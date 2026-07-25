@@ -87,6 +87,15 @@ export async function threadTurnsLoadRequests(page: Page) {
   return await page.evaluate(() => (window as any).__threadTurnsLoadRequests ?? []);
 }
 
+export async function requestOlderTurnsFromStore(page: Page) {
+  await page.evaluate(() => {
+    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
+    const turns = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-turns");
+    if (!turns) throw new Error("Unable to locate gateway thread-turns Pinia store");
+    void turns.loadOlderTurns();
+  });
+}
+
 export async function startElementTopTracking(page: Page, text: string) {
   await startLocatorTopTracking(page.getByText(text, { exact: true }));
 }

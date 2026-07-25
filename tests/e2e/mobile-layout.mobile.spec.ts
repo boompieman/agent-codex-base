@@ -6,6 +6,7 @@ import {
   buildTextTurns,
   frameSpread,
   installDeferredThreadTurnsLoadStub,
+  requestOlderTurnsFromStore,
   releaseDeferredThreadTurnsLoad,
   startBottomDistanceTracking,
   startLocatorTopTracking,
@@ -13,7 +14,7 @@ import {
   threadTurnCount,
   threadTurnsLoadRequests,
   waitForAnimationFrames,
-} from "./helpers/history-top-up";
+} from "./helpers/history-pagination";
 import { execRemoteSsh, readRemoteEnv, waitForSelectedThreadId } from "./helpers/remote-codex";
 
 test("uses the mobile layout with hidden sidebar and usable composer shell", async ({ page }) => {
@@ -128,12 +129,12 @@ test("virtualizes a large running turn in one agent timeline", async ({ page }) 
   expect(pageErrors.filter((message) => message.includes("ResizeObserver loop"))).toEqual([]);
 });
 
-test("background history top-up keeps the mobile timeline visually stable", async ({ page }) => {
+test("explicit history prepend keeps the mobile timeline visually stable", async ({ page }) => {
   await openApp(page);
-  const threadId = "mobile-background-turn-top-up";
+  const threadId = "mobile-explicit-history-prepend";
   await installDeferredThreadTurnsLoadStub(page, {
     type: "thread.turns.page",
-    requestId: "mobile-thread-turns-page",
+    requestId: "mobile-explicit-history-page",
     hostId: 1,
     threadId,
     history: {
@@ -153,10 +154,13 @@ test("background history top-up keeps the mobile timeline visually stable", asyn
 
   const latestRow = page.locator('[data-row-key*=":turn-turn-005:"]');
   await expect(latestRow).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(await threadTurnsLoadRequests(page)).toHaveLength(0);
+  await startLocatorTopTracking(latestRow);
+  await requestOlderTurnsFromStore(page);
   await expect
     .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
     .toBe(1);
-  await startLocatorTopTracking(latestRow);
   await releaseDeferredThreadTurnsLoad(page);
   await expect.poll(() => threadTurnCount(page)).toBe(5);
   await waitForAnimationFrames(page, 8);
@@ -164,9 +168,11 @@ test("background history top-up keeps the mobile timeline visually stable", asyn
   expect(frameSpread(samples), JSON.stringify(samples)).toBeLessThanOrEqual(2);
 });
 
-test("mobile viewport resize during history top-up stays bottom pinned", async ({ page }) => {
+test("mobile viewport resize during explicit history prepend stays bottom pinned", async ({
+  page,
+}) => {
   await openApp(page);
-  const threadId = "mobile-resizing-turn-top-up";
+  const threadId = "mobile-resizing-history-prepend";
   await installDeferredThreadTurnsLoadStub(page, {
     type: "thread.turns.page",
     requestId: "mobile-resizing-turns-page",
@@ -187,10 +193,13 @@ test("mobile viewport resize during history top-up stays bottom pinned", async (
     },
   });
 
+  await page.waitForTimeout(250);
+  expect(await threadTurnsLoadRequests(page)).toHaveLength(0);
+  await startBottomDistanceTracking(page);
+  await requestOlderTurnsFromStore(page);
   await expect
     .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
     .toBe(1);
-  await startBottomDistanceTracking(page);
   await releaseDeferredThreadTurnsLoad(page);
   await page.setViewportSize({ width: 393, height: 820 });
   await expect.poll(() => threadTurnCount(page)).toBe(5);

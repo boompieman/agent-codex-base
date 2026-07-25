@@ -28,6 +28,7 @@ import {
   buildTextTurns,
   frameSpread,
   installDeferredThreadTurnsLoadStub,
+  requestOlderTurnsFromStore,
   releaseDeferredThreadTurnsLoad,
   startBottomDistanceTracking,
   startElementTopTracking,
@@ -35,11 +36,13 @@ import {
   threadTurnCount,
   threadTurnsLoadRequests,
   waitForAnimationFrames,
-} from "./helpers/history-top-up";
+} from "./helpers/history-pagination";
 
-test("opened threads render two turns first and then top up to five turns", async ({ page }) => {
+test("history stays stable until an explicit older-page request prepends turns", async ({
+  page,
+}) => {
   await openApp(page);
-  const threadId = "e2e-background-turn-top-up-thread";
+  const threadId = "e2e-explicit-history-prepend-thread";
   const httpTurnsRequests = trackThreadTurnsHttpRequests(page);
   await installDeferredThreadTurnsLoadStub(page, {
     type: "thread.turns.page",
@@ -66,10 +69,15 @@ test("opened threads render two turns first and then top up to five turns", asyn
   await expect(page.getByText("background turn 004")).toBeVisible();
   await expect(page.getByText("background turn 005")).toBeVisible();
   await expect(page.getByTestId("load-older-turns-button")).toHaveCount(0);
+  // Initial activation now asks for five turns atomically. A cached or synthetic two-turn view
+  // must remain untouched instead of silently starting the old background prepend path.
+  await page.waitForTimeout(250);
+  expect(await threadTurnsLoadRequests(page)).toHaveLength(0);
+  await startElementTopTracking(page, "background turn 004");
+  await requestOlderTurnsFromStore(page);
   await expect
     .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
     .toBe(1);
-  await startElementTopTracking(page, "background turn 004");
   await releaseDeferredThreadTurnsLoad(page);
   await expect.poll(() => threadTurnCount(page)).toBe(5);
   await waitForAnimationFrames(page, 4);
@@ -77,7 +85,7 @@ test("opened threads render two turns first and then top up to five turns", asyn
   expect(frameSpread(samples), JSON.stringify(samples)).toBeLessThanOrEqual(2);
   const requests = await threadTurnsLoadRequests(page);
   expect(requests).toHaveLength(1);
-  expect(requests[0]).toMatchObject({ type: "thread.turns.load", limit: 3 });
+  expect(requests[0]).toMatchObject({ type: "thread.turns.load", limit: 5 });
   expect(httpTurnsRequests()).toBe(0);
 });
 
