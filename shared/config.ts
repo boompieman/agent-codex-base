@@ -1,7 +1,9 @@
 import type { GatewayConfig, GatewayNotificationSettings } from "./types";
 
-export const INITIAL_TURN_PAGE_LIMIT = 2;
-export const OPEN_THREAD_BACKGROUND_TURN_TARGET = 5;
+// Load the complete initial viewport in one thread activation. Do not reintroduce a smaller
+// first page followed by a client-side prepend: dynamic Agent rows are measured after paint, so
+// that two-phase path makes an already visible viewport move while the background page settles.
+export const INITIAL_TURN_PAGE_LIMIT = 5;
 export const OLDER_TURN_PAGE_LIMIT = 5;
 export const SERVER_TURN_CACHE_LIMIT = 50;
 export const SERVER_THREAD_CACHE_LIMIT = 100;

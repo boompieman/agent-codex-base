@@ -17,7 +17,7 @@ const { t } = useI18n();
 <template>
   <button
     type="button"
-    class="flex w-full max-w-4xl items-center gap-2 rounded-md py-2 text-left text-sm text-ink-secondary hover:bg-canvas-soft"
+    class="flex w-full max-w-4xl items-center gap-2 rounded-md bg-canvas-soft px-3 py-2 text-left text-sm text-ink-secondary hover:bg-surface"
     :aria-expanded="open"
     :data-state="open ? 'open' : 'closed'"
     :data-testid="open ? 'intermediate-steps' : undefined"

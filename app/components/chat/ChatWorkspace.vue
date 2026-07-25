@@ -3,7 +3,6 @@ import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceL
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import WorkspaceTabs from "./WorkspaceTabs.vue";
 import { useChatWorkspaceState } from "./chat-workspace-state";
-import { useBackgroundTurnTopUp } from "./useBackgroundTurnTopUp";
 
 withDefaults(
   defineProps<{
@@ -36,19 +35,6 @@ const {
 function loadOlderTurns() {
   void threadTurns.loadOlderTurns();
 }
-
-useBackgroundTurnTopUp({
-  selectedHostId,
-  selectedThreadId,
-  selectedThreadViewReady,
-  loading,
-  loadingOlderTurns,
-  olderTurnsCursor,
-  historyTurns,
-  loadOlderTurns: (options) => {
-    void threadTurns.loadOlderTurns(options);
-  },
-});
 </script>
 
 <template>

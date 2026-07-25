@@ -41,7 +41,8 @@ const chatVirtualizer = useChatVirtualizer({
   onViewportScroll: (viewport) => {
     // A short chat is simultaneously at the top and bottom. Only interpret
     // top proximity as history intent after explicit upward input detached the
-    // outer timeline; otherwise initial bottom alignment races background top-up.
+    // outer timeline. Do not infer intent from an underfilled initial page: the
+    // initial activation is atomic, and older history is loaded only on explicit input.
     const reachedStart = chatVirtualizer.userDetached.value && viewport.scrollTop <= threshold;
     startControlsVisible.value = reachedStart;
     if (reachedStart) {
