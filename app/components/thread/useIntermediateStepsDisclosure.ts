@@ -1,51 +1,70 @@
-import { ref, watch, type ComputedRef } from "vue";
-import { statusValue, itemStatusSignature } from "./thread-turn-sections";
+import { reactive, watch, type ComputedRef } from "vue";
+import { itemStatusSignature, statusValue } from "./thread-turn-sections";
+
+interface IntermediateDisclosureTurn {
+  id: string;
+  status: unknown;
+  items: any[];
+  turnIsActive: boolean;
+}
 
 export function useIntermediateStepsDisclosure(input: {
-  turn: ComputedRef<Record<string, any>>;
-  items: ComputedRef<any[]>;
-  turnIsActive: ComputedRef<boolean>;
+  turns: ComputedRef<IntermediateDisclosureTurn[]>;
   threadIsRunning: ComputedRef<boolean>;
   autoCollapseIntermediate: ComputedRef<boolean>;
 }) {
-  const intermediateOpen = ref(false);
-  const intermediateOpenTouchedByUser = ref(false);
+  // Disclosure state belongs to the timeline, not to virtual row components. Rows are destroyed
+  // offscreen, so keeping this small per-turn map here preserves explicit user choices without
+  // coupling expansion to virtualizer measurements or a global store.
+  const openByTurnId = reactive(new Map<string, boolean>());
+  const touchedByUser = new Set<string>();
 
   watch(
     () => [
-      input.turn.value.id,
       input.threadIsRunning.value,
-      statusValue(input.turn.value.status),
       input.autoCollapseIntermediate.value,
-      ...itemStatusSignature(input.items.value),
+      ...input.turns.value.flatMap((turn) => [
+        turn.id,
+        statusValue(turn.status),
+        ...itemStatusSignature(turn.items),
+      ]),
     ],
     () => {
-      if (input.threadIsRunning.value && input.turnIsActive.value) {
-        intermediateOpenTouchedByUser.value = false;
-        intermediateOpen.value = true;
-        return;
+      const liveTurnIds = new Set(input.turns.value.map((turn) => turn.id));
+      for (const turnId of openByTurnId.keys()) {
+        if (!liveTurnIds.has(turnId)) {
+          openByTurnId.delete(turnId);
+          touchedByUser.delete(turnId);
+        }
       }
-      if (input.autoCollapseIntermediate.value && !intermediateOpenTouchedByUser.value) {
-        intermediateOpen.value = false;
+
+      for (const turn of input.turns.value) {
+        if (input.threadIsRunning.value && turn.turnIsActive) {
+          touchedByUser.delete(turn.id);
+          openByTurnId.set(turn.id, true);
+          continue;
+        }
+        if (input.autoCollapseIntermediate.value && !touchedByUser.has(turn.id)) {
+          openByTurnId.set(turn.id, false);
+        } else if (!openByTurnId.has(turn.id)) {
+          openByTurnId.set(turn.id, false);
+        }
       }
     },
     { immediate: true },
   );
 
-  watch(
-    () => input.turn.value.id,
-    () => {
-      intermediateOpenTouchedByUser.value = false;
-    },
-  );
+  function isIntermediateOpen(turnId: string) {
+    return openByTurnId.get(turnId) ?? false;
+  }
 
-  function setIntermediateOpen(open: boolean) {
-    intermediateOpenTouchedByUser.value = true;
-    intermediateOpen.value = open;
+  function setIntermediateOpen(turnId: string, open: boolean) {
+    touchedByUser.add(turnId);
+    openByTurnId.set(turnId, open);
   }
 
   return {
-    intermediateOpen,
+    isIntermediateOpen,
     setIntermediateOpen,
   };
 }

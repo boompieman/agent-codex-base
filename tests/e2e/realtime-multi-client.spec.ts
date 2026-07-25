@@ -62,7 +62,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   expect(steerMessage.text).toContain(steerMarker);
   await expect(
     page
-      .getByTestId("intermediate-steps")
+      .getByTestId("chat-scroll-area")
       .getByTestId("steered-conversation-item")
       .getByText(steerMarker),
   ).toBeVisible({ timeout: 30_000 });
@@ -101,7 +101,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   await firstIntermediateStepsToggle(page).click();
   await expect(
     page
-      .getByTestId("intermediate-steps")
+      .getByTestId("chat-scroll-area")
       .getByTestId("steered-conversation-item")
       .getByText(steerMarker),
   ).toBeVisible();
@@ -110,7 +110,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   await firstIntermediateStepsToggle(page).click();
   await expect(
     page
-      .getByTestId("intermediate-steps")
+      .getByTestId("chat-scroll-area")
       .getByTestId("steered-conversation-item")
       .getByText(steerMarker),
   ).toBeVisible({ timeout: 30_000 });

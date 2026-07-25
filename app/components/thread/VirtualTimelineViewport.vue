@@ -9,17 +9,17 @@ import {
 import type { ComponentPublicInstance } from "vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { ChatVirtualScrollFrame, useChatVirtualizer } from "@/components/common/chat-virtualizer";
-import { provideTimelineViewport } from "@/components/thread/timeline-viewport-context";
 
 interface TimelineViewportRow {
   key: string;
+  type?: string;
+  section?: string;
 }
 
 const props = defineProps<{
   rows: TimelineViewportRow[];
   followKey: unknown;
   estimateSize: (row: unknown, index: number) => number;
-  deferNestedRowMeasurement?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,9 +38,6 @@ const chatVirtualizer = useChatVirtualizer({
   getItemKey: (index: number) => props.rows[index]?.key ?? index,
   estimateSize: (index: number) => props.estimateSize(props.rows[index], index),
   overscan: 6,
-  // Only timelines that contain a second virtualizer defer outer row measurement. Enabling this
-  // globally delays the synchronous keyed-anchor restore used by ordinary detached readers.
-  useAnimationFrameWithResizeObserver: () => props.deferNestedRowMeasurement ?? false,
   onViewportScroll: (viewport) => {
     // A short chat is simultaneously at the top and bottom. Only interpret
     // top proximity as history intent after explicit upward input detached the
@@ -74,8 +71,6 @@ const documentVisibility = useDocumentVisibility();
 function scrollViewport() {
   return scrollFrameRef.value?.getViewport() ?? null;
 }
-
-provideTimelineViewport(scrollViewport);
 
 function setRowRef(refValue: Element | ComponentPublicInstance | null) {
   const element = refValue instanceof Element ? refValue : null;
@@ -224,6 +219,8 @@ defineExpose({ resetFollowLatest });
           :ref="setRowRef"
           :data-index="virtualRow.index"
           :data-row-key="rows[virtualRow.index]?.key"
+          :data-row-type="rows[virtualRow.index]?.type"
+          :data-row-section="rows[virtualRow.index]?.section"
           class="pb-5 md:pb-8"
           :style="rowStyle(virtualRow)"
         >

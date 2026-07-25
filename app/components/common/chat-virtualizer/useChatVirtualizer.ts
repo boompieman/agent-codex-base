@@ -18,7 +18,6 @@ interface ChatVirtualizerOptions {
   estimateSize: (index: number) => number;
   threshold?: ThresholdSource;
   overscan?: MaybeRefOrGetter<number>;
-  useAnimationFrameWithResizeObserver?: MaybeRefOrGetter<boolean>;
   onViewportScroll?: (viewport: HTMLElement) => void;
   scrollToBottom?: (viewport: HTMLElement) => void;
 }
@@ -40,7 +39,6 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
       getItemKey: options.getItemKey,
       estimateSize: options.estimateSize,
       overscan: toValue(options.overscan) ?? 0,
-      useAnimationFrameWithResizeObserver: toValue(options.useAnimationFrameWithResizeObserver),
       ...createChatVirtualizerBehavior({
         followLatest: sticky.followLatest.value,
         scrollEndThreshold: threshold(),
