@@ -157,8 +157,11 @@ export async function appendAgentStreamLines(
     if (!views) {
       throw new Error("Unable to locate gateway thread-view Pinia store");
     }
-    const turn = views.history.thread.turns[0];
-    const agent = turn.items.find((item: any) => item.id === input.itemId);
+    const turns = views.history.thread.turns as Array<{ items?: any[] }>;
+    const agent = turns
+      .flatMap((turn) => turn.items ?? [])
+      .find((item: any) => item.id === input.itemId);
+    if (!agent) throw new Error(`Missing Agent stream item ${input.itemId}`);
     agent.text +=
       "\n\n" +
       Array.from(

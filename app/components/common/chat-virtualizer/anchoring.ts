@@ -42,14 +42,21 @@ export function createChatVirtualizerBehavior(options: {
 }
 
 export function shouldAdjustChatScrollForSizeChange(
-  _item: VirtualItem,
-  _instance: Virtualizer<HTMLElement, Element>,
+  item: VirtualItem,
+  instance: Virtualizer<HTMLElement, Element>,
   followLatest: boolean,
 ) {
-  // Do not add a positional fallback here. A turn can contain Agent text followed by command and
-  // diff blocks, so streamed text may resize a row that is geometrically above the viewport even
-  // though the user expects the raw viewport to stay parked. Once detached, all row-resize
-  // compensation is disabled. Keyed history prepends use anchorTo="end", while panel restoration
-  // uses the explicit DOM anchor in reflow(); neither path depends on this resize hook.
-  return followLatest;
+  if (followLatest) return true;
+
+  const viewport = instance.scrollElement;
+  const scrollOffset = viewport instanceof HTMLElement ? viewport.scrollTop : instance.scrollOffset;
+  // Dynamic rows entering the overscan window still use estimated heights. While scrolling
+  // upward, replacing an estimate above the viewport without compensation moves every visible
+  // row; once scrolling stops, nearby rows are measured and the same bug appears to disappear.
+  //
+  // Vibe Kanban and NextClaw use this same fully-above-fold predicate for TanStack chat lists.
+  // Do not broaden it to item.start < scrollOffset: a visible streaming Agent row can begin above
+  // the fold, and compensating that row would fight the reader. Diff and command output own
+  // separate bounded scrollports, so their internal size changes do not enter this predicate.
+  return item.end <= (scrollOffset ?? 0);
 }

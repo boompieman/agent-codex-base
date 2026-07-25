@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { HostRecord, ProjectRecord } from "../../shared/types";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
-import { seedGatewayThread } from "./helpers/gateway-store";
+import { appendAgentStreamLines, seedGatewayThread } from "./helpers/gateway-store";
 import {
   buildTextTurns,
   frameSpread,
@@ -15,6 +15,13 @@ import {
   threadTurnsLoadRequests,
   waitForAnimationFrames,
 } from "./helpers/history-pagination";
+import {
+  captureVisibleTextAnchor,
+  continueChatTouchMomentumUp,
+  endChatTouchScroll,
+  startChatTouchScrollUp,
+  visibleTextTop,
+} from "./helpers/scroll";
 import { execRemoteSsh, readRemoteEnv, waitForSelectedThreadId } from "./helpers/remote-codex";
 
 test("uses the mobile layout with hidden sidebar and usable composer shell", async ({ page }) => {
@@ -214,6 +221,117 @@ test("mobile viewport resize during explicit history prepend stays bottom pinned
     JSON.stringify(samples),
   ).toBeLessThanOrEqual(1);
   expect(Math.max(...samples.slice(-4)), JSON.stringify(samples)).toBeLessThanOrEqual(2);
+});
+
+test("mobile touch scrolling stays anchored while Agent output streams", async ({ page }) => {
+  await openApp(page);
+  const threadId = "mobile-active-touch-stream";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Active Touch Stream" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildTextTurns(1, 28, "touch scroll history", 12),
+          {
+            id: "turn-touch-streaming",
+            status: "running",
+            items: [
+              {
+                id: "agent-touch-streaming",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "touch stream initial output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByText("touch stream initial output")).toBeVisible();
+  for (let batch = 0; batch < 3; batch += 1) {
+    await startChatTouchScrollUp(page, 180);
+    const anchor = await captureVisibleTextAnchor(page, "touch scroll history");
+    await appendAgentStreamLines(page, {
+      itemId: "agent-touch-streaming",
+      prefix: `touch stream batch ${batch + 1}`,
+      count: 8,
+    });
+    await waitForAnimationFrames(page, 2);
+
+    await expect
+      .poll(() => visibleTextTop(page, anchor.text))
+      .toBeGreaterThanOrEqual(anchor.top - 2);
+    await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
+      "data-follow-latest",
+      "false",
+    );
+  }
+  await endChatTouchScroll(page);
+});
+
+test("mobile momentum scrolling stays anchored after touchend while output streams", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "mobile-momentum-stream";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Momentum Stream" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildTextTurns(1, 30, "momentum history", 10),
+          {
+            id: "turn-momentum-streaming",
+            status: "running",
+            items: [
+              {
+                id: "agent-momentum-streaming",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "momentum stream initial output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByText("momentum stream initial output")).toBeVisible();
+  await startChatTouchScrollUp(page, 220);
+  await endChatTouchScroll(page);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+
+  for (let frame = 0; frame < 3; frame += 1) {
+    await continueChatTouchMomentumUp(page, 90);
+    const anchor = await captureVisibleTextAnchor(page, "momentum history");
+    await appendAgentStreamLines(page, {
+      itemId: "agent-momentum-streaming",
+      prefix: `momentum stream frame ${frame + 1}`,
+      count: 8,
+    });
+    await waitForAnimationFrames(page, 2);
+
+    await expect
+      .poll(() => visibleTextTop(page, anchor.text))
+      .toBeGreaterThanOrEqual(anchor.top - 2);
+    await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
+      "data-follow-latest",
+      "false",
+    );
+  }
 });
 
 test("opens sidebar context actions with long press on mobile", async ({ page }) => {
