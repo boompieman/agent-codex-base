@@ -19,6 +19,7 @@ import {
   detachChatViewportNearBottom,
   parkChatViewportInMiddle,
   parkCommandOutputInMiddle,
+  scrollChatViewportBy,
   scrollChatViewportToBottom,
   scrollChatViewportToTop,
   visibleAgentLineTop,
@@ -255,6 +256,128 @@ test("streaming Agent output keeps a manually detached reader in place", async (
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+});
+
+test("streaming output does not drift the viewport during upward wheel scrolling", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-active-wheel-stream-thread";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Active Wheel Stream" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildVariableHeightTurns(threadId, 36, "wheel scroll history"),
+          {
+            id: "turn-wheel-streaming",
+            status: "running",
+            items: [
+              {
+                id: "agent-wheel-streaming",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "wheel stream initial output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByText("wheel stream initial output")).toBeVisible();
+  await scrollChatViewportToBottom(page);
+
+  for (let batch = 0; batch < 4; batch += 1) {
+    await scrollChatViewportBy(page, -180);
+    const anchor = await captureVisibleTextAnchor(page, "wheel scroll history");
+    await appendAgentStreamLines(page, {
+      itemId: "agent-wheel-streaming",
+      prefix: `wheel stream batch ${batch + 1}`,
+      count: 8,
+    });
+    await waitForAnimationFrames(page, 2);
+
+    await expect
+      .poll(() => visibleTextTop(page, anchor.text))
+      .toBeGreaterThanOrEqual(anchor.top - 2);
+    await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
+      "data-follow-latest",
+      "false",
+    );
+  }
+});
+
+test("downward wheel scrolling stays detached until the reader reaches latest", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-downward-wheel-stream-thread";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Downward Wheel Stream" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildVariableHeightTurns(threadId, 32, "downward scroll history"),
+          {
+            id: "turn-downward-streaming",
+            status: "running",
+            items: [
+              {
+                id: "agent-downward-streaming",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "downward stream initial output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByText("downward stream initial output")).toBeVisible();
+  await scrollChatViewportBy(page, -900);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+
+  for (let batch = 0; batch < 3; batch += 1) {
+    await scrollChatViewportBy(page, 120);
+    const anchor = await captureVisibleTextAnchor(page, "downward scroll history");
+    await appendAgentStreamLines(page, {
+      itemId: "agent-downward-streaming",
+      prefix: `downward stream batch ${batch + 1}`,
+      count: 8,
+    });
+    await waitForAnimationFrames(page, 2);
+
+    await expect
+      .poll(() => visibleTextTop(page, anchor.text))
+      .toBeGreaterThanOrEqual(anchor.top - 2);
+    await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
+      "data-follow-latest",
+      "false",
+    );
+  }
+
+  await scrollChatViewportToBottom(page);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "true");
+  await appendAgentStreamLines(page, {
+    itemId: "agent-downward-streaming",
+    prefix: "downward stream after relock",
+    count: 12,
+  });
+  await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
 });
 
 test("switching threads discards stale virtual row measurements", async ({ page }) => {
@@ -561,7 +684,11 @@ test("streaming output does not force scroll when the user is reading earlier co
   await scrollChatViewportToBottom(page);
   await expect(page.getByRole("button", { name: /node long-output\.js/ })).toBeVisible();
   await page.getByRole("button", { name: /node long-output\.js/ }).click();
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "true");
   const commandScrollTop = await parkCommandOutputInMiddle(page);
+  // The command output owns a bounded inner viewport. Its wheel event must not
+  // detach the outer Agent timeline or subsequent Agent streaming will stop following.
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "true");
   await appendCommandOutputLines(page, {
     itemId: "command-scroll-1",
     prefix: "new command output line",
@@ -793,6 +920,67 @@ test("loading older turns prepends history without moving the current viewport a
   expect(httpTurnsRequests()).toBe(0);
 });
 
+test("history prepend and current Agent streaming preserve the same detached anchor", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-concurrent-prepend-stream-thread";
+  await installDeferredThreadTurnsLoadStub(page, {
+    type: "thread.turns.page",
+    requestId: "e2e-concurrent-thread-turns-page",
+    hostId: 1,
+    threadId,
+    history: { thread: { id: threadId, turns: buildTextTurns(1, 5, "concurrent turn", 8) } },
+    turnsPage: { nextCursor: null, backwardsCursor: null },
+  });
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Concurrent Prepend Stream" },
+    status: "running",
+    olderTurnsCursor: JSON.stringify({ turnId: "turn-006", includeAnchor: false }),
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildTextTurns(6, 10, "concurrent turn", 8),
+          {
+            id: "turn-concurrent-streaming",
+            status: "running",
+            items: [
+              {
+                id: "agent-concurrent-streaming",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "concurrent stream initial output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await scrollChatViewportToTop(page);
+  await expect
+    .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
+    .toBe(1);
+  const anchor = await captureVisibleTextAnchor(page, "concurrent turn 006");
+
+  await appendAgentStreamLines(page, {
+    itemId: "agent-concurrent-streaming",
+    prefix: "concurrent incoming line",
+    count: 20,
+  });
+  await releaseDeferredThreadTurnsLoad(page);
+
+  await expect.poll(() => threadTurnCount(page)).toBe(11);
+  await waitForAnimationFrames(page, 4);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+});
+
 function trackThreadTurnsHttpRequests(page: Page) {
   let count = 0;
   page.on("request", (request) => {
@@ -818,5 +1006,30 @@ async function stopTimelineRowCountTracking(page: Page) {
   return page.evaluate(() => {
     (window as any).__timelineRowCountObserver?.disconnect();
     return ((window as any).__timelineRowCountSamples ?? []) as number[];
+  });
+}
+
+function buildVariableHeightTurns(threadId: string, count: number, prefix: string) {
+  return Array.from({ length: count }, (_, index) => {
+    const label = String(index + 1).padStart(3, "0");
+    const detailCount = 3 + ((index * 7) % 11);
+    return {
+      id: `turn-${threadId}-${label}`,
+      status: "completed",
+      items: [
+        {
+          id: `agent-${threadId}-${label}`,
+          type: "agentMessage",
+          status: "completed",
+          text: [
+            `${prefix} ${label}`,
+            ...Array.from(
+              { length: detailCount },
+              (_, detailIndex) => `${prefix} ${label} detail ${detailIndex + 1}`,
+            ),
+          ].join("\n\n"),
+        },
+      ],
+    };
   });
 }

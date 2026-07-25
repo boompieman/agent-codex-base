@@ -57,8 +57,12 @@ export async function captureVisibleTextAnchor(page: Page, prefix: string) {
       const rect = candidate.getBoundingClientRect();
       return (
         text.startsWith(prefix) &&
-        rect.top >= viewportRect.top + 8 &&
-        rect.bottom <= viewportRect.bottom - 8
+        // A single Markdown paragraph can be taller than a mobile viewport.
+        // It is still a valid visual anchor when it intersects the viewport;
+        // requiring the entire element to fit turns a real scrolling test into
+        // a false negative as soon as the reader reaches such a paragraph.
+        rect.bottom >= viewportRect.top + 8 &&
+        rect.top <= viewportRect.bottom - 8
       );
     });
     if (!element) {
@@ -127,6 +131,59 @@ export async function scrollChatViewportToTop(page: Page) {
     viewport.scrollTop = 0;
     viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
+}
+
+export async function scrollChatViewportBy(page: Page, deltaY: number) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, deltaY) => {
+    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    if (!viewport) throw new Error("Missing chat viewport");
+    const before = viewport.scrollTop;
+    viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
+    viewport.scrollTop += deltaY;
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return { before, after: viewport.scrollTop };
+  }, deltaY);
+}
+
+export async function startChatTouchScrollUp(page: Page, distance: number) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, distance) => {
+    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    if (!viewport) throw new Error("Missing chat viewport");
+    const touchEvent = (type: string, clientY: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, "touches", { value: [{ clientY }] });
+      return event;
+    };
+    const before = viewport.scrollTop;
+    viewport.dispatchEvent(touchEvent("touchstart", 320));
+    // A finger moving down makes the scrollable content travel upward.
+    viewport.dispatchEvent(touchEvent("touchmove", 520));
+    viewport.scrollTop = Math.max(0, viewport.scrollTop - distance);
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return { before, after: viewport.scrollTop };
+  }, distance);
+}
+
+export async function endChatTouchScroll(page: Page) {
+  await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
+    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    if (!viewport) throw new Error("Missing chat viewport");
+    viewport.dispatchEvent(new Event("touchend", { bubbles: true }));
+  });
+}
+
+export async function continueChatTouchMomentumUp(page: Page, distance: number) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, distance) => {
+    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    if (!viewport) throw new Error("Missing chat viewport");
+    const before = viewport.scrollTop;
+    // Native momentum continues with scroll events after touchend. Do not emit
+    // another touchmove here: the regression is specifically the period where
+    // the browser is moving the viewport without new pointer input.
+    viewport.scrollTop = Math.max(0, viewport.scrollTop - distance);
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return { before, after: viewport.scrollTop };
+  }, distance);
 }
 
 export async function parkCommandOutputInMiddle(page: Page) {
