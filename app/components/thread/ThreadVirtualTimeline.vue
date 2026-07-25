@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, toRef, watch } from "vue";
 import type { ThreadRuntimeStatus } from "~~/shared/types";
 import { Button } from "@/components/ui/button";
-import ThreadTurnView from "@/components/thread/ThreadTurnView.vue";
+import ThreadTimelineRowView from "@/components/thread/ThreadTimelineRowView.vue";
 import VirtualTimelineViewport from "@/components/thread/VirtualTimelineViewport.vue";
 import {
   buildThreadTimelineRows,
   estimateThreadTimelineRow,
-  type ThreadTimelineTurn,
   type ThreadTimelineRow,
+  type ThreadTimelineTurn,
 } from "@/components/thread/timeline-rows";
 import { buildThreadTurnSections } from "@/components/thread/thread-turn-sections";
+import { useIntermediateStepsDisclosure } from "@/components/thread/useIntermediateStepsDisclosure";
+import { provideFilePreviewContext } from "@/composables/files/useFilePreviewContext";
+import { useGatewayComposerStore } from "@/stores/gateway-composer";
 
 const props = defineProps<{
   threadId: string | null;
@@ -29,25 +32,57 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const composer = useGatewayComposerStore();
 const viewportRef = ref<{ resetFollowLatest: () => void } | null>(null);
 const userDetachedFromLatest = ref(false);
+const projectId = computed(() => props.projectId ?? null);
+const planModeActive = computed(() => selectedThreadMode() === "plan");
+const threadIsRunning = computed(() => props.threadStatus === "running");
+const autoCollapseIntermediate = computed(() => !userDetachedFromLatest.value);
 
+provideFilePreviewContext({
+  hostId: toRef(props, "hostId"),
+  projectId,
+  threadId: toRef(props, "threadId"),
+});
+
+const turnStates = computed(() =>
+  props.turns.map((turn) => ({
+    turn,
+    sections: buildThreadTurnSections(turn, { planModeActive: planModeActive.value }),
+  })),
+);
+const disclosureTurns = computed(() =>
+  turnStates.value.map(({ turn, sections }) => ({
+    id: turn.id,
+    status: turn.status,
+    items: sections.items,
+    turnIsActive: sections.turnIsActive,
+  })),
+);
+const { isIntermediateOpen, setIntermediateOpen } = useIntermediateStepsDisclosure({
+  turns: disclosureTurns,
+  threadIsRunning,
+  autoCollapseIntermediate,
+});
 const rows = computed(() =>
   buildThreadTimelineRows({
     threadId: props.threadId,
-    turns: props.turns,
+    turns: turnStates.value.map(({ turn, sections }) => ({
+      turn,
+      sections,
+      intermediateOpen: isIntermediateOpen(turn.id),
+    })),
   }),
 );
-const hasNestedIntermediateVirtualizer = computed(() =>
-  props.turns.some(
-    (turn) => buildThreadTurnSections(turn, { planModeActive: false }).intermediateItems.length > 0,
-  ),
-);
+
+function selectedThreadMode() {
+  if (!props.hostId || !props.threadId) return "default";
+  return composer.threadCollaborationModesByKey[`${props.hostId}:${props.threadId}`] ?? "default";
+}
 
 function handleReachStart() {
-  if (props.olderTurnsCursor && !props.loadingOlder) {
-    emit("loadOlder");
-  }
+  if (props.olderTurnsCursor && !props.loadingOlder) emit("loadOlder");
 }
 
 function handleUserDetachedChange(detached: boolean) {
@@ -58,12 +93,8 @@ function estimateRowSize(row: unknown) {
   return estimateThreadTimelineRow(row as ThreadTimelineRow | undefined);
 }
 
-function isTurnRow(row: unknown) {
-  return (row as ThreadTimelineRow | undefined)?.type === "turn";
-}
-
-function turnForRow(row: unknown) {
-  return (row as Extract<ThreadTimelineRow, { type: "turn" }>).turn;
+function timelineRow(row: unknown) {
+  return row as ThreadTimelineRow;
 }
 
 watch(
@@ -83,7 +114,6 @@ watch(
     :rows="rows"
     :follow-key="followKey"
     :estimate-size="estimateRowSize"
-    :defer-nested-row-measurement="hasNestedIntermediateVirtualizer"
     @reach-start="handleReachStart"
     @user-detached-change="handleUserDetachedChange"
   >
@@ -102,14 +132,11 @@ watch(
     </template>
 
     <template #default="{ row }">
-      <ThreadTurnView
-        v-if="isTurnRow(row)"
-        :turn="turnForRow(row)"
+      <ThreadTimelineRowView
+        :row="timelineRow(row)"
         :host-id="hostId"
-        :project-id="projectId ?? null"
         :thread-id="threadId"
-        :thread-runtime-status="threadStatus"
-        :auto-collapse-intermediate="!userDetachedFromLatest"
+        @intermediate-toggle="setIntermediateOpen"
       />
     </template>
   </VirtualTimelineViewport>

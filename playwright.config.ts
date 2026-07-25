@@ -32,7 +32,7 @@ export default defineConfig({
     {
       name: "mobile-webkit-large-turn",
       testMatch: /.*\.mobile\.spec\.ts/,
-      grep: /virtualizes intermediate items inside a large running turn/,
+      grep: /virtualizes a large running turn in one agent timeline/,
       use: { ...devices["iPhone 13"] },
     },
   ],

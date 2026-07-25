@@ -32,7 +32,7 @@ test("uses the mobile layout with hidden sidebar and usable composer shell", asy
   await expect(page.getByText("先选择一个项目")).toBeVisible();
 });
 
-test("virtualizes intermediate items inside a large running turn", async ({ page }) => {
+test("virtualizes a large running turn in one agent timeline", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await openApp(page);
@@ -96,9 +96,9 @@ test("virtualizes intermediate items inside a large running turn", async ({ page
     },
   });
 
-  const intermediate = page.getByTestId("virtual-intermediate-items");
-  const mountedRows = intermediate.locator(":scope > [data-index]");
-  await expect(intermediate).toBeAttached();
+  const timeline = page.getByTestId("chat-scroll-area");
+  const mountedRows = timeline.locator("[data-row-key]");
+  await expect(page.getByTestId("virtual-intermediate-items")).toHaveCount(0);
   await expect.poll(() => mountedRows.count()).toBeLessThan(30);
 
   // Use the final row as a stable lifecycle probe. Deep estimated rows can move while WebKit
@@ -110,16 +110,12 @@ test("virtualizes intermediate items inside a large running turn", async ({ page
   const commandRowHandle = await commandRow.elementHandle();
   expect(commandRowHandle).not.toBeNull();
 
-  await intermediate.evaluate((element) => {
-    const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  await timeline.evaluate((element) => {
+    const viewport = element.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing Agent timeline viewport");
     // Backward input must detach follow-latest before moving to the earlier file-change region.
     viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -240 }));
-    const start =
-      viewport.scrollTop +
-      element.getBoundingClientRect().top -
-      viewport.getBoundingClientRect().top;
-    viewport.scrollTop = start + element.scrollHeight * 0.55;
+    viewport.scrollTop = viewport.scrollHeight * 0.55;
     viewport.dispatchEvent(new Event("scroll"));
   });
   await expect(page.getByRole("button", { name: /src\/large_file_/ }).first()).toBeVisible();
@@ -155,7 +151,7 @@ test("background history top-up keeps the mobile timeline visually stable", asyn
     },
   });
 
-  const latestRow = page.locator('[data-row-key$=":turn-turn-005"]');
+  const latestRow = page.locator('[data-row-key*=":turn-turn-005:"]');
   await expect(latestRow).toBeVisible();
   await expect
     .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
