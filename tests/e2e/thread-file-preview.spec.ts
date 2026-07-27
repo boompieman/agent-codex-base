@@ -19,6 +19,9 @@ test("the unified file workspace browses, restores, and refreshes real remote fi
   const binaryPath = `${projectPath}/codex-gateway-preview-${Date.now()}.bin`;
   const longFilePath = `${projectPath}/${"very-long-file-name-".repeat(8)}preview.log`;
   const treeStressPath = `${projectPath}/tree-stability-${Date.now()}`;
+  const symlinkTargetPath = `/tmp/codex-gateway-symlink-target-${Date.now()}`;
+  const symlinkDirectoryPath = `${projectPath}/linked-training-${Date.now()}`;
+  const symlinkChildName = `checkpoint-${Date.now()}.log`;
   const wideTable = `| metric | sample-a | sample-b | sample-c |
 | --- | --- | --- | --- |
 | very-long-column | ${"unbroken-value-".repeat(12)}a | ${"unbroken-value-".repeat(12)}b | ${"unbroken-value-".repeat(12)}c |`;
@@ -27,6 +30,9 @@ test("the unified file workspace browses, restores, and refreshes real remote fi
     `
 set -eu
 mkdir -p ${shellQuote(projectPath)} ${shellQuote(`${projectPath}/deep/prefix`)}
+mkdir -p ${shellQuote(symlinkTargetPath)}
+printf '%s\n' 'linked training checkpoint' > ${shellQuote(`${symlinkTargetPath}/${symlinkChildName}`)}
+ln -sfn ${shellQuote(symlinkTargetPath)} ${shellQuote(symlinkDirectoryPath)}
 cat > ${shellQuote(remotePath)} <<'EOF'
 export function previewMarker() {
   return "codex-gateway-file-preview";
@@ -176,7 +182,17 @@ done
   const treeScroll = page.getByTestId("remote-file-tree-scroll");
   const longFileLabel = tree.getByTitle(longFilePath, { exact: true });
   const longFileRow = longFileLabel.locator("xpath=..");
+  const symlinkDirectoryLabel = tree.getByTitle(symlinkDirectoryPath, { exact: true });
+  const symlinkDirectoryRow = symlinkDirectoryLabel.locator("xpath=..");
   await expect(longFileLabel).toBeVisible();
+  await expect(symlinkDirectoryLabel).toBeVisible();
+  await symlinkDirectoryRow.click({ button: "right", position: { x: 20, y: 16 } });
+  await page.getByRole("menuitem", { name: "复制绝对路径" }).click();
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "已复制绝对路径" }).last(),
+  ).toBeVisible();
+  await symlinkDirectoryRow.click({ position: { x: 20, y: 16 } });
+  await expect(tree.getByText(symlinkChildName, { exact: true })).toBeVisible();
   await tree.getByText("deep", { exact: true }).click();
   await tree.getByText("prefix", { exact: true }).click();
   await expect(tree.getByText(nestedPythonPath.split("/").pop()!, { exact: true })).toBeVisible();
@@ -246,7 +262,9 @@ done
   await expect(fileTab(page, longFilePath)).toBeVisible();
   await longFileRow.click({ button: "right", position: { x: 20, y: 16 } });
   await page.getByRole("menuitem", { name: "复制绝对路径" }).click();
-  await expect(page.getByText("已复制绝对路径")).toBeVisible();
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "已复制绝对路径" }).last(),
+  ).toBeVisible();
 
   await longFileRow.click({ button: "right", position: { x: 20, y: 16 } });
   const downloadPromise = page.waitForEvent("download");
