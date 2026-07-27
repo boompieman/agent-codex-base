@@ -41,10 +41,10 @@ const { longPressContextMenuHandlers } = useLongPressContextMenu({ menuWidthEsti
 
 <template>
   <ContextMenu>
-    <ContextMenuTrigger as-child :disabled="node.type !== 'file'">
+    <ContextMenuTrigger as-child :disabled="node.type === 'other'">
       <TreeItem
         v-slot="{ isExpanded }"
-        v-bind="node.type === 'file' ? longPressContextMenuHandlers : {}"
+        v-bind="node.type !== 'other' ? longPressContextMenuHandlers : {}"
         :value="node"
         :data-file-path="node.path"
         :level="level"
@@ -67,12 +67,12 @@ const { longPressContextMenuHandlers } = useLongPressContextMenu({ menuWidthEsti
       </TreeItem>
     </ContextMenuTrigger>
     <ContextMenuContent
-      v-if="node.type === 'file'"
+      v-if="node.type !== 'other'"
       :collision-padding="12"
       prioritize-position
       class="w-48"
     >
-      <ContextMenuItem @select="emit('download', node.path)">
+      <ContextMenuItem v-if="node.type === 'file'" @select="emit('download', node.path)">
         <DownloadIcon class="size-4" />
         {{ $t("app.downloadFile") }}
       </ContextMenuItem>
@@ -80,7 +80,11 @@ const { longPressContextMenuHandlers } = useLongPressContextMenu({ menuWidthEsti
         <CopyIcon class="size-4" />
         {{ $t("app.copyAbsolutePath") }}
       </ContextMenuItem>
-      <ContextMenuItem variant="destructive" @select="emit('delete', node.path)">
+      <ContextMenuItem
+        v-if="node.type === 'file'"
+        variant="destructive"
+        @select="emit('delete', node.path)"
+      >
         <Trash2Icon class="size-4" />
         {{ $t("app.deleteFile") }}
       </ContextMenuItem>

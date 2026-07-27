@@ -1,4 +1,5 @@
-import type { FileEntryWithStats } from "ssh2";
+import pLimit from "p-limit";
+import type { FileEntryWithStats, SFTPWrapper, Stats } from "ssh2";
 import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import { remoteLoginShellCommand } from "./remote-command";
@@ -43,15 +44,16 @@ export class RemoteFileService {
   async listDirectories(host: HostWithSecret, path: string) {
     const resolvedPath = await this.resolveRemoteDirectory(host, path);
     const sftp = await this.ssh.sftp(host);
-    return new Promise<ReturnType<typeof directoryResult>>((resolve, reject) => {
+    const entries = await new Promise<FileEntryWithStats[]>((resolve, reject) => {
       sftp.readdir(resolvedPath, (readError, entries) => {
         if (readError) {
           reject(directoryReadError(readError, path, resolvedPath));
           return;
         }
-        resolve(directoryResult(resolvedPath, entries));
+        resolve(entries);
       });
     });
+    return directoryResult(sftp, resolvedPath, entries);
   }
 
   async uploadFile(host: HostWithSecret, localPath: string, remotePath: string) {
@@ -296,18 +298,27 @@ function directoryReadError(error: unknown, inputPath: string, resolvedPath: str
   return error;
 }
 
-function directoryResult(path: string, source: FileEntryWithStats[]) {
-  const entries = source.map(({ filename, attrs }) => ({
-    name: filename,
-    path: `${path.replace(/\/$/, "")}/${filename}`,
-    type: attrs.isDirectory()
-      ? ("directory" as const)
-      : attrs.isFile()
-        ? ("file" as const)
-        : ("other" as const),
-    size: attrs.isFile() ? attrs.size : null,
-    modifiedAt: attrs.mtime ? attrs.mtime * 1000 : null,
-  }));
+async function directoryResult(sftp: SFTPWrapper, path: string, source: FileEntryWithStats[]) {
+  const limitSymlinkStat = pLimit(8);
+  const entries = await Promise.all(
+    source.map(async ({ filename, attrs }) => {
+      const entryPath = posix.join(path, filename);
+      // SFTP readdir returns lstat-like attributes, so a link is neither a file nor a directory.
+      // Follow only links to recover the target type; regular entries need no extra round trip.
+      // Broken or inaccessible links intentionally remain `other` instead of making the entire
+      // directory unreadable. Limit concurrency because every stat shares the Host's SFTP channel.
+      const effectiveAttrs = attrs.isSymbolicLink()
+        ? await limitSymlinkStat(() => statLinkedEntry(sftp, entryPath))
+        : attrs;
+      return {
+        name: filename,
+        path: entryPath,
+        type: directoryEntryType(effectiveAttrs),
+        size: effectiveAttrs?.isFile() ? effectiveAttrs.size : null,
+        modifiedAt: effectiveAttrs?.mtime ? effectiveAttrs.mtime * 1000 : null,
+      };
+    }),
+  );
   entries.sort((left, right) => {
     if (left.type !== right.type) {
       return left.type === "directory" ? -1 : 1;
@@ -315,4 +326,16 @@ function directoryResult(path: string, source: FileEntryWithStats[]) {
     return left.name.localeCompare(right.name);
   });
   return { path, entries };
+}
+
+function statLinkedEntry(sftp: SFTPWrapper, path: string) {
+  return new Promise<Stats | null>((resolve) => {
+    sftp.stat(path, (error, stats) => resolve(error ? null : stats));
+  });
+}
+
+function directoryEntryType(attrs: Stats | null) {
+  if (attrs?.isDirectory()) return "directory" as const;
+  if (attrs?.isFile()) return "file" as const;
+  return "other" as const;
 }
