@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 interface RealtimeSocketProbe {
+  closeCalls: Array<{ code?: number; reason?: string }>;
   messages: Array<Record<string, unknown>>;
   sockets: Set<WebSocket>;
 }
@@ -15,6 +16,7 @@ export async function installRealtimeSocketProbe(page: Page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
     const probe: RealtimeSocketProbe = {
+      closeCalls: [],
       messages: [],
       sockets: new Set<WebSocket>(),
     };
@@ -56,6 +58,11 @@ export async function installRealtimeSocketProbe(page: Page) {
         frame.set(source);
         super.send(frame);
       }
+
+      override close(code?: number, reason?: string) {
+        probe.closeCalls.push({ code, reason });
+        super.close(code, reason);
+      }
     }
 
     window.WebSocket = TrackedWebSocket;
@@ -73,12 +80,26 @@ export async function activeRealtimeSocketUrls(page: Page) {
   );
 }
 
+export async function realtimeSocketCloseCalls(page: Page) {
+  return page.evaluate(() => [...(window.__gatewayRealtimeProbe?.closeCalls ?? [])]);
+}
+
 export async function closeRealtimeSockets(page: Page) {
   await page.evaluate(() => {
     for (const socket of window.__gatewayRealtimeProbe?.sockets ?? []) {
       socket.close();
     }
   });
+}
+
+export async function dispatchRealtimeServerFrame(page: Page, raw: string) {
+  await page.evaluate((frame) => {
+    const socket = [...(window.__gatewayRealtimeProbe?.sockets ?? [])][0];
+    if (socket === undefined) throw new Error("No realtime WebSocket connection is open");
+    // Dispatch through the native EventTarget API so the production message listener receives the
+    // exact frame while close/reconnect still uses the real browser WebSocket lifecycle.
+    socket.dispatchEvent(new MessageEvent("message", { data: frame }));
+  }, raw);
 }
 
 export async function realtimeClientMessageCount(page: Page) {

@@ -20,8 +20,10 @@ import {
 import { runTurnRequestWithAutoRetry } from "./retry";
 import { requestTurnStart, requestTurnSteer } from "./transport";
 import type { Translate, TurnRequestResult } from "./types";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export async function sendTurn(t: Translate, text: string, options: ComposerTurnOptions = {}) {
+  const sessionIsCurrent = captureSessionEpoch();
   const catalog = useGatewayCatalogStore();
   const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
@@ -73,6 +75,7 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
       { kind: requestKind, hostId, projectId, threadId, cwd, text, options },
       executeTurnRequest,
     );
+    if (!sessionIsCurrent()) return;
     applyAcceptedTurnResult(hostId, threadId, result, clientUserMessageId, optimisticContent);
     if (!shouldSteerActiveTurn) {
       composer.updateSelectedThreadSettings({
@@ -82,6 +85,7 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
       });
     }
   } catch (error: unknown) {
+    if (!sessionIsCurrent()) return;
     useGatewayThreadTurnsStore().clearRequest(hostId, threadId);
     gateway.setError(messageFromError(error, t("app.sendMessageFailed"), errorMessageLabels(t)), {
       hostId,
@@ -92,7 +96,7 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
       runtimeStore.setThreadStatus(hostId, threadId, "completed");
     }
   } finally {
-    views.loading = false;
+    if (sessionIsCurrent()) views.loading = false;
   }
 }
 

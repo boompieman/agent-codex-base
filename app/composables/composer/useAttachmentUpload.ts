@@ -4,6 +4,7 @@ import type { UploadedFileRecord } from "~~/shared/types";
 import type { ComposerAttachment } from "./useComposerDraft";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function useAttachmentUpload(
   selectedHostId: Ref<number | null>,
@@ -32,10 +33,13 @@ export function useAttachmentUpload(
   }
 
   async function addFiles(files: File[]) {
+    const sessionIsCurrent = captureSessionEpoch();
     const images = files.filter((file) => file.type.startsWith("image/"));
     const otherFiles = files.filter((file) => !file.type.startsWith("image/"));
 
     for (const file of images) {
+      const dataUrl = await dataUrlFromFile(file);
+      if (!sessionIsCurrent()) return;
       attachedFiles.value.push({
         id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`,
         name: file.name || "pasted-image.png",
@@ -43,7 +47,7 @@ export function useAttachmentUpload(
         mimeType: file.type || null,
         size: file.size,
         isImage: true,
-        dataUrl: await dataUrlFromFile(file),
+        dataUrl,
       });
     }
 
@@ -63,6 +67,7 @@ export function useAttachmentUpload(
         query: { hostId },
         body: form,
       });
+      if (!sessionIsCurrent() || selectedHostId.value !== hostId) return;
       attachedFiles.value.push(
         ...result.files.map((file) => ({
           ...file,
@@ -70,12 +75,13 @@ export function useAttachmentUpload(
         })),
       );
     } catch (error: unknown) {
+      if (!sessionIsCurrent()) return;
       store.setError(
         messageFromError(error, t("app.uploadAttachmentFailed"), errorMessageLabels(t)),
         { hostId },
       );
     } finally {
-      uploadingAttachments.value = false;
+      if (sessionIsCurrent()) uploadingAttachments.value = false;
     }
   }
 

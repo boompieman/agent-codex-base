@@ -76,6 +76,7 @@ const threadOpenResultFields = {
   thread: appServerThreadSchema,
   history: threadHistorySchema,
   lastEventId: nonNegativeId,
+  eventEpoch: nonEmptyString,
   runtimeStatus: z
     .enum(["idle", "running", "completed", "failed", "interrupted"])
     .nullable()
@@ -185,6 +186,7 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         ...threadScopeFields,
         afterId: nonNegativeId,
         lastEventId: nonNegativeId,
+        eventEpoch: nonEmptyString,
       })
       .strict(),
     z

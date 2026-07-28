@@ -1,6 +1,6 @@
 import type { HostRecord, RpcEnvelope } from "~~/shared/types";
 import { buildCurrentTimeReadResponse, isCurrentTimeReadRequest } from "~~/shared/server-requests";
-import { CodexRpcClient } from "../infra/rpc";
+import { CodexRpcClient } from "../infra/rpc/rpc";
 import { bindGatewayUser } from "../state/memory";
 import type { HostControllerLookup, HostControllersLookup } from "./types";
 import { threadIdFromNotification } from "../protocol/thread-payload";
@@ -9,6 +9,7 @@ import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 import { codexRuntime } from "../infra/host-services";
 import { runtimeLog } from "./runtime-log";
 import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
+import { pendingServerRequests } from "./pending-server-requests";
 
 export class HostRpcSession {
   readonly client: CodexRpcClient;
@@ -94,6 +95,7 @@ export class HostRpcSession {
     if (threadId === null) {
       return;
     }
+    pendingServerRequests.resolveFromNotification(this.host.id, threadId, message);
     const controller = this.controllerForThread(this.host.id, threadId);
     if (controller !== null) {
       controller.handleNotification(message);
@@ -121,6 +123,7 @@ export class HostRpcSession {
       threadRuntimeEvents.record(this.host.id, "gateway", message.method ?? "request", message);
       return;
     }
+    pendingServerRequests.track(this.host.id, threadId, message);
     const controller = this.controllerForThread(this.host.id, threadId);
     if (controller !== null) {
       controller.handleNotification(message);

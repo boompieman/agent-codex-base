@@ -1,5 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import { openApp, reloadApp } from "./helpers/app";
+import { revealVirtualizedChatLocator } from "./helpers/scroll";
 import {
   activeRealtimeSocketCount,
   activeRealtimeSocketUrls,
@@ -8,23 +10,16 @@ import {
   realtimeClientMessageCount,
   waitForRealtimeClientMessage,
 } from "./helpers/realtime-socket-probe";
-import {
-  addRemoteHost,
-  addRemoteProject,
-  readRemoteEnv,
-  sendImageTurnThroughGateway,
-  sendSteerText,
-  sendTextTurn,
-  startRemoteThreadFromProjectMenu,
-} from "./helpers/remote-codex";
+import { sendSteerText, sendTextTurn } from "./helpers/remote-codex";
 
 test.describe.configure({ mode: "serial" });
 
 test("fans out a real remote app-server thread to multiple browser clients across turns", async ({
   browser,
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   await installRealtimeSocketProbe(page);
 
   await openApp(page);
@@ -35,10 +30,9 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   const resumePing = await waitForRealtimeClientMessage(page, "ping", resumePingOffset);
   expect(typeof resumePing.nonce).toBe("string");
 
-  const host = await addRemoteHost(page, remote);
-  const project = await addRemoteProject(page, remote, host.id);
+  const { host, project } = await remoteWorkspace.provision();
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
-  const threadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const threadId = await remoteWorkspace.startThread(project.id);
 
   const firstMarker = `E2E 第一轮 ${Date.now()}`;
   await page
@@ -95,32 +89,35 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   const reconnectMessageOffset = await realtimeClientMessageCount(page);
   await closeRealtimeSockets(page);
   await expect.poll(() => activeRealtimeSocketCount(page), { timeout: 30_000 }).toBe(1);
-  const reconnectActivate = await waitForRealtimeClientMessage(
+  const reconnectSubscription = await waitForRealtimeClientMessage(
     page,
-    "thread.activate",
+    "thread.subscribe",
     reconnectMessageOffset,
   );
-  expect(reconnectActivate.threadId).toBe(threadId);
+  expect(reconnectSubscription.threadId).toBe(threadId);
+  expect(reconnectSubscription.afterEpoch).toEqual(expect.any(String));
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
     timeout: 120_000,
   });
   await expect(page.getByTestId(`thread-button-${threadId}`).getByLabel("已完成")).toBeVisible();
   await firstIntermediateStepsToggle(page).click();
-  await expect(
+  await revealVirtualizedChatLocator(
+    page,
     page
       .getByTestId("chat-scroll-area")
       .getByTestId("steered-conversation-item")
       .getByText(steerMarker),
-  ).toBeVisible();
+  );
   await reloadApp(page);
   await expect(firstIntermediateStepsToggle(page)).toHaveAttribute("data-state", "closed");
   await firstIntermediateStepsToggle(page).click();
-  await expect(
+  await revealVirtualizedChatLocator(
+    page,
     page
       .getByTestId("chat-scroll-area")
       .getByTestId("steered-conversation-item")
       .getByText(steerMarker),
-  ).toBeVisible({ timeout: 30_000 });
+  );
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
@@ -168,7 +165,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     });
 
     const secondMarker = `E2E 第二轮图片 ${Date.now()}`;
-    await sendImageTurnThroughGateway(secondPage, {
+    await remoteWorkspace.sendImageTurn(secondPage, {
       hostId: host.id,
       threadId,
       cwd: remote.projectPath,
@@ -176,11 +173,23 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       marker: secondMarker,
     });
     await expect(
-      page.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),
+      secondPage.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),
     ).toBeVisible({ timeout: 120_000 });
+    // The response text can arrive before app-server emits turn/completed. Waiting on the page
+    // that started the turn prevents the other client from satisfying "已完成" with the previous
+    // turn's state before its queued turn/started event has been projected.
+    await expect(secondPage.getByTestId("send-turn-button")).toHaveAttribute(
+      "aria-label",
+      "已完成",
+      { timeout: 120_000 },
+    );
     await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
       timeout: 120_000,
     });
+    await revealVirtualizedChatLocator(
+      page,
+      page.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),
+    );
     expect(await activeRealtimeSocketCount(page)).toBe(1);
     expect(await activeRealtimeSocketCount(secondPage)).toBe(1);
   } finally {

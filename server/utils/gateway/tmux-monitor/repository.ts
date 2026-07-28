@@ -85,9 +85,13 @@ export class TmuxMonitorRepository {
     return row ? mapMonitor(row) : null;
   }
 
-  activeGroups(): TmuxMonitorHostGroup[] {
+  pollGroups(): TmuxMonitorHostGroup[] {
     const monitors = gatewayDatabase()
-      .prepare("SELECT * FROM tmux_monitors WHERE status = 'active' ORDER BY user_id, host_id, id")
+      .prepare(
+        `SELECT * FROM tmux_monitors
+         WHERE status = 'active' OR (status = 'completed' AND notification_sent_at IS NULL)
+         ORDER BY user_id, host_id, id`,
+      )
       .all()
       .map(mapMonitor);
     const groups = new Map<string, TmuxMonitorHostGroup>();
@@ -97,8 +101,10 @@ export class TmuxMonitorRepository {
         userId: monitor.userId,
         hostId: monitor.hostId,
         monitors: [],
+        pendingNotifications: [],
       };
-      group.monitors.push(monitor);
+      if (monitor.status === "active") group.monitors.push(monitor);
+      else group.pendingNotifications.push(monitor);
       groups.set(key, group);
     }
     return Array.from(groups.values());
@@ -341,6 +347,7 @@ export class TmuxMonitorRepository {
         `DELETE FROM tmux_monitors WHERE id IN (
           SELECT id FROM tmux_monitors
           WHERE user_id = ? AND host_id = ? AND status != 'active'
+            AND (status = 'cancelled' OR notification_sent_at IS NOT NULL)
           ORDER BY completed_at DESC LIMIT -1 OFFSET ?
         )`,
       )

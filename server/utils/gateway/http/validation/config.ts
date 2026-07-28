@@ -5,6 +5,37 @@ import { trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
 import { optionalPositiveInt } from "./common";
 import { hostBaseSchema, validateHostProxy } from "./hosts-projects";
 
+export const pinnedThreadSchema = z
+  .object({
+    hostId: z.coerce.number().int().positive(),
+    projectId: optionalPositiveInt.nullable().optional(),
+    threadId: z.string().trim().min(1),
+    title: z.string().trim().min(1),
+    subtitle: z.string().trim().nullable().optional(),
+    projectName: z.string().trim().nullable().optional(),
+    updatedAt: z.coerce.number().nullable().optional(),
+  })
+  .strict();
+
+export const notificationSettingsSchema = z
+  .object({
+    bark: z
+      .object({
+        enabled: z.boolean().default(false),
+        serverUrl: z.url().default(DEFAULT_BARK_SERVER_URL),
+        deviceKey: z.string().trim().default(""),
+        group: z.string().trim().nullable().optional().default(DEFAULT_BARK_GROUP),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        serverUrl: DEFAULT_BARK_SERVER_URL,
+        deviceKey: "",
+        group: DEFAULT_BARK_GROUP,
+      }),
+  })
+  .strict();
+
 export const gatewayConfigSchema = z
   .object({
     version: z.literal(1).default(1),
@@ -34,47 +65,15 @@ export const gatewayConfigSchema = z
           .strict(),
       )
       .default([]),
-    pinnedThreads: z
-      .array(
-        z
-          .object({
-            hostId: z.coerce.number().int().positive(),
-            projectId: optionalPositiveInt.nullable().optional(),
-            threadId: z.string().trim().min(1),
-            title: z.string().trim().min(1),
-            subtitle: z.string().trim().nullable().optional(),
-            projectName: z.string().trim().nullable().optional(),
-            updatedAt: z.coerce.number().nullable().optional(),
-          })
-          .strict(),
-      )
-      .default([]),
-    notifications: z
-      .object({
-        bark: z
-          .object({
-            enabled: z.boolean().default(false),
-            serverUrl: z.url().default(DEFAULT_BARK_SERVER_URL),
-            deviceKey: z.string().trim().default(""),
-            group: z.string().trim().nullable().optional().default(DEFAULT_BARK_GROUP),
-          })
-          .strict()
-          .default({
-            enabled: false,
-            serverUrl: DEFAULT_BARK_SERVER_URL,
-            deviceKey: "",
-            group: DEFAULT_BARK_GROUP,
-          }),
-      })
-      .strict()
-      .default({
-        bark: {
-          enabled: false,
-          serverUrl: DEFAULT_BARK_SERVER_URL,
-          deviceKey: "",
-          group: DEFAULT_BARK_GROUP,
-        },
-      }),
+    pinnedThreads: z.array(pinnedThreadSchema).default([]),
+    notifications: notificationSettingsSchema.default({
+      bark: {
+        enabled: false,
+        serverUrl: DEFAULT_BARK_SERVER_URL,
+        deviceKey: "",
+        group: DEFAULT_BARK_GROUP,
+      },
+    }),
   })
   .strict();
 

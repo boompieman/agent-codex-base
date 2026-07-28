@@ -1,4 +1,4 @@
-import type { RealtimeClientMessage } from "~~/shared/types";
+import type { BrowserPreviewTarget, RealtimeClientMessage } from "~~/shared/types";
 import { browserPreviewEvents } from "../../browser-preview/browser-preview-events";
 import { browserPreviewManager } from "../../browser-preview/browser-preview-manager";
 import { hostStore } from "../../state/hosts";
@@ -9,6 +9,7 @@ import {
   stateFor,
   type RealtimePeer,
 } from "../peer-state";
+import { runtimeLog } from "../../runtime/runtime-log";
 
 export function openBrowserPreview(
   peer: RealtimePeer,
@@ -21,9 +22,31 @@ export function openBrowserPreview(
     requireOwnerId(state.browserOwnerId),
     authenticatedUserId(peer),
     host,
-    request,
+    browserPreviewTarget(request),
   );
+  runtimeLog("browser preview session opened", {
+    hostId: host.id,
+    hostName: host.name,
+    sessionId: session.sessionId,
+    panelId: request.panelId,
+    targetOrigin: new URL(session.targetUrl).origin,
+  });
   sendRealtimePeerMessage(peer, { type: "browser.opened", requestId: request.requestId, session });
+}
+
+function browserPreviewTarget(
+  request: Extract<RealtimeClientMessage, { type: "browser.open" }>,
+): BrowserPreviewTarget {
+  // The request also owns `type` and `requestId`. Persisting it through structural typing leaks
+  // those transport fields into browser.opened.session, which the strict client schema must reject.
+  return {
+    hostId: request.hostId,
+    projectId: request.projectId,
+    threadId: request.threadId,
+    panelId: request.panelId,
+    targetUrl: request.targetUrl,
+    allowInsecureTls: request.allowInsecureTls,
+  };
 }
 
 export function closeBrowserPreview(

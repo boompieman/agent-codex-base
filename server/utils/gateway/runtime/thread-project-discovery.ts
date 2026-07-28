@@ -1,4 +1,4 @@
-import type { HostWithSecret } from "../infra/ssh-types";
+import type { HostWithSecret } from "../infra/ssh/ssh-types";
 import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
 import { bindGatewayUser } from "../state/memory";
 import { projectStore } from "../state/projects";
@@ -8,6 +8,7 @@ import type { ThreadListPage } from "./thread-catalog";
 
 export class ThreadProjectDiscoveryService {
   private readonly pending = new Map<string, Promise<void>>();
+  private readonly generations = new Map<string, number>();
 
   indexPage(hostId: number, page: ThreadListPage) {
     for (const value of page.data) {
@@ -27,14 +28,26 @@ export class ThreadProjectDiscoveryService {
     }
   }
 
+  captureGeneration(userId: number, hostId: number) {
+    return this.generations.get(this.key(userId, hostId)) ?? 0;
+  }
+
+  indexPageIfCurrent(userId: number, hostId: number, generation: number, page: ThreadListPage) {
+    if (!this.isCurrent(this.key(userId, hostId), generation)) return false;
+    this.indexPage(hostId, page);
+    return true;
+  }
+
   schedule(
     userId: number,
     host: HostWithSecret,
     firstPage: ThreadListPage,
     params: Record<string, unknown>,
+    generation: number,
   ) {
-    const key = `${userId}:${host.id}`;
+    const key = this.key(userId, host.id);
     if (
+      !this.isCurrent(key, generation) ||
       this.pending.has(key) ||
       firstPage.nextCursor === null ||
       firstPage.nextCursor === undefined ||
@@ -51,6 +64,7 @@ export class ThreadProjectDiscoveryService {
           cursor,
           useStateDbOnly: false,
         });
+        if (!this.isCurrent(key, generation)) return;
         this.indexPage(host.id, page);
         cursor = page.nextCursor ?? null;
       }
@@ -67,6 +81,23 @@ export class ThreadProjectDiscoveryService {
         if (this.pending.get(key) === request) this.pending.delete(key);
       });
     this.pending.set(key, request);
+  }
+
+  invalidateHost(userId: number, hostId: number) {
+    const key = this.key(userId, hostId);
+    this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
+    // The old RPC cannot be cancelled safely on the shared Host connection. Removing only its
+    // singleflight ownership allows a new identity to discover immediately, while the generation
+    // check prevents the old result from indexing projects after it eventually returns.
+    this.pending.delete(key);
+  }
+
+  private isCurrent(key: string, generation: number) {
+    return (this.generations.get(key) ?? 0) === generation;
+  }
+
+  private key(userId: number, hostId: number) {
+    return `${userId}:${hostId}`;
   }
 }
 

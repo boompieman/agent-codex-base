@@ -17,6 +17,7 @@ createServer((request, response) => {
       title: decodeURIComponent(title),
       body: decodeURIComponent(body),
       group: url.searchParams.get("group"),
+      id: url.searchParams.get("id"),
       createdAt: new Date().toISOString(),
     })}\n`,
   );

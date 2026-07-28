@@ -200,8 +200,11 @@ export async function addRemoteProject(
   return project;
 }
 
-export async function startRemoteThreadFromProjectMenu(page: Page, projectId: number) {
-  const remote = await readRemoteEnv();
+export async function startRemoteThreadFromProjectMenu(
+  page: Page,
+  remote: RemoteCodexEnv,
+  projectId: number,
+) {
   await page.getByTestId(`project-button-${projectId}`).click({ button: "right" });
   await page.getByRole("menuitem", { name: /新建/ }).click();
   const threadId = await waitForSelectedThreadId(page);
@@ -259,6 +262,7 @@ export async function sendSteerText(page: Page, marker: string) {
 
 export async function sendImageTurnThroughGateway(
   page: Page,
+  remote: RemoteCodexEnv,
   params: {
     hostId: number;
     threadId: string;
@@ -267,7 +271,6 @@ export async function sendImageTurnThroughGateway(
     marker: string;
   },
 ) {
-  const remote = await readRemoteEnv();
   await expect
     .poll(async () => (await currentRouteSelection(page)).threadId, { timeout: 10_000 })
     .toBe(params.threadId);

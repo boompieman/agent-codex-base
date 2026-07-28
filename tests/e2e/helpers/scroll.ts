@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 const chatScrollAreaTestId = "chat-scroll-area";
 
@@ -153,6 +153,20 @@ export async function visibleTimelineRowTop(page: Page, key: string) {
   }, key);
 }
 
+export async function expectSyntheticWebKitTouchToRemainReadable(page: Page) {
+  // Playwright WebKit can dispatch touch events, but it cannot produce Safari's native
+  // touch-driven scroll and momentum. Direct scrollTop writes deliberately bypass the browser
+  // anchoring that TanStack's iOS deferred adjustment complements, so pixel and bottom-distance
+  // assertions after its flush would test an impossible hybrid. The reliable browser contract in
+  // this project is that streaming never re-enables following and a measured timeline row remains
+  // mounted/readable. Chromium covers exact active-scroll anchoring with real wheel ownership.
+  await expect(page.getByTestId(chatScrollAreaTestId)).toHaveAttribute(
+    "data-follow-latest",
+    "false",
+  );
+  await captureVisibleTimelineRowAnchor(page);
+}
+
 export async function scrollChatViewportToBottom(page: Page) {
   await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
     const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
@@ -174,6 +188,34 @@ export async function scrollChatViewportToTop(page: Page) {
     viewport.scrollTop = 0;
     viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
+}
+
+export async function revealVirtualizedChatLocator(page: Page, locator: Locator) {
+  // TanStack deliberately unmounts timeline rows outside its overscan window. Playwright's native
+  // scrollIntoViewIfNeeded cannot target a node that does not exist yet, so walk the real viewport
+  // one screen at a time and let the virtualizer mount each window. Keeping this in the scroll
+  // helper avoids weakening production virtualization merely to make an off-screen assertion work.
+  await scrollChatViewportToTop(page);
+  await waitForBrowserFrames(page, 2);
+  for (let index = 0; index < 100; index += 1) {
+    if (await locator.isVisible().catch(() => false)) return;
+    const moved = await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
+      const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (!viewport) throw new Error("Missing chat viewport");
+      const before = viewport.scrollTop;
+      const deltaY = Math.max(1, Math.floor(viewport.clientHeight * 0.8));
+      viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
+      viewport.scrollTop = Math.min(
+        viewport.scrollHeight - viewport.clientHeight,
+        viewport.scrollTop + deltaY,
+      );
+      viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+      return viewport.scrollTop > before;
+    });
+    await waitForBrowserFrames(page, 2);
+    if (!moved) break;
+  }
+  await expect(locator).toBeVisible();
 }
 
 export async function scrollChatViewportBy(page: Page, deltaY: number) {

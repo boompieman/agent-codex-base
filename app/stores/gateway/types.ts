@@ -36,6 +36,7 @@ export interface ThreadViewState {
   olderTurnsCursor: string | null;
   newerTurnsCursor: string | null;
   lastEventId: number;
+  eventEpoch: string;
   loading: boolean;
   error: string | null;
 }

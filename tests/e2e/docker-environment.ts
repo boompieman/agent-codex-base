@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Client } from "ssh2";
-import { SUPPORTED_CODEX_VERSION } from "../../server/utils/gateway/infra/codex-version";
+import { SUPPORTED_CODEX_VERSION } from "../../server/utils/gateway/infra/codex/codex-version";
 import { connectTestSsh, execTestSsh } from "./helpers/ssh-client";
 import { nodeErrorCode } from "./helpers/node-errors";
 import { firstNonEmptyString } from "../../shared/utils/strings";

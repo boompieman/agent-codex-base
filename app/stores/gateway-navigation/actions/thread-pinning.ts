@@ -7,6 +7,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey, sortThreads, titleForThread } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createThreadPinningActions() {
   return {
@@ -20,26 +21,28 @@ export function createThreadPinningActions() {
       );
       const thread = navigation.threads.find((candidate) => String(candidate.id) === threadId);
       const key = pinnedKey(navigation.selectedHostId, threadId);
+      const previousPinnedThread = gateway.gatewayConfig.pinnedThreads.find(
+        (item) => pinnedKey(item.hostId, item.threadId) === key,
+      );
       gateway.gatewayConfig.pinnedThreads = gateway.gatewayConfig.pinnedThreads.filter(
         (item) => pinnedKey(item.hostId, item.threadId) !== key,
       );
-      if (pinned) {
-        gateway.gatewayConfig.pinnedThreads.unshift({
-          hostId: navigation.selectedHostId,
-          projectId: navigation.selectedProjectId,
-          threadId,
-          title: titleForThread(thread),
-          subtitle: project?.remotePath ?? null,
-          projectName: project?.name ?? null,
-          updatedAt: Number(thread?.recencyAt ?? thread?.updatedAt ?? Date.now() / 1000),
-        });
-      }
+      const nextPinnedThread: PinnedThreadRecord = previousPinnedThread ?? {
+        hostId: navigation.selectedHostId,
+        projectId: navigation.selectedProjectId,
+        threadId,
+        title: titleForThread(thread),
+        subtitle: project?.remotePath ?? null,
+        projectName: project?.name ?? null,
+        updatedAt: Number(thread?.recencyAt ?? thread?.updatedAt ?? Date.now() / 1000),
+      };
+      if (pinned) gateway.gatewayConfig.pinnedThreads.unshift(nextPinnedThread);
       navigation.threads = sortThreads(
         navigation.threads.map((item) =>
           String(item.id) === threadId ? { ...item, pinned } : item,
         ),
       );
-      await gateway.syncConfigToServer();
+      await gateway.setPinnedThread(nextPinnedThread, pinned);
     },
 
     async setPinnedThread(thread: PinnedThreadRecord, pinned: boolean) {
@@ -57,19 +60,23 @@ export function createThreadPinningActions() {
           ),
         );
       }
-      await gateway.syncConfigToServer();
+      await gateway.setPinnedThread(thread, pinned);
     },
 
     async openPinnedThread(thread: PinnedThreadRecord) {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
-      navigation.openingPinnedThreadKey = pinnedKey(thread.hostId, thread.threadId);
+      const openingKey = pinnedKey(thread.hostId, thread.threadId);
+      navigation.openingPinnedThreadKey = openingKey;
       try {
         await useGatewayThreadViewStore().openThread(thread.threadId, {
           hostId: thread.hostId,
           projectId: thread.projectId,
         });
       } finally {
-        navigation.openingPinnedThreadKey = null;
+        if (sessionIsCurrent() && navigation.openingPinnedThreadKey === openingKey) {
+          navigation.openingPinnedThreadKey = null;
+        }
       }
     },
 
@@ -97,7 +104,9 @@ export function createThreadPinningActions() {
           thread.recencyAt ?? thread.updatedAt ?? pinnedThread.updatedAt ?? Date.now() / 1000,
         ),
       };
-      void gateway.syncConfigToServer().catch((error: unknown) => {
+      const updatedPinnedThread = gateway.gatewayConfig.pinnedThreads[index];
+      if (updatedPinnedThread === undefined) return;
+      void gateway.setPinnedThread(updatedPinnedThread, true).catch((error: unknown) => {
         const bootstrap = useGatewayBootstrapStore();
         bootstrap.setError(
           error instanceof Error ? error.message : bootstrap.t("app.configSyncFailed"),
@@ -106,10 +115,12 @@ export function createThreadPinningActions() {
     },
 
     async renameThread(hostId: number, threadId: string, name: string) {
+      const sessionIsCurrent = captureSessionEpoch();
       const gateway = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       const views = useGatewayThreadViewStore();
       await gatewayApi("/api/threads/rename", { method: "POST", body: { hostId, threadId, name } });
+      if (!sessionIsCurrent()) return;
       if (hostId === navigation.selectedHostId) {
         navigation.threads = navigation.threads.map((thread) =>
           String(thread.id) === threadId ? { ...thread, name } : thread,
@@ -120,7 +131,12 @@ export function createThreadPinningActions() {
         pinnedKey(thread.hostId, thread.threadId) === key ? { ...thread, title: name } : thread,
       );
       useGatewayThreadActivityStore().updateTitle(hostId, threadId, name);
-      await gateway.syncConfigToServer();
+      const renamedPinnedThread = gateway.gatewayConfig.pinnedThreads.find(
+        (thread) => pinnedKey(thread.hostId, thread.threadId) === key,
+      );
+      if (renamedPinnedThread !== undefined) {
+        await gateway.setPinnedThread(renamedPinnedThread, true);
+      }
       if (
         hostId === navigation.selectedHostId &&
         navigation.selectedThreadId === threadId &&

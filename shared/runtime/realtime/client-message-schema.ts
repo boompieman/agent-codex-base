@@ -64,6 +64,7 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         type: z.literal("thread.subscribe"),
         ...threadScopeFields,
         afterId: nonNegativeId.optional(),
+        afterEpoch: nonEmptyString.optional(),
       })
       .strict(),
     z.object({ type: z.literal("thread.unsubscribe"), ...threadScopeFields }).strict(),

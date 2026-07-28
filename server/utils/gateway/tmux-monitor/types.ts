@@ -9,6 +9,7 @@ export interface TmuxMonitorHostGroup {
   userId: number;
   hostId: number;
   monitors: StoredTmuxMonitor[];
+  pendingNotifications: StoredTmuxMonitor[];
 }
 
 export interface TmuxMonitorCompletion {

@@ -28,8 +28,7 @@ COPY shared ./shared
 COPY server ./server
 COPY app ./app
 RUN --mount=type=cache,id=codex-gateway-nuxt-build,target=/app/node_modules/.cache/nuxt,sharing=locked \
-    --mount=type=cache,id=codex-gateway-turbo,target=/app/.turbo,sharing=locked \
-    pnpm build
+    pnpm exec nuxt build
 
 FROM node:${NODE_VERSION} AS runner
 ENV NODE_ENV=production

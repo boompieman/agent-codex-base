@@ -11,6 +11,12 @@ import { trimmedOrNull } from "~~/shared/utils/strings";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ThreadOpenSnapshot } from "../runtime/types";
 
+// Gateway cursors are process-local but remain numerically monotonic across normal restarts. A
+// browser cursor from an older process is therefore either below every new event (and replays all
+// of them) or above an empty store (and triggers an explicit gap), never in the middle of a reused
+// 1..N range. Multiplying milliseconds leaves room for sustained event bursts within this process.
+const PROCESS_EVENT_ID_BASE = Date.now() * 1_000;
+
 export type StoredHostRecord = HostRecord;
 
 export interface ThreadMetadataRecord {
@@ -18,6 +24,8 @@ export interface ThreadMetadataRecord {
   projectId: number | null;
   threadId: string;
   parentThreadId: string | null;
+  agentNickname: string | null;
+  agentRole: string | null;
   title: string | null;
   name: string | null;
   preview: string | null;
@@ -52,6 +60,7 @@ export interface GatewayMemoryState {
   subAgentThreads: SubAgentThreadRecord[];
   events: GatewayEvent[];
   eventPrunedThroughByThread: Record<string, number>;
+  eventEpochByHost: Record<string, string>;
   nextEventId: number;
   publishedNotificationKeys: string[];
   deliveredNotificationKeys: string[];
@@ -71,7 +80,8 @@ function createGatewayMemoryState(): GatewayMemoryState {
     subAgentThreads: [],
     events: [],
     eventPrunedThroughByThread: {},
-    nextEventId: 1,
+    eventEpochByHost: {},
+    nextEventId: PROCESS_EVENT_ID_BASE,
     publishedNotificationKeys: [],
     deliveredNotificationKeys: [],
     pendingNotificationKeys: [],
@@ -146,6 +156,12 @@ export const gatewayMemoryState: GatewayMemoryState = {
   },
   set eventPrunedThroughByThread(value) {
     currentGatewayMemoryState().eventPrunedThroughByThread = value;
+  },
+  get eventEpochByHost() {
+    return currentGatewayMemoryState().eventEpochByHost;
+  },
+  set eventEpochByHost(value) {
+    currentGatewayMemoryState().eventEpochByHost = value;
   },
   get nextEventId() {
     return currentGatewayMemoryState().nextEventId;
@@ -249,6 +265,7 @@ export const initialGatewayMemoryState: GatewayMemoryState = {
   subAgentThreads: [],
   events: [],
   eventPrunedThroughByThread: {},
+  eventEpochByHost: {},
   nextEventId: 1,
   publishedNotificationKeys: [],
   deliveredNotificationKeys: [],

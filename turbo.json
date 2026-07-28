@@ -3,7 +3,14 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "scripts/**", "package.json", "vite.config.ts", "rolldown.config.ts"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "rolldown.config.ts"
+      ],
       "outputs": ["dist/**"]
     }
   }

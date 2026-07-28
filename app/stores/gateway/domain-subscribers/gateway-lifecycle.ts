@@ -41,13 +41,10 @@ export function registerGatewayLifecycleSubscribers() {
   });
   gatewayDomainEvents.on("realtime-reconnected", () => {
     useGatewayBrowserStore().resetRuntime();
-    const navigation = useGatewayNavigationStore();
-    if (navigation.selectedHostId === null || navigation.selectedThreadId === null) return;
-    void useGatewayThreadViewStore()
-      .refreshSelectedThreadSnapshot({ scrollToLatest: true })
-      .catch((error: unknown) => {
-        console.warn("[gateway] failed to refresh selected thread after realtime reconnect", error);
-      });
+    // A normal reconnect resumes every thread from its explicit event epoch and cursor. Do not
+    // also activate a full snapshot here: that races replay and discards accepted client-only
+    // items such as steer messages. The server emits thread.events.gap when replay is impossible;
+    // that single path below owns authoritative snapshot recovery.
   });
   gatewayDomainEvents.on("realtime-thread-events-gap", ({ hostId, threadId }) => {
     void useGatewayThreadViewStore().recoverThreadEventGap(hostId, threadId);

@@ -9,6 +9,7 @@ import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
 import { gatewayDomainEvents } from "../domain-events";
 import { writeGatewayRouteSelection } from "../route-state";
 import { beginViewTransition, cacheSelectedThreadView } from "../thread-open/view-state";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createHostActions() {
   function selectHostState(hostId: number | null) {
@@ -28,10 +29,12 @@ export function createHostActions() {
 
   return {
     async createHost(input: Record<string, unknown>) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       const host = await gatewayApi<HostRecord>("/api/hosts", { method: "POST", body: input });
+      if (!sessionIsCurrent()) return host;
       catalog.hosts.push(host);
       config.setCatalog(catalog.hosts, catalog.projects);
       selectHostState(host.id);
@@ -43,11 +46,13 @@ export function createHostActions() {
     },
 
     async updateHost(hostId: number, input: Record<string, unknown>) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const host = await gatewayApi<HostRecord>(`/api/hosts/${hostId}`, {
         method: "PATCH",
         body: input,
       });
+      if (!sessionIsCurrent()) return host;
       catalog.hosts = catalog.hosts.map((candidate) =>
         candidate.id === hostId ? host : candidate,
       );
@@ -56,10 +61,12 @@ export function createHostActions() {
     },
 
     async deleteHost(hostId: number) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       await gatewayApi(`/api/hosts/${hostId}`, { method: "DELETE" });
+      if (!sessionIsCurrent()) return;
       gatewayDomainEvents.emit("host-removed", { hostId });
       useGatewayTmuxStore().removeHost(hostId);
       catalog.hosts = catalog.hosts.filter((host) => host.id !== hostId);

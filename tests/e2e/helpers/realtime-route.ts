@@ -26,6 +26,7 @@ export interface MockThreadSnapshotInput {
       turnsPage?: { nextCursor: string | null; backwardsCursor: string | null };
       recentEvents?: GatewayEvent[];
       lastEventId?: number;
+      eventEpoch?: string;
       runtimeStatus?: "idle" | "running" | "completed" | "failed" | "interrupted" | null;
     }
   >;
@@ -220,6 +221,7 @@ function handleThreadActivate(
       turnsPage: snapshot.turnsPage ?? { nextCursor: null, backwardsCursor: null },
       recentEvents: snapshot.recentEvents ?? [],
       lastEventId: snapshot.lastEventId ?? 0,
+      eventEpoch: snapshot.eventEpoch ?? "e2e-event-epoch",
     });
   if (input.responseDelayMs !== undefined && input.responseDelayMs > 0) {
     setTimeout(respond, input.responseDelayMs);

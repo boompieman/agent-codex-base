@@ -1,15 +1,16 @@
 import type { TmuxPaneOutput, TmuxPaneSnapshot, TmuxSessionSnapshot } from "~~/shared/types";
 import pLimit from "p-limit";
-import { remoteLoginShellCommand } from "../infra/remote-command";
+import { remoteLoginShellCommand } from "../infra/ssh/remote-command";
 import { sshConnections } from "../infra/host-services";
-import { shellQuote } from "../infra/shell";
-import type { HostWithSecret } from "../infra/ssh-types";
+import { shellQuote } from "../infra/ssh/shell";
+import type { HostWithSecret } from "../infra/ssh/ssh-types";
 import { currentGatewayUserId } from "../state/memory";
 import { hostRuntimeFingerprint } from "../runtime/host-runtime-fingerprint";
 
 const FIELD_SEPARATOR = "|";
 const RECORD_KIND = "pane";
 const TMUX_SCAN_CONCURRENCY = 3;
+const TMUX_COMMAND_TIMEOUT_MS = 45_000;
 
 export class TmuxUnavailableError extends Error {
   constructor(message = "tmux is not installed on the remote host") {
@@ -41,7 +42,9 @@ export class RemoteTmuxScanner {
   }
 
   private async scanNow(host: HostWithSecret): Promise<TmuxSessionSnapshot[]> {
-    const result = await sshConnections.exec(host, remoteLoginShellCommand(scanPayload()));
+    const result = await sshConnections.exec(host, remoteLoginShellCommand(scanPayload()), {
+      timeoutMs: TMUX_COMMAND_TIMEOUT_MS,
+    });
     if (result.code === 127 && result.stderr.includes("codex_gateway_tmux_unavailable")) {
       throw new TmuxUnavailableError();
     }
@@ -58,6 +61,7 @@ export class RemoteTmuxScanner {
     const result = await sshConnections.exec(
       host,
       remoteLoginShellCommand(capturePanePayload(target)),
+      { timeoutMs: TMUX_COMMAND_TIMEOUT_MS },
     );
     if (result.code !== 0) {
       throw new Error(

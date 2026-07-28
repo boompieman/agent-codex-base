@@ -9,8 +9,10 @@ import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-ut
 import { isStaleThreadCursorError } from "./stale-cursor";
 import { requestThreadTurnsPage } from "./transport";
 import type { Translate } from "./types";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export async function loadOlderTurns(t: Translate, options: { limit?: number } = {}) {
+  const sessionIsCurrent = captureSessionEpoch();
   const gateway = useGatewayBootstrapStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
@@ -35,6 +37,13 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
       limit: options.limit ?? OLDER_TURN_PAGE_LIMIT,
       sortDirection: "desc",
     });
+    if (
+      !sessionIsCurrent() ||
+      navigation.selectedHostId !== hostId ||
+      navigation.selectedThreadId !== threadId
+    ) {
+      return;
+    }
     const turns = threadTurnsFromHistory(result.history);
     views.history = mergeThreadTurns(
       views.history,
@@ -47,6 +56,7 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
     views.newerTurnsCursor = result.turnsPage.backwardsCursor ?? views.newerTurnsCursor;
     cacheSelectedThreadView();
   } catch (error: unknown) {
+    if (!sessionIsCurrent()) return;
     if (isStaleThreadCursorError(error)) {
       if (navigation.selectedHostId !== hostId || navigation.selectedThreadId !== threadId) {
         return;
@@ -62,6 +72,12 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
       { hostId, projectId, threadId },
     );
   } finally {
-    views.loadingOlderTurns = false;
+    if (
+      sessionIsCurrent() &&
+      navigation.selectedHostId === hostId &&
+      navigation.selectedThreadId === threadId
+    ) {
+      views.loadingOlderTurns = false;
+    }
   }
 }

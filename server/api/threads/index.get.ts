@@ -14,13 +14,16 @@ import { remoteFiles } from "../../utils/gateway/infra/host-services";
 import { withAllThreadSources } from "../../utils/gateway/protocol/thread-list";
 import { threadProjectDiscovery } from "../../utils/gateway/runtime/thread-project-discovery";
 import type { AppServerThread } from "~~/shared/types";
-import type { HostWithSecret } from "../../utils/gateway/infra/ssh-types";
+import type { HostWithSecret } from "../../utils/gateway/infra/ssh/ssh-types";
 import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
 import { trimmedOrNull } from "~~/shared/utils/strings";
 
 export default defineGatewayEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (body) => threadListSchema.parse(body));
   const host = requireRecord(hostStore.getWithSecret(query.hostId), "Host not found");
+  const userId = event.context.auth?.user.id;
+  const discoveryGeneration =
+    userId === undefined ? null : threadProjectDiscovery.captureGeneration(userId, host.id);
   setGatewayRequestLogContext(event, "threads/list", {
     ...hostLogContext(host),
     projectId: query.projectId ?? null,
@@ -42,11 +45,16 @@ export default defineGatewayEventHandler(async (event) => {
   const threads = page.data
     .map(appServerThreadFromUnknown)
     .filter((thread): thread is AppServerThread => thread !== null);
-  threadProjectDiscovery.indexPage(host.id, page);
-
-  const userId = event.context.auth?.user.id;
-  if (userId !== undefined && shouldDiscoverHostProjects(query)) {
-    threadProjectDiscovery.schedule(userId, host, page, listParams);
+  if (userId !== undefined && discoveryGeneration !== null) {
+    const current = threadProjectDiscovery.indexPageIfCurrent(
+      userId,
+      host.id,
+      discoveryGeneration,
+      page,
+    );
+    if (current && shouldDiscoverHostProjects(query)) {
+      threadProjectDiscovery.schedule(userId, host, page, listParams, discoveryGeneration);
+    }
   }
   const mergedThreads = mergeThreads(
     threads,

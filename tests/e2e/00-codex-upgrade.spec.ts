@@ -1,15 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import type { HostRecord } from "../../shared/types";
-import { parseCodexVersion } from "../../server/utils/gateway/infra/codex-version";
+import { parseCodexVersion } from "../../server/utils/gateway/infra/codex/codex-version";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { hostRecordSchema } from "./helpers/http-schemas";
 import {
-  addRemoteHost,
   addRemoteProject,
   execRemoteSsh,
   readContainerCodexVersion,
-  readRemoteEnv,
   readUpgradeRemoteEnvs,
+  type RemoteCodexEnv,
   resetRemoteAppServer,
   remoteCodexCommand,
   sendTextTurn,
@@ -94,7 +93,7 @@ test("upgrades empty, legacy Node, and legacy Codex SSH hosts serially", async (
   // Refresh once before the sole product-flow test to hydrate Pinia with the surviving Host.
   await reloadApp(page);
   const project = await addRemoteProject(page, remote, host.id, `upgrade-project-${Date.now()}`);
-  const threadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const threadId = await startRemoteThreadFromProjectMenu(page, remote, project.id);
   const marker = `E2E 升级后发送 ${Date.now()}`;
   await sendTextTurn(page, marker, { hostId: host.id, threadId, cwd: remote.projectPath });
   await expect(page.getByTestId("chat-scroll-area").getByText(marker)).toBeVisible({
@@ -105,7 +104,7 @@ test("upgrades empty, legacy Node, and legacy Codex SSH hosts serially", async (
   });
 });
 
-async function verifyInitialRuntime(remote: Awaited<ReturnType<typeof readRemoteEnv>>) {
+async function verifyInitialRuntime(remote: RemoteCodexEnv) {
   const checks = {
     "empty-runtime":
       "! command -v node && ! command -v npm && ! command -v codex && printf 'empty runtime verified\\n'",
@@ -126,7 +125,7 @@ printf 'legacy Codex runtime verified\\n'
   expect(result.stdout).toContain("verified");
 }
 
-async function verifyOfficialNpmLayout(remote: Awaited<ReturnType<typeof readRemoteEnv>>) {
+async function verifyOfficialNpmLayout(remote: RemoteCodexEnv) {
   await expect
     .poll(
       async () => {
@@ -161,8 +160,11 @@ printf 'official npm layout and staging cleanup verified\\n'
     .toContain("official npm layout and staging cleanup verified");
 }
 
-test("replaces an existing socket app-server when no loaded turn is active", async ({ page }) => {
-  const remote = await readRemoteEnv();
+test("replaces an existing socket app-server when no loaded turn is active", async ({
+  page,
+  remoteWorkspace,
+}) => {
+  const { remote } = remoteWorkspace;
   const codexBin = remoteCodexCommand(remote);
 
   await resetRemoteAppServer(remote);
@@ -192,9 +194,11 @@ rm -f "$daemon_dir"/app-server.pid "$daemon_dir"/app-server.pid.lock "$daemon_di
 
   await openApp(page);
 
-  const host = await addRemoteHost(page, remote, `unmanaged-codex-${Date.now()}`);
-  const project = await addRemoteProject(page, remote, host.id, `unmanaged-project-${Date.now()}`);
-  const threadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const { host, project } = await remoteWorkspace.provision({
+    hostName: `unmanaged-codex-${Date.now()}`,
+    projectName: `unmanaged-project-${Date.now()}`,
+  });
+  const threadId = await remoteWorkspace.startThread(project.id);
   const marker = `E2E socket app-server 重启 ${Date.now()}`;
   await sendTextTurn(page, marker, { hostId: host.id, threadId, cwd: remote.projectPath });
   await expect(page.getByTestId("chat-scroll-area").getByText(marker)).toBeVisible({

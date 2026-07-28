@@ -29,13 +29,15 @@ function upsertPendingServerRequest(
   threadId: string,
 ) {
   const turnId = idFromUnknown(params.turnId);
+  const stableItemId = idFromUnknown(params.itemId) ?? idFromUnknown(event.payload.id);
+  if (stableItemId === null) return;
   gatewayDomainEvents.emit("history-item-upsert", {
     hostId: event.hostId,
     threadId,
     item: {
       type: itemTypeForServerRequest(event.method),
-      id: `server-request-${String(event.payload.id)}`,
-      turnId: turnId ?? `server-request-turn-${String(event.payload.id)}`,
+      id: `server-request-${String(stableItemId)}`,
+      turnId: turnId ?? `server-request-turn-${String(stableItemId)}`,
       status: "waitingForClient",
       requestId: event.payload.id,
       method: event.method,

@@ -1,13 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { hostRecordSchema, projectRecordSchema } from "./helpers/http-schemas";
 import { seedGatewayThread } from "./helpers/gateway-store";
-import { execRemoteSsh, readRemoteEnv } from "./helpers/remote-codex";
+import { execRemoteSsh } from "./helpers/remote-codex";
 
 test("the unified file workspace browses, restores, and refreshes real remote files", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   await openApp(page);
 
   const projectPath = `/home/${remote.username}`;

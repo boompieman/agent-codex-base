@@ -31,7 +31,11 @@ const panelKey = computed(() =>
 );
 const preview = computed(() => threadViews.value[panelKey.value] ?? null);
 const turns = computed(() =>
-  subAgentOwnedTurns(preview.value?.currentThread ?? null, preview.value?.history ?? null),
+  subAgentOwnedTurns(
+    preview.value?.currentThread ?? null,
+    preview.value?.history ?? null,
+    threadView.history,
+  ),
 );
 const title = computed(() => {
   const thread = preview.value?.currentThread ?? null;

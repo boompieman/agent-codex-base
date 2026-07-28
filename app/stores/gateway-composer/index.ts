@@ -9,8 +9,6 @@ import { createComposerActions } from "./actions/drafts";
 import { createThreadGoalActions } from "./actions/goals";
 import { createThreadSettingsActions } from "./actions/settings";
 
-const emptyDraft = (): ComposerDraft => ({ text: "", attachedFiles: [] });
-
 export const useGatewayComposerStore = defineStore("gateway-composer", () => {
   const threadSettingsByKey = ref<Record<string, ThreadSettingsState>>({});
   const threadCollaborationModesByKey = ref<Record<string, "default" | "plan">>({});
@@ -50,12 +48,6 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
       ? (runtime.threadTokenUsageByKey[selectedKey.value] ?? null)
       : null;
   });
-  const selectedComposerDraft = computed(() =>
-    selectedKey.value !== null
-      ? (composerDraftsByKey.value[selectedKey.value] ?? emptyDraft())
-      : emptyDraft(),
-  );
-
   function resetState() {
     threadSettingsByKey.value = {};
     threadCollaborationModesByKey.value = {};
@@ -77,7 +69,6 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
     selectedThreadGoal,
     selectedThreadGoalObservedAt,
     selectedThreadTokenUsage,
-    selectedComposerDraft,
     resetState,
     ...actions,
   };

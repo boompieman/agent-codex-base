@@ -47,6 +47,10 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   function connect() {
     if (!import.meta.client) return;
 
+    const auth = useAuthStore();
+    auth.hydrate();
+    if (!auth.isAuthenticated) return;
+
     const existing = state.socket;
     if (
       existing !== null &&
@@ -59,8 +63,6 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
     const generation = state.generation + 1;
     state.generation = generation;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const auth = useAuthStore();
-    auth.hydrate();
     const socket = new WebSocket(`${protocol}//${window.location.host}/api/realtime`);
     state.socket = socket;
 
@@ -74,7 +76,14 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
 
     socket.addEventListener("message", (event) => {
       if (state.generation !== generation) return;
-      options.onMessage(parseRealtimeServerMessage(JSON.parse(String(event.data))));
+      try {
+        options.onMessage(parseRealtimeServerMessage(JSON.parse(String(event.data))));
+      } catch (error: unknown) {
+        // A malformed or protocol-incompatible frame cannot be ignored while the socket remains
+        // healthy: the request broker would wait until its deadline for a response already lost.
+        console.error("[gateway] invalid realtime server frame", error);
+        socket.close(1002, "Invalid realtime server frame");
+      }
     });
 
     socket.addEventListener("close", () => {
@@ -126,7 +135,8 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function scheduleReconnect() {
-    if (!import.meta.client || state.reconnectTimer !== null) return;
+    if (!import.meta.client || state.reconnectTimer !== null || !useAuthStore().isAuthenticated)
+      return;
 
     const attempt = state.reconnectAttempt + 1;
     state.reconnectAttempt = attempt;
@@ -156,7 +166,7 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function checkConnection() {
-    if (!import.meta.client) return;
+    if (!import.meta.client || !useAuthStore().isAuthenticated) return;
 
     const socket = state.socket;
     if (socket === null || socket.readyState !== WebSocket.OPEN || !state.connected) {

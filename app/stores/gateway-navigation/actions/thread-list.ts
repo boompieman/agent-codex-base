@@ -12,17 +12,21 @@ import type { ThreadListResponse } from "@/stores/gateway/types";
 import { messageFromError, pinnedKey, sortThreads } from "@/stores/gateway/thread-utils/identity";
 import { runtimeStatusFromAppThreadStatus } from "@/stores/gateway/thread-utils/status";
 import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createThreadListActions() {
   async function loadHostOverview(hostId: number) {
     const catalog = useGatewayCatalogStore();
+    const sessionIsCurrent = captureSessionEpoch();
     const response = await gatewayApi<ThreadListResponse>("/api/threads", {
       query: { hostId, limit: 50 },
     });
+    if (!sessionIsCurrent()) return false;
     if (response.projects !== undefined) catalog.mergeProjects(response.projects);
     applyProjectDirectoryAvailability(response);
     useGatewayThreadActivityStore().ingestThreads(hostId, response.data ?? [], catalog.projects);
     syncThreadStatusesFromList(hostId, response.data ?? []);
+    return true;
   }
 
   function decorateThreads(threads: AppServerThread[]) {
@@ -45,13 +49,15 @@ export function createThreadListActions() {
       const catalog = useGatewayCatalogStore();
       const config = useGatewayConfigStore();
       const bootstrap = useGatewayBootstrapStore();
+      const sessionIsCurrent = captureSessionEpoch();
       await Promise.all(
         catalog.hosts.map(async (host) => {
           catalog.setHostConnectionStatus(host.id, "connecting");
           try {
-            await loadHostOverview(host.id);
+            if (!(await loadHostOverview(host.id)) || !sessionIsCurrent()) return;
             catalog.setHostConnectionStatus(host.id, "connected");
           } catch (error: unknown) {
+            if (!sessionIsCurrent()) return;
             catalog.setHostConnectionStatus(
               host.id,
               "failed",
@@ -60,6 +66,7 @@ export function createThreadListActions() {
           }
         }),
       );
+      if (!sessionIsCurrent()) return;
       config.setCatalog(catalog.hosts, catalog.projects);
     },
     refreshHostProjects: loadHostOverview,
@@ -73,6 +80,7 @@ export function createThreadListActions() {
       const projectId = navigation.selectedProjectId;
       const projectCwd = projectById(catalog.projects, projectId)?.remotePath;
       if (hostId === null) return;
+      const sessionIsCurrent = captureSessionEpoch();
       views.loading = true;
       bootstrap.clearError();
       try {
@@ -81,6 +89,7 @@ export function createThreadListActions() {
         if (projectCwd !== undefined && projectCwd !== "") query.cwd = projectCwd;
         if (searchTerm !== "") query.searchTerm = searchTerm;
         const response = await gatewayApi<ThreadListResponse>("/api/threads", { query });
+        if (!sessionIsCurrent()) return;
         if (navigation.selectedHostId !== hostId || navigation.selectedProjectId !== projectId)
           return;
         if (response.projects !== undefined) catalog.mergeProjects(response.projects);
@@ -101,6 +110,7 @@ export function createThreadListActions() {
         navigation.threads = sortThreads(decorateThreads(mainThreads));
         config.setCatalog(catalog.hosts, catalog.projects);
       } catch (error: unknown) {
+        if (!sessionIsCurrent()) return;
         if (navigation.selectedHostId !== hostId || navigation.selectedProjectId !== projectId)
           return;
         const message = messageFromError(
@@ -111,7 +121,11 @@ export function createThreadListActions() {
         catalog.setHostConnectionStatus(hostId, "failed", message);
         bootstrap.setError(message, { hostId, projectId, threadId: navigation.selectedThreadId });
       } finally {
-        if (navigation.selectedHostId === hostId && navigation.selectedProjectId === projectId) {
+        if (
+          sessionIsCurrent() &&
+          navigation.selectedHostId === hostId &&
+          navigation.selectedProjectId === projectId
+        ) {
           views.loading = false;
         }
       }

@@ -1,57 +1,61 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { ref, watch } from "vue";
 
 import { storeToRefs } from "pinia";
 import type { UploadedFileRecord } from "~~/shared/types";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
+import { selectedThreadKey } from "@/stores/gateway/thread-utils/identity";
 
 export type ComposerAttachment = UploadedFileRecord & { id: string; dataUrl?: string };
 
 export function useComposerDraft() {
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
-  const { selectedComposerDraft } = storeToRefs(composer);
   const { selectedHostId, selectedThreadId } = storeToRefs(navigation);
   const turnText = ref("");
   const attachedFiles = ref<ComposerAttachment[]>([]);
-  const draftKey = computed(() =>
-    selectedHostId.value !== null && selectedThreadId.value !== null
-      ? `${selectedHostId.value}:${selectedThreadId.value}`
-      : "",
-  );
+  let activeHostId: number | null = null;
+  let activeThreadId: string | null = null;
   let syncingDraft = false;
 
   watch(
-    draftKey,
-    () => {
+    [selectedHostId, selectedThreadId],
+    ([hostId, threadId]) => {
       syncingDraft = true;
-      turnText.value = selectedComposerDraft.value.text;
-      attachedFiles.value = [...selectedComposerDraft.value.attachedFiles];
-      void nextTick(() => {
-        syncingDraft = false;
-      });
+      activeHostId = hostId;
+      activeThreadId = threadId;
+      const key = selectedThreadKey(hostId, threadId);
+      const draft = key === null ? undefined : composer.composerDraftsByKey[key];
+      turnText.value = draft?.text ?? "";
+      attachedFiles.value = [...(draft?.attachedFiles ?? [])];
+      syncingDraft = false;
     },
-    { immediate: true },
+    // Scope changes and local v-model writes are one transaction. A deferred watcher can observe
+    // the new navigation scope while persisting the old textarea value and leak a draft between
+    // threads, so both hydration and persistence intentionally run synchronously.
+    { flush: "sync", immediate: true },
   );
 
   watch(
     [turnText, attachedFiles],
     () => {
-      if (syncingDraft || !draftKey.value) {
+      if (syncingDraft || activeHostId === null || activeThreadId === null) {
         return;
       }
-      composer.saveSelectedComposerDraft({
+      composer.saveComposerDraft(activeHostId, activeThreadId, {
         text: turnText.value,
         attachedFiles: attachedFiles.value,
       });
     },
-    { deep: true },
+    { deep: true, flush: "sync" },
   );
 
   function clearDraft() {
     turnText.value = "";
     attachedFiles.value = [];
-    composer.clearSelectedComposerDraft();
+    if (activeHostId !== null && activeThreadId !== null) {
+      composer.clearComposerDraft(activeHostId, activeThreadId);
+    }
   }
 
   return {

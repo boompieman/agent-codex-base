@@ -21,6 +21,7 @@ import {
 } from "./host-runtime-slot";
 import { hostSessionEvents, type HostSessionClosedEvent } from "./host-session-events";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
+import { threadBroker } from "./broker";
 
 class HostRuntimeSupervisor {
   private readonly slots = new Map<string, HostRuntimeSlot>();
@@ -117,6 +118,20 @@ class HostRuntimeSupervisor {
         return;
       }
       this.removeSlot(key, existing);
+      const slot = createHostRuntimeSlot(userId, host, pinnedThreads);
+      this.slots.set(key, slot);
+      const replacedConnection = existing.connectPromise;
+      if (replacedConnection !== null) {
+        // A changed Host reuses the same userId:hostId registry key. Let the old generation finish
+        // unwinding before the replacement can create a session, otherwise the stale task can
+        // overwrite the new target after HostResourceLifecycleService closes the old resources.
+        void replacedConnection.finally(() => {
+          if (this.isCurrent(slot, slot.generation)) this.scheduleConnect(slot, 0);
+        });
+      } else {
+        this.scheduleConnect(slot, 0);
+      }
+      return;
     }
 
     const slot = createHostRuntimeSlot(userId, host, pinnedThreads);
@@ -138,6 +153,17 @@ class HostRuntimeSupervisor {
     slot.generation += 1;
     this.slots.delete(key);
     activeMainThreadMonitor.forgetHost(slot.userId, slot.hostId);
+    const connection = slot.connectPromise;
+    if (connection !== null) {
+      void connection
+        .finally(() => {
+          // HostResourceLifecycle closes the current session synchronously, but an SSH/RPC connect
+          // already in flight can finish afterwards. Replacement slots wait on this same promise,
+          // so closing here cannot race a new target and removes any late old-identity session.
+          runWithGatewayUser(slot.userId, () => threadBroker.closeHost(slot.hostId));
+        })
+        .catch(() => {});
+    }
   }
 
   private handleSessionClosed(event: HostSessionClosedEvent) {
@@ -163,8 +189,11 @@ class HostRuntimeSupervisor {
       return;
     }
     slot.connecting = true;
+    const connection = connectHostRuntime(slot, () => this.isCurrent(slot, generation));
+    slot.connectPromise = connection;
     try {
-      await connectHostRuntime(slot);
+      await connection;
+      if (!this.isCurrent(slot, generation)) return;
       slot.retryCount = 0;
     } catch (error) {
       if (!this.isCurrent(slot, generation)) {
@@ -174,7 +203,10 @@ class HostRuntimeSupervisor {
       publishHostRuntimeFailure(slot, error);
       this.scheduleConnect(slot, retryDelay(slot.retryCount));
     } finally {
-      slot.connecting = false;
+      if (slot.connectPromise === connection) {
+        slot.connectPromise = null;
+        slot.connecting = false;
+      }
     }
   }
 

@@ -1,6 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { projectRecordSchema } from "./helpers/http-schemas";
 import { STALE_THREAD_CURSOR_ERROR_CODE } from "../../shared/gateway-errors";
@@ -10,20 +11,18 @@ import {
   installRealtimeSocketProbe,
 } from "./helpers/realtime-socket-probe";
 import {
-  addRemoteHost,
-  addRemoteProject,
   execRemoteSsh,
-  readRemoteEnv,
+  type RemoteCodexEnv,
   selectSidebarThread,
   sendTextTurn,
-  startRemoteThreadFromProjectMenu,
   waitForSelectedThreadId,
 } from "./helpers/remote-codex";
 
 test("connects to a real SSH Codex host and lists a project thread created by app-server", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   await installRealtimeSocketProbe(page);
 
   await openApp(page);
@@ -31,7 +30,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect.poll(() => activeRealtimeSocketCount(page), { timeout: 10_000 }).toBe(1);
 
   const hostName = `docker-codex-${Date.now()}`;
-  const host = await addRemoteHost(page, remote, hostName);
+  const host = await remoteWorkspace.addHost(hostName);
   await verifyRemoteDirectoryBrowser(page, remote, host.id, hostName);
   const discovered = await createRemoteHistoricalRollout(remote);
   const discoveryResponse = await authenticatedFetch(
@@ -77,7 +76,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
     }),
   ).toBe(true);
 
-  const project = await addRemoteProject(page, remote, host.id);
+  const project = await remoteWorkspace.addProject(host.id);
 
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
   await expect(
@@ -120,9 +119,9 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect(page.getByTestId("composer-mode-strip").getByText("计划模式").first()).toBeVisible();
   await page.getByPlaceholder("输入后续修改要求").fill("");
 
-  const threadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const threadId = await remoteWorkspace.startThread(project.id);
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
-  const secondThreadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const secondThreadId = await remoteWorkspace.startThread(project.id);
   await expect(page.getByTestId(`thread-button-${secondThreadId}`)).toBeVisible();
 
   const firstDraft = `E2E 草稿一 ${Date.now()}`;
@@ -254,11 +253,11 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect(page.getByTestId(`project-button-${project.id}`)).toBeHidden();
 });
 
-test("groups projects whose remote directories were deleted", async ({ page }) => {
-  const remote = await readRemoteEnv();
+test("groups projects whose remote directories were deleted", async ({ page, remoteWorkspace }) => {
+  const { remote } = remoteWorkspace;
   await openApp(page);
 
-  const host = await addRemoteHost(page, remote, `missing-project-host-${Date.now()}`);
+  const host = await remoteWorkspace.addHost(`missing-project-host-${Date.now()}`);
   const suffix = Date.now();
   const availablePath = `/home/${remote.username}/available-project-${suffix}`;
   const missingPath = `/home/${remote.username}/missing-project-${suffix}`;
@@ -322,7 +321,7 @@ test("groups projects whose remote directories were deleted", async ({ page }) =
 
 async function verifyRemoteDirectoryBrowser(
   page: Page,
-  remote: Awaited<ReturnType<typeof readRemoteEnv>>,
+  remote: RemoteCodexEnv,
   hostId: number,
   hostName: string,
 ) {
@@ -373,7 +372,7 @@ async function verifyRemoteDirectoryBrowser(
   await page.keyboard.press("Escape");
 }
 
-async function createRemoteHistoricalRollout(remote: Awaited<ReturnType<typeof readRemoteEnv>>) {
+async function createRemoteHistoricalRollout(remote: RemoteCodexEnv) {
   const suffix = Date.now();
   const threadId = randomUUID();
   const cwd = "/home/codex";

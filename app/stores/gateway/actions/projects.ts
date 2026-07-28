@@ -8,9 +8,14 @@ import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { writeGatewayRouteSelection } from "../route-state";
 import { cacheSelectedThreadView, beginViewTransition } from "../thread-open/view-state";
 import { messageFromError } from "../thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createProjectActions() {
-  let pendingModelRequest: { hostId: number; promise: Promise<void> } | null = null;
+  let pendingModelRequest: {
+    hostId: number;
+    promise: Promise<void>;
+    sessionIsCurrent: () => boolean;
+  } | null = null;
 
   function clearThreadSelection() {
     const navigation = useGatewayNavigationStore();
@@ -22,6 +27,7 @@ export function createProjectActions() {
   }
 
   async function loadModels(hostId: number) {
+    const sessionIsCurrent = captureSessionEpoch();
     const catalog = useGatewayCatalogStore();
     const bootstrap = useGatewayBootstrapStore();
     const navigation = useGatewayNavigationStore();
@@ -32,16 +38,17 @@ export function createProjectActions() {
       const response = await gatewayApi<ModelListResult>("/api/models", {
         query: { hostId, includeHidden: false, limit: 50 },
       });
-      if (navigation.selectedHostId !== hostId) return;
+      if (!sessionIsCurrent() || navigation.selectedHostId !== hostId) return;
       catalog.models = response.data ?? [];
       catalog.modelsHostId = hostId;
     } catch (error: unknown) {
+      if (!sessionIsCurrent()) return;
       bootstrap.setError(
         messageFromError(error, bootstrap.t("app.listModelsFailed"), bootstrap.errorLabels),
         { hostId, projectId, threadId },
       );
     } finally {
-      if (navigation.selectedHostId === hostId) catalog.loadingModels = false;
+      if (sessionIsCurrent() && navigation.selectedHostId === hostId) catalog.loadingModels = false;
     }
   }
 
@@ -70,11 +77,13 @@ export function createProjectActions() {
         catalog.modelsHostId = null;
         return;
       }
-      if (pendingModelRequest?.hostId === hostId) return pendingModelRequest.promise;
+      if (pendingModelRequest?.hostId === hostId && pendingModelRequest.sessionIsCurrent())
+        return pendingModelRequest.promise;
+      const sessionIsCurrent = captureSessionEpoch();
       const promise = loadModels(hostId).finally(() => {
         if (pendingModelRequest?.promise === promise) pendingModelRequest = null;
       });
-      pendingModelRequest = { hostId, promise };
+      pendingModelRequest = { hostId, promise, sessionIsCurrent };
       return promise;
     },
 
@@ -86,6 +95,7 @@ export function createProjectActions() {
     },
 
     async createProject(input: Record<string, unknown>) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
@@ -93,6 +103,7 @@ export function createProjectActions() {
         method: "POST",
         body: input,
       });
+      if (!sessionIsCurrent()) return project;
       catalog.mergeProjects([project]);
       upsertConfiguredProject(project);
       config.setCatalog(catalog.hosts, catalog.projects);
@@ -105,12 +116,14 @@ export function createProjectActions() {
     },
 
     async updateProject(projectId: number, input: Record<string, unknown>) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const navigation = useGatewayNavigationStore();
       const project = await gatewayApi<ProjectRecord>(`/api/projects/${projectId}`, {
         method: "PATCH",
         body: input,
       });
+      if (!sessionIsCurrent()) return project;
       catalog.projects = catalog.projects.map((item) => (item.id === projectId ? project : item));
       upsertConfiguredProject(project);
       catalog.projectDirectoryAvailability = omitKey(
@@ -129,11 +142,13 @@ export function createProjectActions() {
     },
 
     async deleteProject(projectId: number) {
+      const sessionIsCurrent = captureSessionEpoch();
       const catalog = useGatewayCatalogStore();
       const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       const project = catalog.projects.find((item) => item.id === projectId);
       await gatewayApi(`/api/projects/${projectId}`, { method: "DELETE" });
+      if (!sessionIsCurrent()) return;
       catalog.projects = catalog.projects.filter((item) => item.id !== projectId);
       catalog.projectDirectoryAvailability = omitKey(
         catalog.projectDirectoryAvailability,

@@ -16,17 +16,17 @@ import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceL
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import AddProjectDialog from "./AddProjectDialog.vue";
-import HostTree from "./HostTree.vue";
-import PinnedThreadList from "./PinnedThreadList.vue";
-import RecentThreadList from "./RecentThreadList.vue";
+import HostTree from "./host-tree/HostTree.vue";
+import PinnedThreadList from "./thread-list/PinnedThreadList.vue";
+import RecentThreadList from "./thread-list/RecentThreadList.vue";
 import SidebarScrollArea from "./SidebarScrollArea.vue";
 import { SidebarFooter } from "@/components/ui/sidebar";
-import { useSidebarTree } from "./useSidebarTree";
-import { useThreadRename } from "./useThreadRename";
-import { useRecentThreadActivity } from "./useRecentThreadActivity";
+import { useSidebarTree } from "./host-tree/useSidebarTree";
+import { useThreadRename } from "./thread-list/useThreadRename";
+import { useRecentThreadActivity } from "./thread-list/useRecentThreadActivity";
 import SidebarWorkspaceToolbar from "./SidebarWorkspaceToolbar.vue";
 import { useTmuxMonitorLauncher } from "@/composables/workspace/useTmuxMonitorLauncher";
-import type { HostTreeController } from "./host-tree-controller";
+import type { HostTreeController } from "./host-tree/controller";
 import type { HostRecord, ProjectRecord } from "./sidebar-types";
 
 const catalog = useGatewayCatalogStore();

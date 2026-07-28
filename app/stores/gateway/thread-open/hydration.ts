@@ -22,7 +22,12 @@ export function applyOpenedThreadResult(threadId: string, result: ThreadOpenResu
     navigation.selectedProjectId = result.projectId;
   }
   navigation.selectedThreadId = threadId;
-  useGatewayRealtimeStore().rememberThreadSubscription(result.hostId, threadId, result.lastEventId);
+  useGatewayRealtimeStore().rememberThreadSubscription(
+    result.hostId,
+    threadId,
+    result.lastEventId,
+    result.eventEpoch,
+  );
   if (result.project !== null && result.project !== undefined)
     gateway.mergeProjects([result.project]);
   applyCommonThreadResult(threadId, result, result.lastEventId);
@@ -82,6 +87,7 @@ function applyCommonThreadResult(
   views.olderTurnsCursor = result.turnsPage.nextCursor;
   views.newerTurnsCursor = result.turnsPage.backwardsCursor;
   views.lastEventId = explicitLastEventId ?? result.recentEvents.at(-1)?.id ?? 0;
+  views.eventEpoch = result.eventEpoch;
   composer.setThreadSettings(hostId, threadId, result.threadSettings);
   if (result.tokenUsage !== null && result.tokenUsage !== undefined) {
     runtime.setThreadTokenUsage(hostId, threadId, result.tokenUsage);

@@ -23,13 +23,13 @@ export function useFileDocumentGuards(input: {
     const document = pendingCloseDocument.value;
     if (document === null || !(await workspace.saveDocument(document))) return;
     pendingCloseDocument.value = null;
-    workspace.closeFile(toValue(input.hostId), toValue(input.threadId), document.path);
+    workspace.closeFile(document.hostId, document.threadId, document.path);
   }
   function discardAndClose() {
     const document = pendingCloseDocument.value;
     if (document === null) return;
     pendingCloseDocument.value = null;
-    workspace.closeFile(toValue(input.hostId), toValue(input.threadId), document.path);
+    workspace.closeFile(document.hostId, document.threadId, document.path);
   }
   async function discardConflict() {
     const document = conflictDocument.value;

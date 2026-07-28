@@ -275,6 +275,7 @@ function cachedThreadView(threadId: string, history: ThreadHistoryState): Thread
     olderTurnsCursor: null,
     newerTurnsCursor: null,
     lastEventId: 0,
+    eventEpoch: "e2e-event-epoch",
     loading: false,
     error: null,
   };

@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import type { AppServerThread, ProjectRecord, ThreadRuntimeStatus } from "~~/shared/types";
 import { pinnedKey } from "../gateway/thread-utils/identity";
 import { firstNonEmptyString, trimmedOrNull } from "~~/shared/utils/strings";
+import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
 
 export interface ThreadActivitySummary {
   hostId: number;
@@ -52,6 +53,7 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
         // New app-server notifications may identify a managed child by agent metadata before a
         // later thread/read supplies parentThreadId. Keep the classification sticky once known.
         isSubAgent:
+          isAppServerSubAgentThread(thread) ||
           parentThreadId !== null ||
           stringOrNull(thread.agentRole) !== null ||
           stringOrNull(thread.agentNickname) !== null ||

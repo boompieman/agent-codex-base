@@ -9,12 +9,15 @@ import type { StoredHostRecord } from "../state/memory";
 import { threadBroker } from "./broker";
 import { hostRuntimeFingerprint } from "./host-runtime-fingerprint";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
+import { threadProjectDiscovery } from "./thread-project-discovery";
+import { pendingServerRequests } from "./pending-server-requests";
 
 export const hostResourceLifecycle = {
   changed(userId: number, previous: StoredHostRecord, next: StoredHostRecord) {
     if (hostRuntimeFingerprint(previous) === hostRuntimeFingerprint(next)) return;
     closeEphemeralResources(userId, previous.id);
     if (remoteIdentityFingerprint(previous) !== remoteIdentityFingerprint(next)) {
+      threadProjectDiscovery.invalidateHost(userId, previous.id);
       clearThreadRuntime(previous.id);
       tmuxMonitorService.removeHost(userId, previous.id);
     }
@@ -24,6 +27,7 @@ export const hostResourceLifecycle = {
     // Config relations were removed inside UserConfigMutationService's draft transaction.
     // This hook is deliberately limited to ephemeral resources so it cannot create a
     // memory/SQLite split after the durable commit has already succeeded.
+    threadProjectDiscovery.invalidateHost(userId, hostId);
     clearThreadRuntime(hostId);
     closeEphemeralResources(userId, hostId);
     tmuxMonitorService.removeHost(userId, hostId);
@@ -31,6 +35,7 @@ export const hostResourceLifecycle = {
 };
 
 function closeEphemeralResources(userId: number, hostId: number) {
+  pendingServerRequests.deleteHost(userId, hostId);
   activeMainThreadMonitor.forgetHost(userId, hostId);
   threadBroker.closeHost(hostId);
   terminalManager.closeHost(userId, hostId);

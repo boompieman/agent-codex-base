@@ -6,6 +6,7 @@ export interface RealtimeThreadSubscription {
   hostId: number;
   threadId: string;
   afterId: number;
+  afterEpoch?: string;
 }
 
 export interface RealtimeThreadSubscriptionState {
@@ -30,16 +31,26 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
     options.send({ type: "host.lifecycle.subscribe" });
   }
 
-  function connectThreadEvents(hostId: number, threadId: string, afterId: number) {
+  function connectThreadEvents(
+    hostId: number,
+    threadId: string,
+    afterId: number,
+    afterEpoch: string | undefined,
+  ) {
     const key = pinnedKey(hostId, threadId);
-    const subscription = { hostId, threadId, afterId };
+    const subscription = { hostId, threadId, afterId, afterEpoch };
     rememberSubscription(key, subscription);
     options.connect();
     sendThreadSubscribe(subscription);
   }
 
-  function rememberThreadSubscription(hostId: number, threadId: string, afterId: number) {
-    rememberSubscription(pinnedKey(hostId, threadId), { hostId, threadId, afterId });
+  function rememberThreadSubscription(
+    hostId: number,
+    threadId: string,
+    afterId: number,
+    afterEpoch: string | undefined,
+  ) {
+    rememberSubscription(pinnedKey(hostId, threadId), { hostId, threadId, afterId, afterEpoch });
   }
 
   function rememberSubscription(key: string, subscription: RealtimeThreadSubscription) {
@@ -110,6 +121,9 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
       hostId: subscription.hostId,
       threadId: subscription.threadId,
       afterId: subscription.afterId,
+      ...(subscription.afterEpoch !== undefined && subscription.afterEpoch !== ""
+        ? { afterEpoch: subscription.afterEpoch }
+        : {}),
     });
   }
 

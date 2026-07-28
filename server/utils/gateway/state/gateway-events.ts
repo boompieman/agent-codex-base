@@ -2,6 +2,7 @@ import type { GatewayEvent, RpcEnvelope } from "~~/shared/types";
 import { rpcEnvelopeCreatedAt } from "~~/shared/types/records";
 import { SERVER_THREAD_CACHE_LIMIT } from "~~/shared/config";
 import { gatewayMemoryState } from "./memory";
+import { randomUUID } from "node:crypto";
 
 export const gatewayEventStore = {
   pruneToHosts(hostIds: Set<number>) {
@@ -11,6 +12,11 @@ export const gatewayEventStore = {
     gatewayMemoryState.eventPrunedThroughByThread = Object.fromEntries(
       Object.entries(gatewayMemoryState.eventPrunedThroughByThread).filter(([key]) =>
         hostIds.has(hostIdFromEventKey(key)),
+      ),
+    );
+    gatewayMemoryState.eventEpochByHost = Object.fromEntries(
+      Object.entries(gatewayMemoryState.eventEpochByHost).filter(([hostId]) =>
+        hostIds.has(Number(hostId)),
       ),
     );
   },
@@ -24,6 +30,26 @@ export const gatewayEventStore = {
         ([key]) => hostIdFromEventKey(key) !== hostId,
       ),
     );
+    this.rotateHostEpoch(hostId);
+  },
+
+  epoch(hostId: number) {
+    const key = String(hostId);
+    const existing = gatewayMemoryState.eventEpochByHost[key];
+    if (existing !== undefined) return existing;
+    const epoch = randomUUID();
+    gatewayMemoryState.eventEpochByHost = {
+      ...gatewayMemoryState.eventEpochByHost,
+      [key]: epoch,
+    };
+    return epoch;
+  },
+
+  rotateHostEpoch(hostId: number) {
+    gatewayMemoryState.eventEpochByHost = {
+      ...gatewayMemoryState.eventEpochByHost,
+      [String(hostId)]: randomUUID(),
+    };
   },
 
   add(hostId: number, threadId: string, method: string, payload: RpcEnvelope): GatewayEvent {
@@ -71,7 +97,9 @@ export const gatewayEventStore = {
 
   hasReplayGap(hostId: number, threadId: string, afterId: number) {
     if (afterId <= 0) return false;
+    const latestId = this.latestId(hostId, threadId);
     return (
+      afterId > latestId ||
       afterId < (gatewayMemoryState.eventPrunedThroughByThread[eventKey(hostId, threadId)] ?? 0)
     );
   },

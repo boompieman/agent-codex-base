@@ -3,19 +3,22 @@ import { defineStore } from "pinia";
 import { klona } from "klona";
 import { toast } from "vue-sonner";
 import { useGatewayTranslator } from "@/composables/i18n/useGatewayTranslator";
-import type { GatewayConfig, GatewayNotificationSettings } from "~~/shared/types";
+import type {
+  GatewayConfig,
+  GatewayNotificationSettings,
+  PinnedThreadRecord,
+} from "~~/shared/types";
 import { useAuthStore } from "@/stores/auth";
 import { gatewayApi } from "@/utils/gateway-api";
 import { defaultGatewayConfig, normalizeNotificationSettings } from "@/stores/gateway/config";
 import { gatewayDomainEvents } from "@/stores/gateway/domain-events";
 import { createPinnedThreadSync } from "./pinned-thread-sync";
 import { recordFromUnknown } from "~~/shared/utils/records";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export const useGatewayConfigStore = defineStore("gateway-config", () => {
   const t = useGatewayTranslator();
   const gatewayConfig = ref<GatewayConfig>(defaultGatewayConfig());
-  let syncQueue: Promise<void> = Promise.resolve();
-  let syncGeneration = 0;
   const pinnedThreadSync = createPinnedThreadSync({ apply: applyPinnedThreads });
 
   function applyPinnedThreads(pinnedThreads: GatewayConfig["pinnedThreads"]) {
@@ -36,23 +39,6 @@ export const useGatewayConfigStore = defineStore("gateway-config", () => {
   function applyConfig(config: GatewayConfig) {
     gatewayConfig.value = { ...defaultGatewayConfig(), ...config };
     gatewayDomainEvents.emit("gateway-config-applied", { config: gatewayConfig.value });
-  }
-
-  async function syncConfigToServer() {
-    const config = klona(gatewayConfig.value);
-    const generation = ++syncGeneration;
-    const auth = useAuthStore();
-    const sessionEpoch = auth.sessionEpoch;
-    const sync = async () => {
-      const result = await gatewayApi<GatewayConfig>("/api/config/sync", {
-        method: "POST",
-        body: config,
-      });
-      if (generation === syncGeneration && auth.isCurrentSession(sessionEpoch)) applyConfig(result);
-    };
-    const result = syncQueue.then(sync, sync);
-    syncQueue = result.catch(() => {});
-    return result;
   }
 
   async function loadConfigFromServer() {
@@ -81,15 +67,33 @@ export const useGatewayConfigStore = defineStore("gateway-config", () => {
   }
 
   async function saveNotificationSettings(notifications: GatewayNotificationSettings) {
+    const sessionIsCurrent = captureSessionEpoch();
     gatewayConfig.value.notifications = normalizeNotificationSettings(notifications);
-    await syncConfigToServer();
+    const result = await gatewayApi<GatewayConfig>("/api/config/notifications", {
+      method: "POST",
+      body: { notifications: gatewayConfig.value.notifications },
+    });
+    if (!sessionIsCurrent()) return false;
+    applyConfig(result);
     if (import.meta.client) toast.success(t("app.notificationSettingsSaved"));
+    return true;
+  }
+
+  async function setPinnedThread(thread: PinnedThreadRecord, pinned: boolean) {
+    const sessionIsCurrent = captureSessionEpoch();
+    const result = await gatewayApi<GatewayConfig>("/api/config/pinned-threads", {
+      method: "POST",
+      body: pinned
+        ? { pinned: true, thread: klona(thread) }
+        : { pinned: false, hostId: thread.hostId, threadId: thread.threadId },
+    });
+    if (!sessionIsCurrent()) return false;
+    applyConfig(result);
+    return true;
   }
 
   function resetState() {
     gatewayConfig.value = defaultGatewayConfig();
-    syncGeneration += 1;
-    syncQueue = Promise.resolve();
     pinnedThreadSync.reset();
   }
 
@@ -97,11 +101,11 @@ export const useGatewayConfigStore = defineStore("gateway-config", () => {
     gatewayConfig,
     setCatalog,
     applyConfig,
-    syncConfigToServer,
     loadConfigFromServer,
     exportConfigText,
     importConfigText,
     saveNotificationSettings,
+    setPinnedThread,
     refreshPinnedThreads: pinnedThreadSync.refresh,
     resetState,
   };

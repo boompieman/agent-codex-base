@@ -7,8 +7,9 @@ import { refreshRunningThreadsForHost } from "./running-thread-sync";
 import { runtimeLog } from "./runtime-log";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 
-export async function connectHostRuntime(slot: HostRuntimeSlot) {
+export async function connectHostRuntime(slot: HostRuntimeSlot, isCurrent: () => boolean) {
   await runWithGatewayUser(slot.userId, async () => {
+    if (!isCurrent()) return;
     hostLifecycleBus.emit({
       hostId: slot.hostId,
       status: "connecting",
@@ -21,19 +22,28 @@ export async function connectHostRuntime(slot: HostRuntimeSlot) {
       pinnedThreads: slot.pinnedThreads.filter((thread) => thread.hostId === slot.hostId).length,
     });
     const client = await threadBroker.getHostClient(slot.host);
+    if (!isCurrent()) return;
+    // Browser WebSockets outlive an app-server transport reconnect. Their local event listeners
+    // retain lease counts in the registry, so rebuild those upstream controllers before restoring
+    // background-only monitoring; otherwise an idle selected thread silently stops receiving.
+    await threadBroker.restoreRetainedSubscriptions(slot.host);
+    if (!isCurrent()) return;
     await activeMainThreadMonitor.recoverHost({
       host: slot.host,
       client,
       hasController: (threadId) => threadBroker.hasController(slot.host.id, threadId),
     });
+    if (!isCurrent()) return;
     await refreshRunningThreadsForHost({
       host: slot.host,
       reason: "host-connected",
     });
+    if (!isCurrent()) return;
     await warmPinnedThreads({
       host: slot.host,
       pinnedThreads: slot.pinnedThreads,
     });
+    if (!isCurrent()) return;
     runtimeLog("host background ready", {
       userId: slot.userId,
       hostId: slot.hostId,

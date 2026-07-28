@@ -60,11 +60,11 @@ watch(
     if (!authInitialized || currentToken === activeSessionToken) {
       return;
     }
-    const hadPreviousSession = Boolean(activeSessionToken);
     activeSessionToken = currentToken;
-    if (hadPreviousSession || !currentToken) {
-      resetGatewayClientSession();
-    }
+    // Reset on every token transition, including logged-out -> logged-in. A request rejected by
+    // logout can still finish its catch/finally after the first reset; clearing again before the
+    // next account hydrates prevents that stale projection from crossing the session boundary.
+    resetGatewayClientSession();
     if (!currentToken) {
       return;
     }

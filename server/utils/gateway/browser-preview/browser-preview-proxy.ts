@@ -53,6 +53,24 @@ async function proxyHttpRequest(
     () => new BrowserPreviewHttpAgent(() => browserPreviewUpstreamConnector.openSocket(session)),
   );
   await new Promise<void>((resolve) => {
+    let settled = false;
+    let upstreamResponse: IncomingMessage | null = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      request.off("aborted", abortUpstream);
+      response.off("close", abortUpstream);
+      resolve();
+    };
+    const abortUpstream = () => {
+      if (response.writableFinished) {
+        finish();
+        return;
+      }
+      upstream.destroy(new Error("Browser preview downstream closed"));
+      upstreamResponse?.destroy();
+      finish();
+    };
     const upstream = http.request(
       {
         method: request.method,
@@ -62,20 +80,24 @@ async function proxyHttpRequest(
         host: session.target.hostname,
         port: String(browserPreviewTargetPort(session)),
       },
-      (upstreamResponse) => {
-        const responseHeaders = { ...upstreamResponse.headers };
+      (incoming) => {
+        upstreamResponse = incoming;
+        const responseHeaders = { ...incoming.headers };
         rewriteLocation(session, responseHeaders);
         stripCookieDomains(responseHeaders);
         publishFramePolicy(session, responseHeaders);
-        response.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
-        upstreamResponse.pipe(response);
-        upstreamResponse.once("close", resolve);
+        response.writeHead(incoming.statusCode ?? 502, responseHeaders);
+        incoming.pipe(response);
+        incoming.once("end", finish);
+        incoming.once("close", finish);
       },
     );
+    request.once("aborted", abortUpstream);
+    response.once("close", abortUpstream);
     upstream.on("error", (error) => {
       if (!response.headersSent) sendText(response, 502, `Remote preview failed: ${error.message}`);
       else response.destroy(error);
-      resolve();
+      finish();
     });
     if (request.method === "GET" || request.method === "HEAD") upstream.end();
     else request.pipe(upstream);

@@ -11,8 +11,10 @@ import {
 import { recordFromUnknown } from "~~/shared/utils/records";
 import { threadIdFromNotification } from "../protocol/thread-payload";
 import { currentGatewayUserId } from "../state/memory";
-import type { CodexRpcClient } from "../infra/rpc";
+import type { CodexRpcClient } from "../infra/rpc/rpc";
 import { runtimeLog } from "./runtime-log";
+import { runtimeStatusFromAppThreadStatus } from "~~/shared/thread-runtime-status";
+import { threadMetadataStore } from "../state/thread-metadata";
 
 const RECOVERY_CONCURRENCY = 2;
 const RECOVERY_TIMEOUT_MS = 15_000;
@@ -75,7 +77,9 @@ class ActiveMainThreadMonitor {
     if (threadId === null) return;
 
     if (method === "thread/started") {
-      if (isSubagentThread(message)) return;
+      const thread = startedThread(message);
+      if (thread !== null) threadMetadataStore.record(context.host.id, null, thread);
+      if (thread !== null && isAppServerSubAgentThread(thread)) return;
       void this.observeThread(context, threadId).catch((error) => {
         runtimeLog("active main thread subscribe failed", {
           hostId: context.host.id,
@@ -84,6 +88,26 @@ class ActiveMainThreadMonitor {
           message: messageFromError(error),
         });
       });
+      return;
+    }
+
+    if (method === "thread/status/changed") {
+      const params = recordFromUnknown(recordFromUnknown(message)?.params);
+      if (runtimeStatusFromAppThreadStatus(params?.status) === "running") {
+        // Existing idle threads do not emit thread/started for every new turn. The global status
+        // broadcast is therefore the ownership signal for work started by VS Code and other
+        // app-server clients; resume validates main-vs-subagent before retaining the subscription.
+        void this.observeThread(context, threadId).catch((error) => {
+          runtimeLog("active main thread status subscribe failed", {
+            hostId: context.host.id,
+            hostName: context.host.name,
+            threadId,
+            message: messageFromError(error),
+          });
+        });
+      } else {
+        void this.releaseThread(context, threadId);
+      }
       return;
     }
 
@@ -305,10 +329,9 @@ function isActive(thread: AppServerThread) {
   );
 }
 
-function isSubagentThread(message: unknown) {
+function startedThread(message: unknown) {
   const params = recordFromUnknown(recordFromUnknown(message)?.params);
-  const thread = appServerThreadFromUnknown(params?.thread);
-  return thread !== null && isAppServerSubAgentThread(thread);
+  return appServerThreadFromUnknown(params?.thread);
 }
 
 function requiredUserId() {

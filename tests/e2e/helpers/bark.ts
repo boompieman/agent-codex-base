@@ -9,6 +9,7 @@ export interface BarkRequest {
   title: string;
   body: string;
   group: string | null;
+  id: string | null;
   createdAt: string;
 }
 
@@ -17,6 +18,7 @@ const barkRequestSchema = z.object({
   title: z.string(),
   body: z.string(),
   group: z.string().nullable(),
+  id: z.string().nullable(),
   createdAt: z.string(),
 });
 

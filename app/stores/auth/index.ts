@@ -13,6 +13,14 @@ export const useAuthStore = defineStore("auth", () => {
 
   const isAuthenticated = computed(() => token.value !== "");
 
+  watch([storedToken, storedUsername], ([nextToken, nextUsername]) => {
+    if (!initialized.value) return;
+    // VueUse synchronizes useLocalStorage across same-origin tabs. Mirror that durable state into
+    // the live session so logout/account switches advance sessionEpoch and cancel stale HTTP/RAF
+    // work in every open Gateway tab without waiting for a refresh.
+    replaceSession(nextToken ?? "", nextUsername ?? "");
+  });
+
   function hydrate() {
     if (!import.meta.client || initialized.value) {
       return;

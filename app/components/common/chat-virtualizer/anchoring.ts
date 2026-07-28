@@ -1,9 +1,4 @@
-import {
-  elementScroll,
-  type VirtualItem,
-  type Virtualizer,
-  type VirtualizerOptions,
-} from "@tanstack/virtual-core";
+import { elementScroll, type VirtualizerOptions } from "@tanstack/virtual-core";
 
 type ChatVirtualizerBehavior = Pick<
   VirtualizerOptions<HTMLElement, Element>,
@@ -39,37 +34,4 @@ export function createChatVirtualizerBehavior(options: {
       elementScroll(offset, scrollOptions, instance);
     },
   };
-}
-
-export function shouldAdjustChatScrollForSizeChange(
-  item: VirtualItem,
-  delta: number,
-  instance: Virtualizer<HTMLElement, Element>,
-  followLatest: boolean,
-) {
-  if (followLatest) return true;
-
-  const viewport = instance.scrollElement;
-  const scrollOffset = viewport instanceof HTMLElement ? viewport.scrollTop : instance.scrollOffset;
-  const isFirstMeasurement = !instance.itemSizeCache.has(item.key);
-  const measuredEnd = item.end + delta;
-  // Dynamic rows enter the overscan window with estimated heights. Replacing an estimate for a
-  // row that is entirely above the viewport must move scrollTop by the same delta or every visible
-  // row drifts. This is the standard TanStack chat predicate used by Vibe Kanban and NextClaw.
-  //
-  // Use the measured end, not item.end: item still contains the old estimate when this callback
-  // runs. A row can shrink from an estimate that crosses the fold to a real box entirely above it;
-  // checking the stale end skips the required correction and shifts the viewport by that row's
-  // full estimate delta. Do not broaden this to item.start < scrollOffset: a row that remains
-  // visible across the top edge must not move content under the reader.
-  //
-  // For rows TanStack has already measured, retain Virtual Core's backward direction guard.
-  // Otherwise iOS queues those remeasurement deltas during touch/momentum and replays a stale
-  // aggregate after touchend. TanStack still owns correction timing and its iOS deferral; this
-  // predicate only decides which deltas are valid. Diff and command output use separate bounded
-  // scrollports and never enter this rule.
-  return (
-    measuredEnd <= (scrollOffset ?? 0) &&
-    (isFirstMeasurement || instance.scrollDirection !== "backward")
-  );
 }

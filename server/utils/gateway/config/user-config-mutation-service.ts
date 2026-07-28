@@ -15,7 +15,6 @@ import { pinnedThreadEvents } from "./pinned-thread-events";
 export class UserConfigMutationService {
   commit<T>(userId: number, mutateDraft: () => T): T {
     const previousState = currentGatewayMemoryState();
-    const previousConfig = runtimeConfigFromMemory();
     const draftState = structuredClone(previousState);
     replaceCurrentGatewayMemoryState(draftState);
     let result: T;
@@ -34,55 +33,14 @@ export class UserConfigMutationService {
     replaceCurrentGatewayMemoryState(previousState);
     userStore.saveConfig(userId, nextConfig);
     replaceCurrentGatewayMemoryState(draftState);
-    try {
-      this.reconcileCommittedConfig(
-        userId,
-        previousState.hosts,
-        draftState.hosts,
-        previousState.pinnedThreads,
-        draftState.pinnedThreads,
-      );
-    } catch (cause) {
-      this.rollbackCommit(userId, previousState, draftState, previousConfig, cause);
-    }
+    this.reconcileCommittedConfig(
+      userId,
+      previousState.hosts,
+      draftState.hosts,
+      previousState.pinnedThreads,
+      draftState.pinnedThreads,
+    );
     return result;
-  }
-
-  private rollbackCommit(
-    userId: number,
-    previousState: ReturnType<typeof currentGatewayMemoryState>,
-    draftState: ReturnType<typeof currentGatewayMemoryState>,
-    previousConfig: GatewayConfig,
-    cause: unknown,
-  ): never {
-    replaceCurrentGatewayMemoryState(previousState);
-    const rollbackErrors: unknown[] = [cause];
-    try {
-      userStore.saveConfig(userId, previousConfig);
-    } catch (error) {
-      rollbackErrors.push(error);
-    }
-    try {
-      // Resource reconciliation may have closed only part of the old Host graph. Running the
-      // same domain transition in reverse makes lazy SSH/RPC resources converge on the restored
-      // durable configuration instead of preserving a half-committed runtime.
-      this.reconcileCommittedConfig(
-        userId,
-        draftState.hosts,
-        previousState.hosts,
-        draftState.pinnedThreads,
-        previousState.pinnedThreads,
-      );
-    } catch (error) {
-      rollbackErrors.push(error);
-    }
-    if (rollbackErrors.length > 1) {
-      throw new AggregateError(
-        rollbackErrors,
-        "Configuration reconciliation failed and rollback was incomplete",
-      );
-    }
-    throw cause;
   }
 
   private reconcileCommittedConfig(
@@ -95,15 +53,23 @@ export class UserConfigMutationService {
     const nextById = new Map(nextHosts.map((host) => [host.id, host]));
     for (const previous of previousHosts) {
       const next = nextById.get(previous.id);
-      if (!next) hostResourceLifecycle.deleted(userId, previous.id);
-      else hostResourceLifecycle.changed(userId, previous, next);
+      attemptRuntimeReconciliation(userId, `host:${previous.id}:lifecycle`, () => {
+        if (!next) hostResourceLifecycle.deleted(userId, previous.id);
+        else hostResourceLifecycle.changed(userId, previous, next);
+      });
     }
     if (hostsChanged(previousHosts, nextHosts)) {
-      sshConnections.syncHosts(nextHosts);
-      hostRuntimeSupervisor.syncCurrentUserConfig();
+      attemptRuntimeReconciliation(userId, "ssh-connections", () =>
+        sshConnections.syncHosts(nextHosts),
+      );
+      attemptRuntimeReconciliation(userId, "host-runtime-supervisor", () =>
+        hostRuntimeSupervisor.syncCurrentUserConfig(),
+      );
     }
     if (JSON.stringify(previousPinnedThreads) !== JSON.stringify(nextPinnedThreads)) {
-      pinnedThreadEvents.publish(userId);
+      attemptRuntimeReconciliation(userId, "pinned-thread-broadcast", () =>
+        pinnedThreadEvents.publish(userId),
+      );
     }
   }
 }
@@ -118,6 +84,20 @@ function hostsChanged(previous: StoredHostRecord[], next: StoredHostRecord[]) {
 }
 
 export const userConfigMutationService = new UserConfigMutationService();
+
+function attemptRuntimeReconciliation(userId: number, resource: string, reconcile: () => void) {
+  try {
+    reconcile();
+  } catch (error) {
+    // Runtime resources are not transactional. Continue converging independent resources after a
+    // failure instead of skipping SSH sync, supervision, or browser invalidation behind it.
+    console.error("[gateway] committed config runtime reconciliation failed", {
+      userId,
+      resource,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 function pruneDanglingHostRelations(state: ReturnType<typeof currentGatewayMemoryState>) {
   const hostIds = new Set(state.hosts.map((host) => host.id));

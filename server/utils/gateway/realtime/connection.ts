@@ -30,6 +30,11 @@ export async function handleRealtimePeerMessage(peer: RealtimePeer, rawMessage: 
     request = parseClientMessage(rawMessage);
     await realtimeMessageDispatcher.dispatch(peer, request);
   } catch (error: unknown) {
+    console.error("[gateway] realtime message failed", {
+      requestType: request?.type ?? null,
+      requestId: request && "requestId" in request ? request.requestId : null,
+      message: error instanceof Error ? error.message : String(error),
+    });
     if (error instanceof RealtimeAuthenticationRequiredError) {
       rejectUnauthenticatedPeer(peer, request);
       return;

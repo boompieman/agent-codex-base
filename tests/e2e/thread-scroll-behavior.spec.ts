@@ -26,6 +26,7 @@ import {
   scrollChatViewportToTop,
   visibleAgentLineTop,
   visibleTextTop,
+  waitForScrollableChatViewportAtBottom,
 } from "./helpers/scroll";
 import {
   buildTextTurns,
@@ -366,10 +367,13 @@ test("streaming output does not drift the viewport during upward wheel scrolling
   });
 
   await expect(page.getByText("wheel stream initial output")).toBeVisible();
-  await scrollChatViewportToBottom(page);
+  await waitForScrollableChatViewportAtBottom(page);
 
-  for (let batch = 0; batch < 4; batch += 1) {
-    await scrollChatViewportBy(page, -180);
+  // The setup guarantees at least 400px of upward range. Keep the full gesture sequence inside
+  // that range so every batch models active scrolling rather than asking a viewport already at
+  // its top boundary to move farther.
+  for (let batch = 0; batch < 3; batch += 1) {
+    await scrollChatViewportBy(page, -100);
     const anchor = await captureVisibleTextAnchor(page, "wheel scroll history");
     await appendAgentStreamLines(page, {
       itemId: "agent-wheel-streaming",
@@ -422,6 +426,11 @@ test("downward wheel scrolling stays detached until the reader reaches latest", 
   });
 
   await expect(page.getByText("downward stream initial output")).toBeVisible();
+  // Establish the same settled starting geometry as a real reader before injecting wheel input.
+  // A visible final row alone does not prove that ResizeObserver has committed the virtual
+  // document height; scrolling during that initial transaction would test mount settling rather
+  // than whether later streamed output preserves a detached viewport.
+  await waitForScrollableChatViewportAtBottom(page);
   await scrollChatViewportBy(page, -900);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
 
@@ -494,6 +503,7 @@ test("switching threads discards stale virtual row measurements", async ({ page 
         olderTurnsCursor: null,
         newerTurnsCursor: null,
         lastEventId: 0,
+        eventEpoch: "e2e-event-epoch",
         loading: false,
         error: null,
       },
@@ -512,6 +522,7 @@ test("switching threads discards stale virtual row measurements", async ({ page 
         olderTurnsCursor: null,
         newerTurnsCursor: null,
         lastEventId: 0,
+        eventEpoch: "e2e-event-epoch",
         loading: false,
         error: null,
       },
@@ -604,6 +615,7 @@ function cachedThreadView(threadId: string, history: ThreadHistoryState): Thread
     olderTurnsCursor: null,
     newerTurnsCursor: null,
     lastEventId: 0,
+    eventEpoch: "e2e-event-epoch",
     loading: false,
     error: null,
   };

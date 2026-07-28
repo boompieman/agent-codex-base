@@ -31,7 +31,7 @@ export async function subscribeThread(
 
   const host = requireRecord(hostStore.getWithSecret(hostId), "Host not found");
   const afterId = Number(message.afterId ?? 0);
-  subscribeThreadEvents(peer, host, threadId, afterId);
+  subscribeThreadEvents(peer, host, threadId, afterId, message.afterEpoch);
 }
 
 export async function activateThread(
@@ -41,22 +41,27 @@ export async function activateThread(
   const input = threadOpenSchema.parse(message);
 
   const host = requireRecord(hostStore.getWithSecret(input.hostId), "Host not found");
+  // Capture the replay cursor before reading the snapshot. Events emitted while thread/read is in
+  // flight are then replayed by subscribeThreadEvents; capturing it afterwards would pair an old
+  // snapshot with a newer cursor and permanently skip those events.
+  const lastEventId = gatewayEventStore.latestId(input.hostId, input.threadId);
+  const eventEpoch = gatewayEventStore.epoch(input.hostId);
   const result = await threadBroker.openThread(
     host,
     input.threadId,
     input.projectId ?? null,
     input.limit,
   );
-  const lastEventId = gatewayEventStore.latestId(input.hostId, input.threadId);
   sendRealtimePeerMessage(peer, {
     type: "thread.snapshot",
     requestId: message.requestId,
     hostId: input.hostId,
     threadId: input.threadId,
     lastEventId,
+    eventEpoch,
     ...result,
   });
-  subscribeThreadEvents(peer, host, input.threadId, lastEventId);
+  subscribeThreadEvents(peer, host, input.threadId, lastEventId, eventEpoch);
 }
 
 export async function startThread(
@@ -76,7 +81,10 @@ export async function startThread(
     input.projectId ?? null,
   );
   const threadId = String(result.thread.id);
-  const lastEventId = gatewayEventStore.latestId(input.hostId, threadId);
+  // A newly started thread can emit notifications before thread/start returns its id. Replaying
+  // from zero is safe for a new identity and avoids advancing past those startup events.
+  const lastEventId = 0;
+  const eventEpoch = gatewayEventStore.epoch(input.hostId);
   sendRealtimePeerMessage(peer, {
     ...result,
     type: "thread.started",
@@ -84,8 +92,9 @@ export async function startThread(
     hostId: input.hostId,
     threadId,
     lastEventId,
+    eventEpoch,
   });
-  subscribeThreadEvents(peer, host, threadId, lastEventId);
+  subscribeThreadEvents(peer, host, threadId, lastEventId, eventEpoch);
 }
 
 export function unsubscribeThread(
@@ -109,13 +118,54 @@ function subscribeThreadEvents(
   host: HostRecord,
   threadId: string,
   afterId: number,
+  afterEpoch?: string,
 ) {
   const hostId = host.id;
+  const eventEpoch = gatewayEventStore.epoch(hostId);
   const state = stateFor(peer);
   const key = threadTopicKey(hostId, threadId);
   state.threadUnsubscribers.get(key)?.();
+  state.threadUnsubscribers.delete(key);
+
+  // A first subscription has no server epoch yet and starts at zero, so it may consume the
+  // current retained stream directly. A non-zero cursor without an epoch cannot prove that its
+  // ids belong to this Host generation and must refresh from an authoritative snapshot.
+  const epochMismatch = afterEpoch === undefined ? afterId > 0 : afterEpoch !== eventEpoch;
+  const replayGap = epochMismatch || gatewayEventStore.hasReplayGap(hostId, threadId, afterId);
+  if (replayGap) {
+    // Do not attach live delivery until the client activates an authoritative snapshot. Sending
+    // live events while that snapshot is in flight lets the later snapshot overwrite newer
+    // projections and can also restore the stale pre-gap cursor.
+    sendRealtimePeerMessage(peer, {
+      type: "thread.events.gap",
+      hostId,
+      threadId,
+      afterId,
+      lastEventId: gatewayEventStore.latestId(hostId, threadId),
+      eventEpoch,
+    });
+    return;
+  }
   let sentThroughId = afterId;
+  let invalidated = false;
+  let releaseSubscription = () => {};
   const sendOnce = (event: GatewayEvent) => {
+    const currentEpoch = gatewayEventStore.epoch(hostId);
+    if (currentEpoch !== eventEpoch) {
+      if (!invalidated) {
+        invalidated = true;
+        sendRealtimePeerMessage(peer, {
+          type: "thread.events.gap",
+          hostId,
+          threadId,
+          afterId: sentThroughId,
+          lastEventId: gatewayEventStore.latestId(hostId, threadId),
+          eventEpoch: currentEpoch,
+        });
+        releaseSubscription();
+      }
+      return;
+    }
     if (event.id <= sentThroughId) return;
     // Gateway event ids are monotonic within a user's in-memory event store. A high-water cursor
     // provides the same replay/live de-duplication as an ever-growing Set without retaining one
@@ -138,23 +188,14 @@ function subscribeThreadEvents(
     }),
   );
   const upstreamLease = threadBroker.retainUpstreamSubscription(host, threadId);
-  state.threadUnsubscribers.set(key, () => {
+  releaseSubscription = () => {
     unsubscribe();
     upstreamLease.release();
-  });
-
-  const replayGap = gatewayEventStore.hasReplayGap(hostId, threadId, afterId);
-  if (replayGap) {
-    // A bounded event cache cannot reconstruct a cursor older than its pruned prefix. Explicitly
-    // request one authoritative snapshot instead of applying a plausible-looking partial replay.
-    sendRealtimePeerMessage(peer, {
-      type: "thread.events.gap",
-      hostId,
-      threadId,
-      afterId,
-      lastEventId: gatewayEventStore.latestId(hostId, threadId),
-    });
-  }
+    if (state.threadUnsubscribers.get(key) === releaseSubscription) {
+      state.threadUnsubscribers.delete(key);
+    }
+  };
+  state.threadUnsubscribers.set(key, releaseSubscription);
 
   void runPeerScoped(peer, () =>
     upstreamLease.ready.catch((error: unknown) => {
@@ -170,10 +211,8 @@ function subscribeThreadEvents(
   // Each thread cache is bounded to 500 events. Replay the complete retained window rather than
   // silently stopping at an arbitrary first 200; selected views refresh their authoritative
   // snapshot on reconnect and cached views refresh when activated if an older gap was pruned.
-  if (!replayGap) {
-    for (const event of gatewayEventStore.list(hostId, threadId, afterId, 500)) {
-      sendOnce(event);
-    }
+  for (const event of gatewayEventStore.list(hostId, threadId, afterId, 500)) {
+    sendOnce(event);
   }
   replaying = false;
   for (const event of liveQueue) {

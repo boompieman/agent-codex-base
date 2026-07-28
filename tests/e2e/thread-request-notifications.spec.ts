@@ -83,7 +83,7 @@ test("dynamic tool response submits through the server request responder and sur
     hostId: 7,
     threadId,
     method: "serverRequest/resolved",
-    payload: { params: { threadId, requestId: 42 } },
+    payload: { method: "serverRequest/resolved", params: { threadId, requestId: 42 } },
     createdAt: new Date().toISOString(),
   });
   await expect(page.getByTestId("dynamic-tool-submit")).toBeHidden();
@@ -106,6 +106,7 @@ test("app-server error notifications use Sonner without entering the timeline", 
     threadId,
     method: "error",
     payload: {
+      method: "error",
       params: {
         threadId,
         turnId: "turn-error",
@@ -132,6 +133,7 @@ test("app-server error notifications use Sonner without entering the timeline", 
     threadId,
     method: "item/agentMessage/delta",
     payload: {
+      method: "item/agentMessage/delta",
       params: {
         threadId,
         turnId: "turn-error",
@@ -161,6 +163,7 @@ test("app-server moderation notifications render a readable summary before raw d
     threadId,
     method: "turn/moderationMetadata",
     payload: {
+      method: "turn/moderationMetadata",
       params: {
         threadId,
         turnId: "turn-moderation",
@@ -197,6 +200,7 @@ test("terminal wait notifications mention the command being watched", async ({ p
     threadId: "e2e-terminal-wait-thread",
     method: "item/started",
     payload: {
+      method: "item/started",
       params: {
         threadId: "e2e-terminal-wait-thread",
         turnId: "turn-terminal",
@@ -221,6 +225,7 @@ test("terminal wait notifications mention the command being watched", async ({ p
     threadId: "e2e-terminal-wait-thread",
     method: "item/commandExecution/terminalInteraction",
     payload: {
+      method: "item/commandExecution/terminalInteraction",
       params: {
         threadId: "e2e-terminal-wait-thread",
         turnId: "turn-terminal",

@@ -15,6 +15,7 @@ import {
   normalizeThreadSettings,
 } from "@/stores/gateway/thread-utils/settings";
 import { statusValue } from "@/utils/thread-items";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createThreadSettingsActions() {
   return {
@@ -74,6 +75,7 @@ export function createThreadSettingsActions() {
     },
 
     async saveSelectedThreadSettings(settings: ThreadSettingsState) {
+      const sessionIsCurrent = captureSessionEpoch();
       const gateway = useGatewayBootstrapStore();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
@@ -87,6 +89,7 @@ export function createThreadSettingsActions() {
           body: { hostId, threadId, ...settings },
         });
       } catch (error: unknown) {
+        if (!sessionIsCurrent()) return;
         gateway.setError(
           messageFromError(error, gateway.t("app.updateThreadSettingsFailed"), gateway.errorLabels),
           { hostId, projectId, threadId },

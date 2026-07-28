@@ -20,6 +20,11 @@ export E2E_GID="${E2E_GID:-12345}"
 export E2E_CODEX_HOME="${E2E_CODEX_HOME:-$HOME/.codex}"
 
 cleanup() {
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    docker compose -p "$project_name" -f "$compose_file" logs --no-color \
+      gateway-under-test ssh-target >&2 || true
+  fi
   docker compose -p "$project_name" -f "$compose_file" down --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT

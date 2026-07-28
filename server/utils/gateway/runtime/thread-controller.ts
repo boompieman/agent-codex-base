@@ -6,7 +6,7 @@ import {
   runtimeStatusFromSnapshotState,
 } from "~~/shared/thread-runtime-status";
 import { recordFromUnknown } from "~~/shared/utils/records";
-import { CodexRpcClient } from "../infra/rpc";
+import { CodexRpcClient } from "../infra/rpc/rpc";
 import { bindGatewayUser } from "../state/memory";
 import { threadSnapshotStore } from "../state/thread-snapshots";
 import { threadRuntimeEvents } from "./thread-runtime-events";

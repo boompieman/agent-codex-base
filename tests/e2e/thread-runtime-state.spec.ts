@@ -27,7 +27,10 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     hostId: 1,
     threadId,
     method: "turn/started",
-    payload: { params: { threadId, turn: { id: "turn-1", status: "running", items: [] } } },
+    payload: {
+      method: "turn/started",
+      params: { threadId, turn: { id: "turn-1", status: "running", items: [] } },
+    },
     createdAt: "2026-07-02T10:00:00.000Z",
   };
   const completedTurn = {
@@ -52,7 +55,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     hostId: 1,
     threadId,
     method: "turn/completed",
-    payload: { params: { threadId, turn: completedTurn } },
+    payload: { method: "turn/completed", params: { threadId, turn: completedTurn } },
     createdAt: "2026-07-02T10:00:01.000Z",
   };
   await seedGatewayThread(page, {
@@ -129,7 +132,7 @@ test("opening a cached thread applies terminal events before deriving composer s
             hostId: 1,
             threadId,
             method: "turn/completed",
-            payload: { params: { threadId, turn: completedTurn } },
+            payload: { method: "turn/completed", params: { threadId, turn: completedTurn } },
             createdAt: new Date().toISOString(),
           },
         ],
@@ -248,6 +251,7 @@ test("live terminal event updates selected thread even when snapshot cursor is a
     history: { thread: { id: cursorThreadId, turns: [runningTurn] } },
     status: "running",
     lastEventId: 10,
+    eventEpoch: "e2e-event-epoch",
     threadViews: {
       "1:e2e-terminal-cursor-thread": {
         hostId: 1,
@@ -259,6 +263,7 @@ test("live terminal event updates selected thread even when snapshot cursor is a
         olderTurnsCursor: null,
         newerTurnsCursor: null,
         lastEventId: 11,
+        eventEpoch: "e2e-event-epoch",
         loading: false,
         error: null,
       },
@@ -295,6 +300,7 @@ test("context compaction duration survives event replay timing", async ({ page }
     threadId,
     method: "item/started",
     payload: {
+      method: "item/started",
       params: {
         threadId,
         turnId: "turn-context",
@@ -313,6 +319,7 @@ test("context compaction duration survives event replay timing", async ({ page }
     threadId,
     method: "item/completed",
     payload: {
+      method: "item/completed",
       params: {
         threadId,
         turnId: "turn-context",
@@ -360,6 +367,7 @@ test("turn completed keeps thread running while context compaction is active", a
     threadId,
     method: "turn/completed",
     payload: {
+      method: "turn/completed",
       params: {
         threadId,
         turn: activeCompactionTurn,

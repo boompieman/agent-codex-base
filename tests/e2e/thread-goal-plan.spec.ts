@@ -156,6 +156,7 @@ test("goal progress updates the composer status strip without flooding the agent
     threadId,
     method: "thread/goal/updated",
     payload: {
+      method: "thread/goal/updated",
       params: {
         threadId,
         turnId: "turn-goal-progress",
@@ -179,6 +180,7 @@ test("goal progress updates the composer status strip without flooding the agent
     threadId,
     method: "thread/goal/updated",
     payload: {
+      method: "thread/goal/updated",
       params: {
         threadId,
         turnId: "turn-goal-progress",
@@ -216,6 +218,7 @@ test("goal progress updates the composer status strip without flooding the agent
     threadId,
     method: "thread/goal/updated",
     payload: {
+      method: "thread/goal/updated",
       params: {
         threadId,
         turnId: "turn-goal-progress",

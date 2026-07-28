@@ -6,7 +6,7 @@ import type {
   TerminalSessionSnapshot,
   TerminalScope,
 } from "~~/shared/types";
-import { shellQuote } from "../infra/shell";
+import { shellQuote } from "../infra/ssh/shell";
 import { trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
 import { sshConnections } from "../infra/host-services";
 import { terminalEventBus } from "./events";

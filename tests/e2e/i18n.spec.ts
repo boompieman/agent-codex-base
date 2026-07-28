@@ -51,6 +51,21 @@ test("can revoke the current session from appearance settings", async ({ page })
   expect(revokedStatus).toBe(401);
 });
 
+test("synchronizes logout state across same-origin tabs", async ({ page }) => {
+  await openApp(page);
+  const secondPage = await page.context().newPage();
+  await openApp(secondPage, { resetConfig: false });
+  await expect(secondPage.getByTestId("desktop-layout")).toBeVisible();
+
+  await page.evaluate(() => {
+    localStorage.removeItem("codex-gateway-auth-token");
+    localStorage.removeItem("codex-gateway-auth-token:username");
+  });
+
+  await expect(secondPage.getByRole("heading", { name: "登录 Codex Gateway" })).toBeVisible();
+  await expect(secondPage.getByTestId("desktop-layout")).toBeHidden();
+});
+
 test("config JSON editor shows current config by default and scrolls", async ({ page }) => {
   await openApp(page);
   await page.getByTestId("settings-toggle").click();

@@ -1,4 +1,4 @@
-import type { HostWithSecret } from "../infra/ssh-types";
+import type { HostWithSecret } from "../infra/ssh/ssh-types";
 import { notificationCenter } from "../notifications/notification-center";
 import { TmuxMonitorRepository } from "./repository";
 import type { StoredTmuxMonitor } from "./types";
@@ -9,14 +9,14 @@ export class TmuxMonitorNotifier {
 
   constructor(private readonly repository: TmuxMonitorRepository) {}
 
-  publishCompletion(host: HostWithSecret, monitor: StoredTmuxMonitor) {
+  async publishCompletion(host: HostWithSecret, monitor: StoredTmuxMonitor) {
     if (this.pendingMonitorIds.has(monitor.id)) return;
     const persisted = this.repository.getOwned(monitor.userId, monitor.id);
     if (persisted === null || persisted.notificationSentAt !== null) return;
 
     this.pendingMonitorIds.add(monitor.id);
     try {
-      notificationCenter.publish({
+      await notificationCenter.publish({
         key: `tmux-monitor:${monitor.userId}:${monitor.id}:completed`,
         title: `Tmux 任务已结束 · ${firstNonEmptyString([host.name, host.sshHost]) ?? String(host.id)} · ${monitor.sessionName}`,
         body: [
@@ -34,9 +34,9 @@ export class TmuxMonitorNotifier {
           threadId: monitor.threadId,
         },
       });
-      // Mark only after the notification center accepted browser fan-out and Bark scheduling.
-      // Marking first creates an at-most-once crash window where a process exit loses the task
-      // completion forever; a retry after an unconfirmed publish is the safer notification policy.
+      // Browser fan-out is synchronous and Bark resolves only after delivery (or when disabled).
+      // Persist acknowledgement last so a crash or exhausted Bark retry leaves this row eligible
+      // for the next poll instead of permanently losing the notification.
       this.repository.markNotificationSent(monitor.userId, monitor.id);
     } finally {
       this.pendingMonitorIds.delete(monitor.id);

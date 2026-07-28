@@ -9,6 +9,7 @@ import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import { gatewayDomainEvents } from "@/stores/gateway/domain-events";
 import { threadGoalTimelineItem } from "@/stores/gateway/thread-goals/goal-timeline";
 import { pinnedKey, selectedThreadScope } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createThreadGoalActions() {
   function upsertThreadGoal(
@@ -45,6 +46,7 @@ export function createThreadGoalActions() {
     upsertThreadGoal,
     clearThreadGoalState,
     async setSelectedThreadGoal(objective: string) {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
       if (scope === null) return;
@@ -60,9 +62,11 @@ export function createThreadGoalActions() {
         }),
         expectThreadGoalUpdated,
       );
+      if (!sessionIsCurrent()) return;
       upsertThreadGoal(hostId, threadId, message.goal, { showInTimeline: true });
     },
     async setSelectedThreadGoalStatus(status: ThreadGoalStatus) {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
       if (scope === null) return;
@@ -77,9 +81,11 @@ export function createThreadGoalActions() {
         }),
         expectThreadGoalUpdated,
       );
+      if (!sessionIsCurrent()) return;
       upsertThreadGoal(hostId, threadId, message.goal);
     },
     async clearSelectedThreadGoal() {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
       if (scope === null) return;
@@ -90,9 +96,11 @@ export function createThreadGoalActions() {
         hostId,
         threadId,
       }));
+      if (!sessionIsCurrent()) return;
       clearThreadGoalState(hostId, threadId);
     },
     async refreshSelectedThreadGoal() {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
       if (scope === null) return;
@@ -106,6 +114,7 @@ export function createThreadGoalActions() {
         }),
         expectThreadGoalSnapshot,
       );
+      if (!sessionIsCurrent()) return;
       if (message.goal !== null) upsertThreadGoal(hostId, threadId, message.goal);
       else clearThreadGoalState(hostId, threadId);
     },

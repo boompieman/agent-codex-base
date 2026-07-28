@@ -1,4 +1,4 @@
-import type { CodexRpcClient } from "../infra/rpc";
+import type { CodexRpcClient } from "../infra/rpc/rpc";
 import type { ThreadGoalResolver, ThreadMetadataResolver } from "./thread-runtime-events";
 
 const NOTIFICATION_INSPECTION_TIMEOUT_MS = 10_000;

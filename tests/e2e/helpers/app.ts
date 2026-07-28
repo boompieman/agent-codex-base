@@ -5,11 +5,14 @@ export const E2E_USERNAME = process.env.E2E_GATEWAY_USERNAME ?? "e2e";
 export const E2E_PASSWORD = process.env.E2E_GATEWAY_PASSWORD ?? "codex-gateway-e2e-password";
 const resetPages = new WeakSet<Page>();
 
-export async function openApp(page: Page, options: { resetConfig?: boolean } = {}) {
+export async function openApp(
+  page: Page,
+  options: { resetConfig?: boolean; interceptRealtime?: boolean } = {},
+) {
   // Playwright only routes WebSockets created after registration. Install a transparent pass-
   // through before the first navigation; focused tests can later intercept individual protocol
   // messages without replacing Pinia state or weakening real realtime coverage elsewhere.
-  await installRealtimeRoute(page);
+  if (options.interceptRealtime !== false) await installRealtimeRoute(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForHydratedApp(page, options);
 }

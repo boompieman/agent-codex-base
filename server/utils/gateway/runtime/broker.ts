@@ -131,6 +131,10 @@ class ThreadBroker {
     return this.registry.retainSubscription(host, threadId);
   }
 
+  async restoreRetainedSubscriptions(host: HostRecord) {
+    await this.registry.restoreRetainedSubscriptions(host);
+  }
+
   close(hostId: number, threadId: string) {
     this.registry.close(hostId, threadId);
   }

@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { hostRecordSchema, projectRecordSchema } from "./helpers/http-schemas";
 import { appendAgentStreamLines, seedGatewayThread } from "./helpers/gateway-store";
@@ -18,17 +19,21 @@ import {
 } from "./helpers/history-pagination";
 import {
   captureVisibleTimelineRowAnchor,
-  chatViewportBottomDistance,
   continueChatTouchScrollUp,
   continueChatTouchMomentumUp,
   endChatTouchScroll,
+  expectSyntheticWebKitTouchToRemainReadable,
   scrollChatViewportToTop,
   startChatTouchScrollUp,
   visibleTimelineRowTop,
   waitForScrollableChatViewportAtBottom,
   waitForChatScrollToSettle,
 } from "./helpers/scroll";
-import { execRemoteSsh, readRemoteEnv, waitForSelectedThreadId } from "./helpers/remote-codex";
+import {
+  execRemoteSsh,
+  type RemoteCodexEnv,
+  waitForSelectedThreadId,
+} from "./helpers/remote-codex";
 
 test("uses the mobile layout with hidden sidebar and usable composer shell", async ({ page }) => {
   await openApp(page);
@@ -259,7 +264,9 @@ test("mobile viewport resize during explicit history prepend stays bottom pinned
   expect(Math.max(...samples.slice(-4)), JSON.stringify(samples)).toBeLessThanOrEqual(2);
 });
 
-test("mobile touch scrolling stays anchored while Agent output streams", async ({ page }) => {
+test("mobile touch scrolling stays anchored while Agent output streams", async ({
+  page,
+}, testInfo) => {
   await openApp(page);
   const threadId = "mobile-active-touch-stream";
   await seedGatewayThread(page, {
@@ -319,6 +326,10 @@ test("mobile touch scrolling stays anchored while Agent output streams", async (
   await endChatTouchScroll(page);
   await waitForChatScrollToSettle(page);
   expect(finalAnchor).not.toBeNull();
+  if (testInfo.project.name === "mobile-webkit-core-scroll") {
+    await expectSyntheticWebKitTouchToRemainReadable(page);
+    return;
+  }
   await expect
     .poll(() => visibleTimelineRowTop(page, finalAnchor!.key))
     .toBeGreaterThanOrEqual(finalAnchor!.top - 2);
@@ -397,12 +408,7 @@ test("mobile momentum scrolling stays anchored after touchend while output strea
     // corrections until that phase settles. A row coordinate captured before the deferred flush
     // is therefore not a valid final anchor on WebKit. Keep the user-facing contract strict: the
     // timeline must remain detached, retain visible content, and stay away from the latest edge.
-    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
-      "data-follow-latest",
-      "false",
-    );
-    await captureVisibleTimelineRowAnchor(page);
-    expect(await chatViewportBottomDistance(page)).toBeGreaterThan(80);
+    await expectSyntheticWebKitTouchToRemainReadable(page);
     return;
   }
   await expect
@@ -413,8 +419,11 @@ test("mobile momentum scrolling stays anchored after touchend while output strea
     .toBeLessThanOrEqual(finalAnchor!.top + 2);
 });
 
-test("opens sidebar context actions with long press on mobile", async ({ page }) => {
-  const remote = await readRemoteEnv();
+test("opens sidebar context actions with long press on mobile", async ({
+  page,
+  remoteWorkspace,
+}) => {
+  const { remote } = remoteWorkspace;
   await openApp(page);
   const { project } = await createConfiguredHostAndProject(page, remote);
   await reloadApp(page);
@@ -516,6 +525,7 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
           olderTurnsCursor: null,
           newerTurnsCursor: null,
           lastEventId: 0,
+          eventEpoch: "e2e-event-epoch",
           loading: false,
           error: null,
         },
@@ -539,8 +549,11 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
   await expect(panel).toBeHidden();
 });
 
-test("browses the current thread file workspace from a mobile sheet", async ({ page }) => {
-  const remote = await readRemoteEnv();
+test("browses the current thread file workspace from a mobile sheet", async ({
+  page,
+  remoteWorkspace,
+}) => {
+  const { remote } = remoteWorkspace;
   await openApp(page);
   const { host, project } = await createConfiguredHostAndProject(page, remote);
   const rootPath = `/home/${remote.username}`;
@@ -586,10 +599,7 @@ async function openIntermediateSteps(page: Page) {
   await expect(toggle).toHaveAttribute("data-state", "open");
 }
 
-async function createConfiguredHostAndProject(
-  page: Page,
-  remote: Awaited<ReturnType<typeof readRemoteEnv>>,
-) {
+async function createConfiguredHostAndProject(page: Page, remote: RemoteCodexEnv) {
   const host = await authenticatedFetch(
     page,
     {

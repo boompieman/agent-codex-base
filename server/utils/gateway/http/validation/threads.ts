@@ -19,6 +19,14 @@ export const threadOpenSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(INITIAL_TURN_PAGE_LIMIT),
 });
 
+export const threadMetadataListSchema = z.object({
+  hostId: z.coerce.number().int().positive(),
+  threadIds: z
+    .string()
+    .transform((value) => [...new Set(value.split(",").map((item) => item.trim()))])
+    .pipe(z.array(z.string().min(1)).min(1).max(20)),
+});
+
 export const threadTurnsListSchema = z.object({
   hostId: z.coerce.number().int().positive(),
   threadId: z.string().trim().min(1),

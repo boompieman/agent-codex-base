@@ -5,7 +5,7 @@ import {
   type ComponentPublicInstance,
   type MaybeRefOrGetter,
 } from "vue";
-import { createChatVirtualizerBehavior, shouldAdjustChatScrollForSizeChange } from "./anchoring";
+import { createChatVirtualizerBehavior } from "./anchoring";
 import { useDirectDomVirtualizer } from "./direct-dom-virtualizer";
 import { useStickToBottom } from "./stick-to-bottom";
 import type { ThresholdSource } from "./stick-to-bottom-state";
@@ -47,8 +47,11 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
     })),
   );
   const virtualizer = directVirtualizer.virtualizer;
-  virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) =>
-    shouldAdjustChatScrollForSizeChange(item, delta, instance, sticky.followLatest.value);
+  // Keep Virtual Core's built-in dynamic-size anchoring. Since 3.17 it distinguishes first
+  // estimate measurements from later reflows and defers iOS momentum corrections itself. A local
+  // predicate loses that context and has historically broken either active scrolling or concurrent
+  // history prepends. Diff and command output remain separate bounded scrollports, so they never
+  // participate in this outer timeline policy.
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());
 
   function bottomOffset(viewport: HTMLElement) {

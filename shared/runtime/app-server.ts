@@ -7,22 +7,45 @@ import type {
   ThreadHistoryTurn,
 } from "../types";
 
-export const rpcEnvelopeSchema = z
+const rpcIdSchema = z.union([z.string(), z.number()]);
+const rpcErrorSchema = z
   .object({
-    id: z.union([z.string(), z.number()]).optional(),
-    method: z.string().min(1).optional(),
-    params: z.unknown().optional(),
-    result: z.unknown().optional(),
-    emittedAtMs: z.number().optional(),
-    error: z
-      .object({
-        code: z.number(),
-        message: z.string(),
-        data: z.unknown().optional(),
-      })
-      .optional(),
+    code: z.number(),
+    message: z.string(),
+    data: z.unknown().optional(),
   })
-  .loose();
+  .strict();
+const rpcTraceSchema = z
+  .object({
+    traceparent: z.string().nullable().optional(),
+    tracestate: z.string().nullable().optional(),
+  })
+  .strict()
+  .nullable()
+  .optional();
+
+// Codex app-server uses four JSONL envelope shapes: request, notification, success response and
+// error response. Keeping their discriminants required rejects `{}` and unrelated objects at the
+// transport boundary instead of silently routing them as notifications.
+export const rpcEnvelopeSchema = z.union([
+  z
+    .object({
+      id: rpcIdSchema,
+      method: z.string().min(1),
+      params: z.unknown().optional(),
+      trace: rpcTraceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      method: z.string().min(1),
+      params: z.unknown().optional(),
+      emittedAtMs: z.number().optional(),
+    })
+    .strict(),
+  z.object({ id: rpcIdSchema, result: z.unknown() }).strict(),
+  z.object({ id: rpcIdSchema, error: rpcErrorSchema }).strict(),
+]);
 
 export function parseRpcEnvelope(value: unknown): RpcEnvelope {
   return rpcEnvelopeSchema.parse(value);

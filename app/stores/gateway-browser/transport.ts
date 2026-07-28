@@ -2,8 +2,10 @@ import type { BrowserPreviewTarget } from "~~/shared/types";
 import { useGatewayBrowserStore } from "./index";
 import { useGatewayRealtimeStore } from "../gateway-realtime";
 import { expectBrowserOpened } from "../gateway-realtime/response-parsers";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export async function openBrowserPreview(input: BrowserPreviewTarget) {
+  const sessionIsCurrent = captureSessionEpoch();
   // Browser panels also carry UI-only fields such as `title`. TypeScript's structural typing
   // permits those objects at this call site, so project the official wire target explicitly.
   // Do not loosen the realtime parser: strict protocol boundaries are what catch accidental UI
@@ -14,7 +16,7 @@ export async function openBrowserPreview(input: BrowserPreviewTarget) {
     expectBrowserOpened,
     30_000,
   );
-  useGatewayBrowserStore().upsertSession(response.session);
+  if (sessionIsCurrent()) useGatewayBrowserStore().upsertSession(response.session);
   return response.session;
 }
 
@@ -37,6 +39,7 @@ export async function closeBrowserPreview(sessionId: string) {
 }
 
 export async function setBrowserPreviewInsecureTls(sessionId: string, allowInsecureTls: boolean) {
+  const sessionIsCurrent = captureSessionEpoch();
   const response = await useGatewayRealtimeStore().request(
     (requestId) => ({
       type: "browser.allowInsecureTls",
@@ -46,6 +49,6 @@ export async function setBrowserPreviewInsecureTls(sessionId: string, allowInsec
     }),
     expectBrowserOpened,
   );
-  useGatewayBrowserStore().upsertSession(response.session);
+  if (sessionIsCurrent()) useGatewayBrowserStore().upsertSession(response.session);
   return response.session;
 }

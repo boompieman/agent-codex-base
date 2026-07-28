@@ -49,19 +49,55 @@ export interface ProjectCreateInput {
 
 export type ProjectUpdateInput = ProjectCreateInput;
 
-export interface RpcEnvelope {
-  id?: number | string;
-  method?: string;
-  params?: unknown;
-  result?: unknown;
-  /** Unix time recorded by app-server when a notification was emitted. */
-  emittedAtMs?: number;
-  error?: {
-    code: number;
-    message: string;
-    data?: unknown;
-  };
+interface RpcTrace {
+  traceparent?: string | null;
+  tracestate?: string | null;
 }
+
+interface RpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+export type RpcEnvelope =
+  | {
+      id: number | string;
+      method: string;
+      params?: unknown;
+      trace?: RpcTrace | null;
+      result?: never;
+      error?: never;
+      emittedAtMs?: never;
+    }
+  | {
+      method: string;
+      params?: unknown;
+      /** Unix time recorded by app-server when a notification was emitted. */
+      emittedAtMs?: number;
+      id?: never;
+      result?: never;
+      error?: never;
+      trace?: never;
+    }
+  | {
+      id: number | string;
+      result: unknown;
+      method?: never;
+      params?: never;
+      error?: never;
+      trace?: never;
+      emittedAtMs?: never;
+    }
+  | {
+      id: number | string;
+      error: RpcError;
+      method?: never;
+      params?: never;
+      result?: never;
+      trace?: never;
+      emittedAtMs?: never;
+    };
 
 export function rpcEnvelopeCreatedAt(payload: unknown, fallback = new Date()): string {
   const emittedAtMs = recordFromUnknown(payload)?.emittedAtMs;

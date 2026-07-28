@@ -10,6 +10,7 @@ import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity"
 import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 import { activeSubAgentsFromTurns } from "./active-subagents";
 import { subAgentDisplayName } from "./display-name";
+import { useActiveSubAgentMetadata } from "./useActiveSubAgentMetadata";
 
 const props = defineProps<{
   turns: ThreadTimelineTurn[];
@@ -21,6 +22,7 @@ const threadView = useGatewayThreadViewStore();
 const threadActivity = useGatewayThreadActivityStore();
 const { openSubAgentPanel } = useOpenSubAgentPanel();
 const agents = computed(() => activeSubAgentsFromTurns(props.turns));
+useActiveSubAgentMetadata(() => props.hostId, agents);
 
 function displayName(agent: (typeof agents.value)[number]) {
   const thread = props.hostId

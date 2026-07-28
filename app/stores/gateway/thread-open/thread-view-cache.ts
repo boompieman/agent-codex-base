@@ -75,6 +75,7 @@ export function activateThreadViewFromCache(hostId: number, threadId: string) {
   views.olderTurnsCursor = view.olderTurnsCursor;
   views.newerTurnsCursor = view.newerTurnsCursor;
   views.lastEventId = view.lastEventId;
+  views.eventEpoch = view.eventEpoch;
   return true;
 }
 
@@ -99,6 +100,7 @@ export function saveSelectedThreadView() {
     olderTurnsCursor: views.olderTurnsCursor,
     newerTurnsCursor: views.newerTurnsCursor,
     lastEventId: views.lastEventId,
+    eventEpoch: views.eventEpoch,
     loading: false,
     error: null,
   });
@@ -147,6 +149,7 @@ function emptyThreadView(hostId: number, threadId: string): ThreadViewState {
     olderTurnsCursor: null,
     newerTurnsCursor: null,
     lastEventId: 0,
+    eventEpoch: "",
     loading: false,
     error: null,
   };

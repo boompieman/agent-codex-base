@@ -38,6 +38,7 @@ interface SeedGatewayThreadInput {
   newerTurnsCursor?: string | null;
   events?: GatewayEvent[];
   lastEventId?: number;
+  eventEpoch?: string;
   threadViews?: Record<string, ThreadViewState>;
 }
 
@@ -80,6 +81,7 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     views.history = input.history ?? (hasThread ? input.defaultHistory : null);
     views.events = input.events ?? [];
     views.lastEventId = input.lastEventId ?? views.lastEventId;
+    views.eventEpoch = input.eventEpoch ?? views.eventEpoch;
     views.olderTurnsCursor = input.olderTurnsCursor ?? null;
     views.newerTurnsCursor = input.newerTurnsCursor ?? null;
     views.threadViews = { ...views.threadViews, ...input.threadViews };
@@ -326,6 +328,7 @@ export async function setThreadViewHistoryAndStatus(
       olderTurnsCursor: previous?.olderTurnsCursor ?? null,
       newerTurnsCursor: previous?.newerTurnsCursor ?? null,
       lastEventId: previous?.lastEventId ?? 0,
+      eventEpoch: previous?.eventEpoch ?? "e2e-event-epoch",
       loading: previous?.loading ?? false,
       error: previous?.error ?? null,
     };

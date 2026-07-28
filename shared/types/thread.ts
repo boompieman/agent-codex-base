@@ -40,6 +40,7 @@ export interface ThreadOpenResult {
   thread: AppServerThread;
   history: ThreadHistoryState;
   lastEventId: number;
+  eventEpoch: string;
   runtimeStatus?: ThreadRuntimeStatus | null;
   threadSettings?: ThreadSettingsState | null;
   tokenUsage?: ThreadTokenUsageState | null;
