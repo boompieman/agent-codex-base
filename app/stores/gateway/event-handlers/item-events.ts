@@ -1,4 +1,6 @@
 import type { GatewayEvent } from "~~/shared/types";
+import { threadHistoryItemFromUnknown } from "~~/shared/runtime/app-server";
+import { idFromUnknown, stringFromUnknown, stringIdFromUnknown } from "~~/shared/utils/records";
 import { gatewayDomainEvents } from "../domain-events";
 import { tagFileChanges } from "./file-change-sequence";
 import type { AppServerEventParams, GatewayEventHandlerRegistry } from "./types";
@@ -14,28 +16,34 @@ export const itemEventHandlers: GatewayEventHandlerRegistry = {
     emitRemoteFilesChanged(event, params, threadId);
   },
   "item/commandExecution/requestApproval": (event, params, threadId) => {
+    const itemId = idFromUnknown(params.itemId);
+    const turnId = idFromUnknown(params.turnId);
+    if (itemId === null || turnId === null) return;
     gatewayDomainEvents.emit("history-item-upsert", {
       hostId: event.hostId,
       threadId,
       item: {
         type: "commandExecution",
-        id: params.itemId,
-        turnId: params.turnId,
+        id: itemId,
+        turnId,
         status: "waitingForApproval",
-        command: params.command,
-        cwd: params.cwd,
+        command: stringFromUnknown(params.command),
+        cwd: stringFromUnknown(params.cwd),
         pendingApproval: { requestId: event.payload.id, method: event.method, params },
       },
     });
   },
   "item/fileChange/requestApproval": (event, params, threadId) => {
+    const itemId = idFromUnknown(params.itemId);
+    const turnId = idFromUnknown(params.turnId);
+    if (itemId === null || turnId === null) return;
     gatewayDomainEvents.emit("history-item-upsert", {
       hostId: event.hostId,
       threadId,
       item: {
         type: "fileChange",
-        id: params.itemId,
-        turnId: params.turnId,
+        id: itemId,
+        turnId,
         status: "waitingForApproval",
         pendingApproval: { requestId: event.payload.id, method: event.method, params },
       },
@@ -43,13 +51,16 @@ export const itemEventHandlers: GatewayEventHandlerRegistry = {
   },
   "item/fileChange/patchUpdated": (event, params, threadId) => {
     emitRunning(event, params, threadId);
+    const itemId = idFromUnknown(params.itemId);
+    const turnId = idFromUnknown(params.turnId);
+    if (itemId === null || turnId === null) return;
     gatewayDomainEvents.emit("history-item-upsert", {
       hostId: event.hostId,
       threadId,
       item: {
         type: "fileChange",
-        id: params.itemId,
-        turnId: params.turnId,
+        id: itemId,
+        turnId,
         changes: tagFileChanges(params.changes),
         status: "inProgress",
       },
@@ -62,7 +73,7 @@ function emitRunning(event: GatewayEvent, params: AppServerEventParams, threadId
     hostId: event.hostId,
     threadId,
     status: "running",
-    turnId: params.turnId ? String(params.turnId) : null,
+    turnId: stringIdFromUnknown(params.turnId),
   });
 }
 
@@ -71,12 +82,13 @@ function emitTerminalProcessCompleted(
   params: AppServerEventParams,
   threadId: string,
 ) {
-  const item = params.item;
-  if (item?.type !== "commandExecution" || !params.turnId || !item.id) return;
+  const item = threadHistoryItemFromUnknown(params.item);
+  const turnId = idFromUnknown(params.turnId);
+  if (item?.type !== "commandExecution" || turnId === null || item.id == null) return;
   gatewayDomainEvents.emit("terminal-process-completed", {
     hostId: event.hostId,
     threadId,
-    turnId: String(params.turnId),
+    turnId: String(turnId),
     itemId: String(item.id),
   });
 }
@@ -86,11 +98,18 @@ function emitRemoteFilesChanged(
   params: AppServerEventParams,
   threadId: string,
 ) {
-  if (params.item?.type !== "fileChange") return;
-  const paths = (Array.isArray(params.item.changes) ? params.item.changes : [])
-    .map((change: Record<string, unknown>) => change.path ?? change.filePath)
-    .filter((path: unknown): path is string => typeof path === "string" && path.length > 0);
-  if (paths.length)
+  const item = threadHistoryItemFromUnknown(params.item);
+  if (item?.type !== "fileChange") return;
+  const paths = [
+    ...new Set(
+      (Array.isArray(item.changes) ? item.changes : []).flatMap((change: Record<string, unknown>) =>
+        [change.path, change.filePath, change.pathBefore, change.pathAfter].filter(
+          (path: unknown): path is string => typeof path === "string" && path.length > 0,
+        ),
+      ),
+    ),
+  ];
+  if (paths.length > 0)
     gatewayDomainEvents.emit("remote-files-changed", { hostId: event.hostId, threadId, paths });
 }
 
@@ -100,17 +119,23 @@ function upsertStartedOrCompletedItem(
   threadId: string,
   phase: "started" | "completed",
 ) {
-  if (!params.item) return;
-  const eventIso = event.createdAt || new Date().toISOString();
+  const item = threadHistoryItemFromUnknown(params.item);
+  if (item === null) return;
+  const turnId = idFromUnknown(params.turnId);
+  const eventIso = event.createdAt === "" ? new Date().toISOString() : event.createdAt;
   gatewayDomainEvents.emit("history-item-upsert", {
     hostId: event.hostId,
     threadId,
     item: {
-      ...params.item,
-      turnId: params.turnId,
-      status: params.item.status ?? (phase === "started" ? "inProgress" : "completed"),
-      ...(phase === "started" && !params.item.startedAt ? { startedAt: eventIso } : {}),
-      ...(phase === "completed" && !params.item.completedAt ? { completedAt: eventIso } : {}),
+      ...item,
+      turnId,
+      status: item.status ?? (phase === "started" ? "inProgress" : "completed"),
+      ...(phase === "started" && (item.startedAt === null || item.startedAt === undefined)
+        ? { startedAt: eventIso }
+        : {}),
+      ...(phase === "completed" && (item.completedAt === null || item.completedAt === undefined)
+        ? { completedAt: eventIso }
+        : {}),
     },
   });
 }

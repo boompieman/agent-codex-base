@@ -9,7 +9,6 @@ const props = withDefaults(
     hideIcon?: boolean;
     nameKey?: string;
     verticalAlign?: "bottom" | "top";
-    // payload?: any[]
     class?: HTMLAttributes["class"];
   }>(),
   {

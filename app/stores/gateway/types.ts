@@ -1,6 +1,7 @@
 import type {
   AppServerThread,
   GatewayEvent,
+  ThreadHistoryState,
   TerminalOpenTarget,
   TerminalSessionSnapshot,
   ThreadRuntimeStatus,
@@ -30,11 +31,12 @@ export interface ThreadViewState {
   projectId: number | null;
   threadId: string;
   currentThread: AppServerThread | null;
-  history: unknown;
+  history: ThreadHistoryState | null;
   events: GatewayEvent[];
   olderTurnsCursor: string | null;
   newerTurnsCursor: string | null;
   lastEventId: number;
+  eventEpoch: string;
   loading: boolean;
   error: string | null;
 }
@@ -42,7 +44,8 @@ export interface ThreadViewState {
 export interface SubAgentPanelState {
   hostId: number;
   threadId: string;
-  title: string;
+  /** Optional human-readable candidate; machine thread IDs are never stored as titles. */
+  title: string | null;
   parentHostId: number;
   parentThreadId: string;
 }

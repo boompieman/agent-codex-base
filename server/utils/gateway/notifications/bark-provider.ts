@@ -1,26 +1,25 @@
 import type { BarkNotificationSettings } from "~~/shared/types";
 import type { ServerNotification } from "~~/shared/types";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 const BARK_REQUEST_TIMEOUT_MS = 10_000;
-const BARK_RETRY_DELAYS_MS = [1_000, 3_000] as const;
+
+export class BarkRequestError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "BarkRequestError";
+  }
+}
 
 export async function sendBarkNotification(
   settings: BarkNotificationSettings,
   notification: ServerNotification,
 ) {
   const url = buildBarkUrl(settings, notification);
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await sendBarkRequest(url);
-      return;
-    } catch (error) {
-      const retryDelay = BARK_RETRY_DELAYS_MS[attempt];
-      if (retryDelay === undefined) {
-        throw error;
-      }
-      await delay(retryDelay);
-    }
-  }
+  await sendBarkRequest(url);
 }
 
 async function sendBarkRequest(url: URL) {
@@ -29,14 +28,9 @@ async function sendBarkRequest(url: URL) {
     signal: AbortSignal.timeout(BARK_REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`Bark notification failed with HTTP ${response.status}`);
+    const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+    throw new BarkRequestError(`Bark notification failed with HTTP ${response.status}`, retryable);
   }
-}
-
-function delay(milliseconds: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
 }
 
 function buildBarkUrl(settings: BarkNotificationSettings, notification: ServerNotification) {
@@ -44,9 +38,13 @@ function buildBarkUrl(settings: BarkNotificationSettings, notification: ServerNo
   const url = new URL(
     `${base}/${encodeURIComponent(settings.deviceKey)}/${encodeURIComponent(notification.title)}/${encodeURIComponent(notification.body)}`,
   );
-  const group = notification.group?.trim() || settings.group?.trim();
-  if (group) {
+  const group = firstNonEmptyString([notification.group, settings.group]);
+  if (group !== null) {
     url.searchParams.set("group", group);
   }
+  // Bark 1.5.2+/server 2.2.5+ replaces a notification with the same id. The Gateway key is
+  // already stable across retries and process restarts, so provider-level retries remain
+  // at-least-once without producing duplicate alerts after an ambiguous timeout.
+  url.searchParams.set("id", notification.key);
   return url;
 }

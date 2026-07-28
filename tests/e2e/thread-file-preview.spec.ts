@@ -1,13 +1,14 @@
-import { expect, test } from "@playwright/test";
-import type { HostRecord, ProjectRecord } from "../../shared/types";
+import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
+import { hostRecordSchema, projectRecordSchema } from "./helpers/http-schemas";
 import { seedGatewayThread } from "./helpers/gateway-store";
-import { execRemoteSsh, readRemoteEnv } from "./helpers/remote-codex";
+import { execRemoteSsh } from "./helpers/remote-codex";
 
 test("the unified file workspace browses, restores, and refreshes real remote files", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   await openApp(page);
 
   const projectPath = `/home/${remote.username}`;
@@ -75,28 +76,36 @@ done
 `,
   );
 
-  const host = await authenticatedFetch<HostRecord>(page, {
-    url: "/api/hosts",
-    method: "POST",
-    body: {
-      name: `file-preview-host-${Date.now()}`,
-      sshHost: remote.host,
-      username: remote.username,
-      port: Number(remote.port),
-      authMode: "password",
-      password: remote.password,
-      proxyUrl: remote.proxyUrl ?? null,
+  const host = await authenticatedFetch(
+    page,
+    {
+      url: "/api/hosts",
+      method: "POST",
+      body: {
+        name: `file-preview-host-${Date.now()}`,
+        sshHost: remote.host,
+        username: remote.username,
+        port: Number(remote.port),
+        authMode: "password",
+        password: remote.password,
+        proxyUrl: remote.proxyUrl ?? null,
+      },
     },
-  });
-  const project = await authenticatedFetch<ProjectRecord>(page, {
-    url: "/api/projects",
-    method: "POST",
-    body: {
-      hostId: host.id,
-      name: `file-preview-project-${Date.now()}`,
-      remotePath: projectPath,
+    (value) => hostRecordSchema.parse(value),
+  );
+  const project = await authenticatedFetch(
+    page,
+    {
+      url: "/api/projects",
+      method: "POST",
+      body: {
+        hostId: host.id,
+        name: `file-preview-project-${Date.now()}`,
+        remotePath: projectPath,
+      },
     },
-  });
+    (value) => projectRecordSchema.parse(value),
+  );
   const origin = await page.evaluate(() => window.location.origin);
   const threadId = `file-preview-thread-${Date.now()}`;
   const latestHistory = {

@@ -8,7 +8,7 @@ export interface NotificationItemInput {
   level?: "info" | "warning";
   message?: string;
   details?: string;
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
 }
 
 export function emitNotificationItem(

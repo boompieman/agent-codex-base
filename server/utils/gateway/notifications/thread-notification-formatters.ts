@@ -1,18 +1,16 @@
-import type {
-  GatewayEvent,
-  ThreadGoal,
-  ThreadGoalStatus,
-  ThreadRuntimeStatus,
-} from "~~/shared/types";
+import type { GatewayEvent, ThreadGoalStatus, ThreadRuntimeStatus } from "~~/shared/types";
 import { terminalTurnStatus } from "~~/shared/thread-runtime-status";
 import { gatewayMemoryState } from "../state/memory";
 import { hostStore } from "../state/hosts";
 import type { ServerNotification } from "~~/shared/types";
+import { threadGoalFromUnknown, threadHistoryTurnFromUnknown } from "~~/shared/runtime/app-server";
+import { idFromUnknown, recordFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export function threadTurnCompletedNotification(event: GatewayEvent): ServerNotification | null {
-  const params = (event.payload as any)?.params ?? {};
-  const turn = params.turn ?? {};
-  const turnId = turn.id ? String(turn.id) : `event-${event.id}`;
+  const params = recordFromUnknown(event.payload.params);
+  const turn = threadHistoryTurnFromUnknown(params?.turn) ?? {};
+  const turnId = turn.id === null || turn.id === undefined ? `event-${event.id}` : String(turn.id);
   const status = terminalTurnStatus(turn.status);
   return {
     key: `thread-terminal:${event.hostId}:${event.threadId}:turn:${turnId}:${status}`,
@@ -24,9 +22,9 @@ export function threadTurnCompletedNotification(event: GatewayEvent): ServerNoti
 }
 
 export function threadGoalCompletedNotification(event: GatewayEvent): ServerNotification | null {
-  const params = (event.payload as any)?.params ?? {};
-  const goal = params.goal as ThreadGoal | undefined;
-  if (!goal || !isTerminalGoalStatus(goal.status)) {
+  const params = recordFromUnknown(event.payload.params);
+  const goal = threadGoalFromUnknown(params?.goal);
+  if (goal === null || !isTerminalGoalStatus(goal.status)) {
     return null;
   }
   return {
@@ -36,6 +34,30 @@ export function threadGoalCompletedNotification(event: GatewayEvent): ServerNoti
       `${hostTitle(event.hostId)} 上的目标状态：${goalStatusLabel(goal.status)}。`,
       `推进 ${formatDuration(goal.timeUsedSeconds)}，使用 ${goal.tokensUsed.toLocaleString()} tokens。`,
     ].join(""),
+    group: "Codex Gateway",
+    target: notificationTarget(event),
+  };
+}
+
+export function threadUserInputRequestedNotification(event: GatewayEvent): ServerNotification {
+  const params = recordFromUnknown(event.payload.params);
+  const questions = Array.isArray(params?.questions) ? params.questions : [];
+  const firstQuestion = recordFromUnknown(questions[0]);
+  const question = firstNonEmptyString([
+    stringFromUnknown(firstQuestion?.question),
+    stringFromUnknown(firstQuestion?.header),
+  ]);
+  // itemId belongs to the thread history and survives app-server restarts. Numeric RPC ids restart
+  // from zero with each process, so they are only a fallback when older payloads omit itemId.
+  const requestId = idFromUnknown(params?.itemId) ?? idFromUnknown(event.payload.id) ?? event.id;
+  const questionCount = questions.length > 1 ? `（共 ${questions.length} 个问题）` : "";
+
+  return {
+    key: `thread-user-input:${event.hostId}:${event.threadId}:${requestId}`,
+    title: `${threadTitle(event.hostId, event.threadId)} · 等待回答`,
+    // Options may contain secrets or large model-generated payloads. A push notification only
+    // needs enough context to bring the user back; the interactive card remains authoritative.
+    body: `${hostTitle(event.hostId)} 上的 Agent 正在等待你的回答${questionCount}：${question ?? "请打开会话查看问题。"}`,
     group: "Codex Gateway",
     target: notificationTarget(event),
   };
@@ -67,11 +89,18 @@ function threadTitle(hostId: number, threadId: string) {
   const metadata = gatewayMemoryState.threadMetadata.find(
     (thread) => thread.hostId === hostId && thread.threadId === threadId,
   );
-  return pinnedThread?.title || metadata?.title || metadata?.name || metadata?.preview || threadId;
+  return (
+    firstNonEmptyString([
+      pinnedThread?.title,
+      metadata?.title,
+      metadata?.name,
+      metadata?.preview,
+    ]) ?? threadId
+  );
 }
 
 function hostTitle(hostId: number) {
-  return hostStore.get(hostId)?.name || `Host ${hostId}`;
+  return firstNonEmptyString([hostStore.get(hostId)?.name]) ?? `Host ${hostId}`;
 }
 
 function turnStatusLabel(status: ThreadRuntimeStatus) {

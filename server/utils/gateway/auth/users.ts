@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { GatewayConfig } from "~~/shared/types";
 import { defaultGatewayConfig } from "../../../../shared/config";
 import { gatewayDatabase, gatewayDatabaseExists } from "../storage/database";
+import { parseGatewayConfig } from "../http/validation/config";
 import {
   decryptJson,
   encryptJson,
@@ -10,6 +11,7 @@ import {
   verifyPassword,
 } from "../storage/crypto";
 import { sessionRevocationEvents } from "./session-events";
+import { sessionActivityTracker } from "./session-activity-tracker";
 
 export interface AuthenticatedUser {
   id: number;
@@ -80,6 +82,7 @@ export const userStore = {
     if (!token) {
       return null;
     }
+    const tokenHash = hashToken(token);
     const row = gatewayDatabase()
       .prepare(
         `
@@ -89,7 +92,7 @@ export const userStore = {
           WHERE sessions.token_hash = ?
         `,
       )
-      .get(hashToken(token));
+      .get(tokenHash);
     if (!row || Number(row.is_active) !== 1) {
       return null;
     }
@@ -97,14 +100,13 @@ export const userStore = {
       this.deleteToken(token);
       return null;
     }
-    gatewayDatabase()
-      .prepare("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?")
-      .run(new Date().toISOString(), hashToken(token));
+    sessionActivityTracker.touch(tokenHash);
     return { id: Number(row.id), username: String(row.username) };
   },
 
   deleteToken(token: string) {
     const tokenHash = hashToken(token);
+    sessionActivityTracker.forget(tokenHash);
     const result = gatewayDatabase()
       .prepare("DELETE FROM sessions WHERE token_hash = ?")
       .run(tokenHash);
@@ -132,12 +134,17 @@ export const userStore = {
     const row = gatewayDatabase()
       .prepare("SELECT encrypted_config_json FROM user_configs WHERE user_id = ?")
       .get(userId);
-    if (!row?.encrypted_config_json) {
+    if (
+      row === undefined ||
+      row.encrypted_config_json === null ||
+      row.encrypted_config_json === undefined ||
+      row.encrypted_config_json === ""
+    ) {
       return defaultGatewayConfig();
     }
     return {
       ...defaultGatewayConfig(),
-      ...decryptJson<GatewayConfig>(String(row.encrypted_config_json)),
+      ...parseGatewayConfig(decryptJson(String(row.encrypted_config_json))),
     };
   },
 
@@ -172,14 +179,14 @@ export const userStore = {
         `,
       )
       .all();
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       user: {
         id: Number(row.id),
         username: String(row.username),
       },
       config: {
         ...defaultGatewayConfig(),
-        ...decryptJson<GatewayConfig>(String(row.encrypted_config_json)),
+        ...parseGatewayConfig(decryptJson(String(row.encrypted_config_json))),
       },
     }));
   },

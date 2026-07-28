@@ -1,4 +1,5 @@
 import { itemTypeForServerRequest, SERVER_REQUEST_ITEM_TYPES } from "~~/shared/server-requests";
+import { idFromUnknown } from "~~/shared/utils/records";
 import { gatewayDomainEvents } from "../domain-events";
 import type { GatewayEventHandlerRegistry } from "./types";
 
@@ -9,10 +10,12 @@ const pendingServerRequestHandlers = Object.fromEntries(
 export const requestEventHandlers: GatewayEventHandlerRegistry = {
   ...pendingServerRequestHandlers,
   "serverRequest/resolved": (event, params, threadId) => {
+    const requestId = idFromUnknown(params.requestId);
+    if (requestId === null) return;
     gatewayDomainEvents.emit("history-server-request-resolved", {
       hostId: event.hostId,
       threadId,
-      requestId: params.requestId,
+      requestId,
     });
   },
   "currentTime/read": () => {
@@ -22,16 +25,19 @@ export const requestEventHandlers: GatewayEventHandlerRegistry = {
 
 function upsertPendingServerRequest(
   event: Parameters<GatewayEventHandlerRegistry[string]>[0],
-  params: Record<string, any>,
+  params: Parameters<GatewayEventHandlerRegistry[string]>[1],
   threadId: string,
 ) {
+  const turnId = idFromUnknown(params.turnId);
+  const stableItemId = idFromUnknown(params.itemId) ?? idFromUnknown(event.payload.id);
+  if (stableItemId === null) return;
   gatewayDomainEvents.emit("history-item-upsert", {
     hostId: event.hostId,
     threadId,
     item: {
       type: itemTypeForServerRequest(event.method),
-      id: `server-request-${String(event.payload.id)}`,
-      turnId: params.turnId || `server-request-turn-${String(event.payload.id)}`,
+      id: `server-request-${String(stableItemId)}`,
+      turnId: turnId ?? `server-request-turn-${String(stableItemId)}`,
       status: "waitingForClient",
       requestId: event.payload.id,
       method: event.method,

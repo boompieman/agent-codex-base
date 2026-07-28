@@ -12,7 +12,7 @@ import {
   AGENT_WORKSPACE_PANEL_ID,
   FILES_WORKSPACE_PANEL_ID,
 } from "@/stores/gateway/workspace-panels";
-import type { WorkspaceDockPanelParams } from "./types";
+import { workspaceDockPanelParamsFromUnknown, type WorkspaceDockPanelParams } from "./types";
 import { workspacePanelPolicy } from "./panel-registry";
 
 interface PanelDefinition {
@@ -49,7 +49,7 @@ export function useWorkspaceDockPanels(options: {
         params: { kind: "agent" },
       },
     ];
-    if (options.selectedThreadId.value) {
+    if (options.selectedThreadId.value !== null) {
       panels.push({
         id: FILES_WORKSPACE_PANEL_ID,
         title: t("app.filesTab"),
@@ -91,21 +91,22 @@ export function useWorkspaceDockPanels(options: {
     const desiredIds = new Set(desired.map(({ id }) => id));
     for (const panel of api.panels) {
       if (!desiredIds.has(panel.id)) {
-        const params = panel.params as WorkspaceDockPanelParams;
-        if (params.kind === "browser" && params.browserPanelId) {
+        const params = workspaceDockPanelParamsFromUnknown(panel.params);
+        if (params?.kind === "browser") {
           const session = browserStore.sessionForPanel(params.browserPanelId);
-          if (session) void closeBrowserPreview(session.sessionId);
+          if (session !== null) void closeBrowserPreview(session.sessionId);
         }
         api.removePanel(panel);
       }
     }
     for (const definition of desired) {
       const existing = api.getPanel(definition.id);
-      if (existing) {
+      if (existing !== undefined) {
         existing.api.setTitle(definition.title);
         existing.api.updateParameters(definition.params);
       } else {
-        const position = api.activeGroup ? { referenceGroup: api.activeGroup } : undefined;
+        const position =
+          api.activeGroup === undefined ? undefined : { referenceGroup: api.activeGroup };
         api.addPanel({
           ...definition,
           tabComponent: "WorkspaceDockTab",
@@ -163,37 +164,41 @@ export function useWorkspaceDockPanels(options: {
   }
 
   function closeDynamic(panel: IDockviewPanel) {
-    const params = panel.params as WorkspaceDockPanelParams;
+    const params = workspaceDockPanelParamsFromUnknown(panel.params);
+    if (params === null) return;
     const nextPanelId = activateNextPanel(panel);
-    const handler = closeHandlers[params.kind as keyof typeof closeHandlers];
-    handler?.(params as never);
-    if (nextPanelId) workspaceLayout.requestPanelActivation(nextPanelId);
+    switch (params.kind) {
+      case "terminal":
+        void terminalTransport.closeTerminal(params.sessionId);
+        break;
+      case "subagent":
+        threadView.closeSubAgentPanel({
+          hostId: params.subAgentHostId,
+          threadId: params.subAgentThreadId,
+        });
+        break;
+      case "browser": {
+        const removed = browserStore.removePanel(params.browserPanelId);
+        if (removed.sessionId !== null && removed.sessionId !== undefined) {
+          void closeBrowserPreview(removed.sessionId);
+        }
+        break;
+      }
+      case "tmux":
+        tmuxStore.closePanel();
+        break;
+      case "agent":
+      case "files":
+        return;
+    }
+    if (nextPanelId !== null) workspaceLayout.requestPanelActivation(nextPanelId);
   }
-
-  const closeHandlers = {
-    terminal(params: Extract<WorkspaceDockPanelParams, { kind: "terminal" }>) {
-      void terminalTransport.closeTerminal(params.sessionId);
-    },
-    subagent(params: Extract<WorkspaceDockPanelParams, { kind: "subagent" }>) {
-      threadView.closeSubAgentPanel({
-        hostId: params.subAgentHostId,
-        threadId: params.subAgentThreadId,
-      });
-    },
-    browser(params: Extract<WorkspaceDockPanelParams, { kind: "browser" }>) {
-      const removed = browserStore.removePanel(params.browserPanelId);
-      if (removed.sessionId) void closeBrowserPreview(removed.sessionId);
-    },
-    tmux() {
-      tmuxStore.closePanel();
-    },
-  };
 
   function activateNextPanel(closingPanel: IDockviewPanel) {
     const remainingDynamic = closingPanel.api.group.panels.find((panel) => {
       if (panel.id === closingPanel.id) return false;
-      const kind = (panel.params as WorkspaceDockPanelParams).kind;
-      return workspacePanelPolicy(kind).dynamic;
+      const params = workspaceDockPanelParamsFromUnknown(panel.params);
+      return params !== null && workspacePanelPolicy(params.kind).dynamic;
     });
     const nextPanel =
       remainingDynamic ??

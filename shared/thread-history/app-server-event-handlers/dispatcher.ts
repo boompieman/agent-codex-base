@@ -6,13 +6,14 @@ import type {
   AppServerRequestId,
   ApplyAppServerEventInput,
 } from "./types";
+import type { ThreadHistoryState } from "../types";
 
 interface ReducerEnvelope {
   input: ApplyAppServerEventInput;
   params: AppServerEventParams;
   requestId: AppServerRequestId;
   handled: boolean;
-  result: unknown;
+  result: ThreadHistoryState | null;
 }
 
 type ReducerEventMap = Record<string, ReducerEnvelope>;

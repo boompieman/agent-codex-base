@@ -9,8 +9,6 @@ import { createComposerActions } from "./actions/drafts";
 import { createThreadGoalActions } from "./actions/goals";
 import { createThreadSettingsActions } from "./actions/settings";
 
-const emptyDraft = (): ComposerDraft => ({ text: "", attachedFiles: [] });
-
 export const useGatewayComposerStore = defineStore("gateway-composer", () => {
   const threadSettingsByKey = ref<Record<string, ThreadSettingsState>>({});
   const threadCollaborationModesByKey = ref<Record<string, "default" | "plan">>({});
@@ -29,29 +27,27 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
     return selectedThreadKey(navigation.selectedHostId, navigation.selectedThreadId);
   });
   const selectedThreadSettings = computed(() =>
-    selectedKey.value ? (threadSettingsByKey.value[selectedKey.value] ?? {}) : {},
+    selectedKey.value !== null ? (threadSettingsByKey.value[selectedKey.value] ?? {}) : {},
   );
   const selectedThreadCollaborationMode = computed(() =>
-    selectedKey.value
+    selectedKey.value !== null
       ? (threadCollaborationModesByKey.value[selectedKey.value] ?? "default")
       : "default",
   );
   const selectedThreadGoal = computed(() =>
-    selectedKey.value ? (threadGoalsByKey.value[selectedKey.value] ?? null) : null,
+    selectedKey.value !== null ? (threadGoalsByKey.value[selectedKey.value] ?? null) : null,
   );
   const selectedThreadGoalObservedAt = computed(() =>
-    selectedKey.value ? (threadGoalObservedAtByKey.value[selectedKey.value] ?? null) : null,
+    selectedKey.value !== null
+      ? (threadGoalObservedAtByKey.value[selectedKey.value] ?? null)
+      : null,
   );
   const selectedThreadTokenUsage = computed(() => {
     const runtime = useGatewayThreadRuntimeStore();
-    return selectedKey.value ? (runtime.threadTokenUsageByKey[selectedKey.value] ?? null) : null;
+    return selectedKey.value !== null
+      ? (runtime.threadTokenUsageByKey[selectedKey.value] ?? null)
+      : null;
   });
-  const selectedComposerDraft = computed(() =>
-    selectedKey.value
-      ? (composerDraftsByKey.value[selectedKey.value] ?? emptyDraft())
-      : emptyDraft(),
-  );
-
   function resetState() {
     threadSettingsByKey.value = {};
     threadCollaborationModesByKey.value = {};
@@ -73,7 +69,6 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
     selectedThreadGoal,
     selectedThreadGoalObservedAt,
     selectedThreadTokenUsage,
-    selectedComposerDraft,
     resetState,
     ...actions,
   };

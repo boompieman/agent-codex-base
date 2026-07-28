@@ -1,96 +1,94 @@
-import { EventEmitter } from "@posva/event-emitter";
 import { defineStore } from "pinia";
-import type { RealtimeServerMessage, TerminalSessionSnapshot } from "~~/shared/types";
-import { useGatewayBrowserStore } from "@/stores/gateway-browser";
-import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
-import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
-import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
-import { createRealtimeConnection } from "./connection";
+import type { ToRefs } from "vue";
+import type { RealtimeServerMessage } from "~~/shared/types";
+import { useGatewayTranslator } from "@/composables/i18n/useGatewayTranslator";
+import { gatewayDomainEvents } from "@/stores/gateway/domain-events";
+import { createRealtimeConnection, type RealtimeConnectionState } from "./connection";
 import { createRealtimeRequestBroker } from "./request-broker";
+import { createRealtimeServerMessageDispatcher } from "./server-message-handlers";
 import {
-  registerRealtimeServerMessageHandlers,
-  type RealtimeServerMessageMap,
-} from "./server-message-handlers";
-import { createRealtimeThreadSubscriptions } from "./thread-subscriptions";
-import { createPinnedThreadSync } from "./pinned-thread-sync";
+  createRealtimeThreadSubscriptions,
+  type RealtimeThreadSubscriptionState,
+} from "./thread-subscriptions";
+import { realtimeRequestContext } from "./request-context";
 
-export const useGatewayRealtimeStore = defineStore("gateway-realtime", () => {
-  const { t } = useI18n();
-  const lifecycleNotificationKeys = new Set<string>();
-  const serverMessages = new EventEmitter<RealtimeServerMessageMap>();
+type RealtimeConnection = ReturnType<typeof createRealtimeConnection>;
+type RealtimeRequestBroker = ReturnType<typeof createRealtimeRequestBroker>;
+type RealtimeSubscriptions = ReturnType<typeof createRealtimeThreadSubscriptions>;
+
+export type GatewayRealtimeSetup = ToRefs<RealtimeConnectionState> &
+  ToRefs<RealtimeThreadSubscriptionState> & {
+    connect: RealtimeConnection["connect"];
+    reconnectNow: RealtimeConnection["reconnectNow"];
+    resetForSessionChange: () => void;
+    scheduleReconnect: RealtimeConnection["scheduleReconnect"];
+    send: RealtimeConnection["send"];
+    request: RealtimeRequestBroker["request"];
+    installHealthCheck: RealtimeConnection["installHealthCheck"];
+    checkConnection: RealtimeConnection["checkConnection"];
+    connectHostLifecycleEvents: RealtimeSubscriptions["connectHostLifecycleEvents"];
+    connectThreadEvents: RealtimeSubscriptions["connectThreadEvents"];
+    rememberThreadSubscription: RealtimeSubscriptions["rememberThreadSubscription"];
+    closeThreadEvents: RealtimeSubscriptions["closeThreadEvents"];
+    cancelThreadEvents: RealtimeSubscriptions["cancelThreadEvents"];
+    closeHostThreadEvents: RealtimeSubscriptions["closeHostThreadEvents"];
+    receiveServerMessage: (message: RealtimeServerMessage) => void;
+  };
+
+export const useGatewayRealtimeStore = defineStore("gateway-realtime", (): GatewayRealtimeSetup => {
+  const t = useGatewayTranslator();
+  let rejectPendingRequests = (_error: Error) => {};
+  let dispatchServerMessage = (_message: RealtimeServerMessage) => {};
 
   const connection = createRealtimeConnection({
     disconnectedMessage: () => t("app.realtimeDisconnected"),
     onMessage: receiveServerMessage,
-    onDisconnected: (error) => requestBroker.rejectAllRequests(error),
+    onDisconnected: (error) => rejectPendingRequests(error),
   });
   const requestBroker = createRealtimeRequestBroker({
     waitForReady: connection.waitForReady,
     send: connection.send,
     unavailableMessage: () => t("app.realtimeUnavailable"),
     timeoutMessage: () => t("app.realtimeRequestTimedOut"),
+    requestContext: realtimeRequestContext,
   });
+  rejectPendingRequests = requestBroker.rejectAllRequests;
   const subscriptions = createRealtimeThreadSubscriptions({
     connect: connection.connect,
     send: connection.send,
   });
-  const pinnedThreadSync = createPinnedThreadSync();
-
-  registerRealtimeServerMessageHandlers(serverMessages, {
+  dispatchServerMessage = createRealtimeServerMessageDispatcher({
     t,
     readyCount: () => connection.state.readyCount,
     markReady,
-    lifecycleNotificationKeys,
     resubscribe: subscriptions.resubscribe,
     resolveRequest: requestBroker.resolveRequest,
     rejectRequest: requestBroker.rejectRequest,
     acknowledgePong: connection.acknowledgePong,
     restoreTerminalSessions,
-    refreshSelectedThreadAfterReconnect,
-    refreshPinnedThreads,
     advanceThreadSubscriptionCursor: subscriptions.advanceThreadSubscriptionCursor,
   });
 
   function receiveServerMessage(message: RealtimeServerMessage) {
-    serverMessages.emit(message.type, message as never);
+    dispatchServerMessage(message);
   }
 
   function markReady() {
     connection.markReady();
-    if (connection.state.readyCount > 1) useGatewayBrowserStore().resetRuntime();
   }
 
   function resetForSessionChange() {
     connection.reset();
     subscriptions.reset();
-    lifecycleNotificationKeys.clear();
+    gatewayDomainEvents.emit("gateway-session-reset", {});
   }
 
   async function restoreTerminalSessions() {
     try {
-      const response = await requestBroker.request<{ sessions: TerminalSessionSnapshot[] }>(
-        (requestId) => ({ type: "terminal.list", requestId }),
-      );
-      useGatewayTerminalStore().replaceTerminalSessions(response.sessions ?? []);
+      await requestBroker.request((requestId) => ({ type: "terminal.list", requestId }));
     } catch {
       // Realtime reconnect may race with Nuxt hydration. The next ready event retries.
     }
-  }
-
-  function refreshSelectedThreadAfterReconnect() {
-    const navigation = useGatewayNavigationStore();
-    if (!navigation.selectedHostId || !navigation.selectedThreadId) return;
-    void useGatewayThreadViewStore()
-      .refreshSelectedThreadSnapshot({ scrollToLatest: true })
-      .catch((error: unknown) => {
-        console.warn("[gateway] failed to refresh selected thread after realtime reconnect", error);
-      });
-  }
-
-  function refreshPinnedThreads() {
-    void pinnedThreadSync.refresh().catch((error: unknown) => {
-      console.warn("[gateway] failed to refresh pinned threads", error);
-    });
   }
 
   return {
@@ -108,6 +106,7 @@ export const useGatewayRealtimeStore = defineStore("gateway-realtime", () => {
     connectThreadEvents: subscriptions.connectThreadEvents,
     rememberThreadSubscription: subscriptions.rememberThreadSubscription,
     closeThreadEvents: subscriptions.closeThreadEvents,
+    cancelThreadEvents: subscriptions.cancelThreadEvents,
     closeHostThreadEvents: subscriptions.closeHostThreadEvents,
     receiveServerMessage,
   };

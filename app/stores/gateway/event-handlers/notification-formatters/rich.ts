@@ -1,4 +1,5 @@
 import { jsonPreview } from "@/utils/thread-items";
+import { recordFromUnknown } from "~~/shared/utils/records";
 import {
   count,
   list,
@@ -8,25 +9,36 @@ import {
   type FormattedNotification,
   type TranslationFunction,
 } from "./common";
+import {
+  categoryRecordSchema,
+  externalImportResultsSchema,
+  guardianReviewSchema,
+  hookRunSchema,
+  rateLimitsSchema,
+} from "./schemas";
 
-export function hookNotification(t: TranslationFunction, params: Record<string, any>, key: string) {
-  const run = params.run || {};
+export function hookNotification(
+  t: TranslationFunction,
+  params: Record<string, unknown>,
+  key: string,
+) {
+  const run = hookRunSchema.safeParse(params.run).data ?? {};
   return withDetails(
     simpleNotification(t, key, run.status === "failed" ? "warning" : "info", {
       event: text(run.eventName),
       status: text(run.status),
       message: text(run.statusMessage),
     }),
-    run.entries?.length ? jsonPreview(run.entries) : null,
+    Array.isArray(run.entries) && run.entries.length > 0 ? jsonPreview(run.entries) : null,
   );
 }
 
 export function guardianReviewNotification(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   phase: "started" | "completed",
 ) {
-  const review = params.review || {};
+  const review = guardianReviewSchema.safeParse(params.review).data ?? {};
   return withDetails(
     simpleNotification(
       t,
@@ -48,40 +60,41 @@ export function guardianReviewNotification(
   );
 }
 
-export function rateLimitsUpdatedNotification(t: TranslationFunction, params: Record<string, any>) {
-  const limits = params.rateLimits || {};
+export function rateLimitsUpdatedNotification(
+  t: TranslationFunction,
+  params: Record<string, unknown>,
+) {
+  const limits = rateLimitsSchema.safeParse(params.rateLimits).data ?? {};
+  const reached = text(limits.rateLimitReachedType);
+  const limitName = text(limits.limitName);
   return withDetails(
-    simpleNotification(
-      t,
-      "accountRateLimitsUpdated",
-      limits.rateLimitReachedType ? "warning" : "info",
-      {
-        plan: text(limits.planType),
-        limit: text(limits.limitName || limits.limitId),
-        reached: text(limits.rateLimitReachedType),
-      },
-    ),
+    simpleNotification(t, "accountRateLimitsUpdated", reached !== "" ? "warning" : "info", {
+      plan: text(limits.planType),
+      limit: limitName !== "" ? limitName : text(limits.limitId),
+      reached,
+    }),
     jsonPreview(limits),
   );
 }
 
 export function externalAgentConfigImportNotification(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   key: string,
 ) {
-  const results = Array.isArray(params.itemTypeResults) ? params.itemTypeResults : [];
+  const parsedResults = externalImportResultsSchema.safeParse(params.itemTypeResults);
+  const results = parsedResults.success ? parsedResults.data : [];
   const successes = results.reduce((total, result) => total + count(result.successes), 0);
   const failures = results.reduce((total, result) => total + count(result.failures), 0);
   return withDetails(
-    simpleNotification(t, key, failures ? "warning" : "info", { successes, failures }),
+    simpleNotification(t, key, failures > 0 ? "warning" : "info", { successes, failures }),
     jsonPreview(results),
   );
 }
 
 export function moderationMetadataNotification(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
 ): FormattedNotification {
   const metadata = params.metadata;
   const summary = moderationSummary(metadata);
@@ -93,12 +106,14 @@ export function moderationMetadataNotification(
 
 export function modelSafetyBufferingNotification(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
 ) {
   return withDetails(
     simpleNotification(
       t,
-      params.showBufferingUi ? "modelSafetyBufferingEnabled" : "modelSafetyBufferingDisabled",
+      params.showBufferingUi === true
+        ? "modelSafetyBufferingEnabled"
+        : "modelSafetyBufferingDisabled",
       "info",
       {
         model: text(params.model),
@@ -118,44 +133,45 @@ export function modelSafetyBufferingNotification(
 export function warningNotification(
   t: TranslationFunction,
   key: string,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
 ) {
   return simpleNotification(t, key, "warning", { message: text(params.message) });
 }
 
 function moderationSummary(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object") {
-    return text(metadata) || "metadata";
+  const record = recordFromUnknown(metadata);
+  if (record === null) {
+    const summary = text(metadata);
+    return summary !== "" ? summary : "metadata";
   }
-  const record = metadata as Record<string, any>;
   const flagged = findFirst(record, ["flagged", "blocked", "unsafe", "moderated"]);
   const model = findFirst(record, ["model", "moderationModel", "classifier"]);
   const categoryKeys = extractCategoryKeys(record);
   return [
-    flagged === undefined ? null : `flagged=${String(flagged)}`,
-    model ? `model=${String(model)}` : null,
-    categoryKeys.length ? `categories=${categoryKeys.slice(0, 4).join(", ")}` : null,
+    flagged === undefined ? "" : `flagged=${text(flagged)}`,
+    text(model) !== "" ? `model=${text(model)}` : "",
+    categoryKeys.length > 0 ? `categories=${categoryKeys.slice(0, 4).join(", ")}` : "",
     `keys=${Object.keys(record).slice(0, 6).join(", ")}`,
   ]
-    .filter(Boolean)
+    .filter((value) => value !== "")
     .join(" · ");
 }
 
-function extractCategoryKeys(record: Record<string, any>) {
+function extractCategoryKeys(record: Record<string, unknown>) {
   const categories = findFirst(record, ["categories", "category_scores", "categoryScores"]);
-  if (categories && typeof categories === "object" && !Array.isArray(categories)) {
-    return Object.entries(categories)
-      .filter(([, value]) => Boolean(value))
+  const parsed = categoryRecordSchema.safeParse(categories);
+  if (parsed.success) {
+    return Object.entries(parsed.data)
+      .filter(([, value]) => text(value) !== "")
       .map(([key]) => key);
   }
   return [];
 }
 
-function findFirst(record: Record<string, any>, keys: string[]) {
+function findFirst(record: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
-    if (record[key] !== undefined && record[key] !== null) {
-      return record[key];
-    }
+    const value = record[key];
+    if (value !== null && value !== undefined) return value;
   }
   return undefined;
 }

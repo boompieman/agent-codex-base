@@ -1,16 +1,19 @@
 import type { HostRecord } from "~~/shared/types";
 import { gatewayApi } from "@/utils/gateway-api";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayConfigStore } from "@/stores/gateway-config";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
-import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
+import { gatewayDomainEvents } from "../domain-events";
 import { writeGatewayRouteSelection } from "../route-state";
 import { beginViewTransition, cacheSelectedThreadView } from "../thread-open/view-state";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createHostActions() {
   function selectHostState(hostId: number | null) {
-    const gateway = useGatewayStore();
+    const catalog = useGatewayCatalogStore();
     const navigation = useGatewayNavigationStore();
     const views = useGatewayThreadViewStore();
     beginViewTransition();
@@ -19,88 +22,96 @@ export function createHostActions() {
     navigation.selectedThreadId = null;
     navigation.threads = [];
     views.resetCurrentView();
-    gateway.models = [];
-    gateway.modelsHostId = null;
-    gateway.clearError();
+    catalog.models = [];
+    catalog.modelsHostId = null;
+    useGatewayBootstrapStore().clearError();
   }
 
   return {
     async createHost(input: Record<string, unknown>) {
-      const gateway = useGatewayStore();
+      const sessionIsCurrent = captureSessionEpoch();
+      const catalog = useGatewayCatalogStore();
+      const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       const host = await gatewayApi<HostRecord>("/api/hosts", { method: "POST", body: input });
-      gateway.hosts.push(host);
-      gateway.persistConfig();
+      if (!sessionIsCurrent()) return host;
+      catalog.hosts.push(host);
+      config.setCatalog(catalog.hosts, catalog.projects);
       selectHostState(host.id);
       writeGatewayRouteSelection({ hostId: host.id, projectId: null, threadId: null });
-      await Promise.all([gateway.listModels(), navigation.listThreads()]);
-      gateway.ensureSelectedProject();
-      if (navigation.selectedProjectId) await navigation.listThreads();
+      await Promise.all([catalog.listModels(), navigation.listThreads()]);
+      catalog.ensureSelectedProject();
+      if (navigation.selectedProjectId !== null) await navigation.listThreads();
       return host;
     },
 
     async updateHost(hostId: number, input: Record<string, unknown>) {
-      const gateway = useGatewayStore();
+      const sessionIsCurrent = captureSessionEpoch();
+      const catalog = useGatewayCatalogStore();
       const host = await gatewayApi<HostRecord>(`/api/hosts/${hostId}`, {
         method: "PATCH",
         body: input,
       });
-      gateway.hosts = gateway.hosts.map((candidate) =>
+      if (!sessionIsCurrent()) return host;
+      catalog.hosts = catalog.hosts.map((candidate) =>
         candidate.id === hostId ? host : candidate,
       );
-      gateway.persistConfig();
+      useGatewayConfigStore().setCatalog(catalog.hosts, catalog.projects);
       return host;
     },
 
     async deleteHost(hostId: number) {
-      const gateway = useGatewayStore();
+      const sessionIsCurrent = captureSessionEpoch();
+      const catalog = useGatewayCatalogStore();
+      const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       await gatewayApi(`/api/hosts/${hostId}`, { method: "DELETE" });
-      useGatewayRealtimeStore().closeHostThreadEvents(hostId);
+      if (!sessionIsCurrent()) return;
+      gatewayDomainEvents.emit("host-removed", { hostId });
       useGatewayTmuxStore().removeHost(hostId);
-      gateway.hosts = gateway.hosts.filter((host) => host.id !== hostId);
+      catalog.hosts = catalog.hosts.filter((host) => host.id !== hostId);
       const removedProjectIds = new Set(
-        gateway.projects
+        catalog.projects
           .filter((project) => project.hostId === hostId)
           .map((project) => project.id),
       );
-      gateway.projects = gateway.projects.filter((project) => project.hostId !== hostId);
-      gateway.projectDirectoryAvailability = Object.fromEntries(
-        Object.entries(gateway.projectDirectoryAvailability).filter(
+      catalog.projects = catalog.projects.filter((project) => project.hostId !== hostId);
+      catalog.projectDirectoryAvailability = Object.fromEntries(
+        Object.entries(catalog.projectDirectoryAvailability).filter(
           ([projectId]) => !removedProjectIds.has(Number(projectId)),
         ),
       );
-      gateway.gatewayConfig.projects = gateway.gatewayConfig.projects.filter(
+      config.gatewayConfig.projects = config.gatewayConfig.projects.filter(
         (project) => project.hostId !== hostId,
       );
-      gateway.hostConnectionStatuses = omitKey(gateway.hostConnectionStatuses, hostId);
-      gateway.gatewayConfig.pinnedThreads = gateway.gatewayConfig.pinnedThreads.filter(
+      catalog.hostConnectionStatuses = omitKey(catalog.hostConnectionStatuses, hostId);
+      config.gatewayConfig.pinnedThreads = config.gatewayConfig.pinnedThreads.filter(
         (thread) => thread.hostId !== hostId,
       );
-      gateway.persistConfig();
+      config.setCatalog(catalog.hosts, catalog.projects);
       if (navigation.selectedHostId === hostId) {
-        selectHostState(gateway.hosts[0]?.id ?? null);
+        selectHostState(catalog.hosts[0]?.id ?? null);
         writeGatewayRouteSelection(
           { hostId: navigation.selectedHostId, projectId: null, threadId: null },
           { replace: true },
         );
         if (navigation.selectedHostId) {
-          await gateway.listModels();
+          await catalog.listModels();
           await navigation.listThreads();
         }
       }
     },
 
     async selectHost(hostId: number) {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       const navigation = useGatewayNavigationStore();
       cacheSelectedThreadView();
       selectHostState(hostId);
       writeGatewayRouteSelection({ hostId, projectId: null, threadId: null });
-      await gateway.listModels();
+      await catalog.listModels();
       await navigation.listThreads();
-      gateway.ensureSelectedProject();
-      if (navigation.selectedProjectId) await navigation.listThreads();
+      catalog.ensureSelectedProject();
+      if (navigation.selectedProjectId !== null) await navigation.listThreads();
     },
   };
 }

@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { openApp } from "./helpers/app";
 import { appendFileDiffLines, seedGatewayThread } from "./helpers/gateway-store";
 import { diffScrollLeft, setDiffScrollLeft } from "./helpers/scroll";
+import type { ThreadHistoryState } from "../../shared/types";
+import type { ThreadViewState } from "../../app/stores/gateway/types";
 
 test("file diff blocks can collapse and expand after virtual timeline measurement", async ({
   page,
@@ -53,6 +55,10 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await openIntermediateSteps(page);
   const toggle = page.getByRole("button", { name: /src\/example\.py/ });
   const diffText = page.getByText("new_value =");
+  await expect(toggle).toHaveAttribute("data-state", "closed");
+  await expect(diffText).toHaveCount(0);
+
+  await toggle.click();
   await expect(toggle).toHaveAttribute("data-state", "open");
   await expect(diffText).toBeVisible();
   await expect
@@ -102,8 +108,10 @@ test("short command output uses natural height instead of a fixed minimum", asyn
   await expect
     .poll(async () =>
       page.getByText("/tmp/e2e").evaluate((element: HTMLElement) => {
-        const scrollArea = element.closest('[data-slot="scroll-area"]') as HTMLElement | null;
-        if (!scrollArea) throw new Error("Missing command output scroll area");
+        const scrollArea = element.closest('[data-slot="scroll-area"]');
+        if (!(scrollArea instanceof HTMLElement)) {
+          throw new Error("Missing command output scroll area");
+        }
         return scrollArea.getBoundingClientRect().height;
       }),
     )
@@ -152,6 +160,7 @@ test("streaming diff keeps user-selected horizontal scroll position", async ({ p
   });
 
   await openIntermediateSteps(page);
+  await page.getByRole("button", { name: /src\/wide\.py/ }).click();
   await expect(page.getByText("wide_line_001")).toBeVisible();
   const chosenScrollLeft = await setDiffScrollLeft(page, "wide_line_001", 96);
   expect(chosenScrollLeft).toBeGreaterThan(0);
@@ -249,12 +258,13 @@ test("switching threads keeps asynchronously rendered diff content in normal flo
   await page.getByTestId(`thread-button-${shortThreadId}`).click();
   await expect(page.getByText("short thread content")).toBeVisible();
   await page.getByTestId(`thread-button-${diffThreadId}`).click();
+  await page.getByRole("button", { name: /src\/async\.py/ }).click();
   await expect(page.getByText("async_diff_line_120")).toBeVisible();
   await expect(page.getByText(finalMarker)).toBeVisible();
   await expect.poll(() => diffEndsBeforeText(page, finalMarker)).toBe(true);
 });
 
-function cachedThreadView(threadId: string, history: unknown) {
+function cachedThreadView(threadId: string, history: ThreadHistoryState): ThreadViewState {
   return {
     hostId: 1,
     projectId: 1,
@@ -265,6 +275,7 @@ function cachedThreadView(threadId: string, history: unknown) {
     olderTurnsCursor: null,
     newerTurnsCursor: null,
     lastEventId: 0,
+    eventEpoch: "e2e-event-epoch",
     loading: false,
     error: null,
   };

@@ -3,6 +3,7 @@ import { requireRecord } from "../http/validation/common";
 import { serverRequestResponseSchema } from "../http/validation/threads";
 import { threadBroker } from "../runtime/broker";
 import { hostStore } from "../state/hosts";
+import { pendingServerRequests } from "../runtime/pending-server-requests";
 
 export type RealtimeServerRequestResponseMessage = Extract<
   RealtimeClientMessage,
@@ -22,4 +23,5 @@ export async function respondToServerRequestFromRealtime(
     result: input.result,
     error: input.error,
   });
+  pendingServerRequests.resolve(input.hostId, input.threadId, input.requestId);
 }

@@ -1,6 +1,7 @@
 import { nextTick, onBeforeUnmount } from "vue";
 import { createStickToBottomState, type ThresholdSource } from "./stick-to-bottom-state";
 import { createViewportInputIntent } from "./viewport-input-intent";
+import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 type StickToBottomOptions = {
   threshold?: ThresholdSource;
@@ -9,10 +10,6 @@ type StickToBottomOptions = {
   onViewportScroll?: (viewport: HTMLElement) => void;
   scrollToBottom: (viewport: HTMLElement) => void;
 };
-
-function nextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(resolve));
-}
 
 export function useStickToBottom(options: StickToBottomOptions) {
   const state = createStickToBottomState({
@@ -24,6 +21,7 @@ export function useStickToBottom(options: StickToBottomOptions) {
     getViewport: options.getViewport,
     onBound: state.prepareViewport,
     onKeydown: state.handleKeydown,
+    onPointerDown: state.handlePointerDown,
     onScroll: state.handleScroll,
     onTouchMove: state.handleTouchMove,
     onTouchStart: state.handleTouchStart,
@@ -37,7 +35,7 @@ export function useStickToBottom(options: StickToBottomOptions) {
       return;
     }
     options.measure?.();
-    await nextFrame();
+    await nextAnimationFrame();
     if (version !== state.currentVersion() || !state.followLatest.value) {
       return;
     }
@@ -83,7 +81,7 @@ export function useStickToBottom(options: StickToBottomOptions) {
     // CollapsibleContent and syntax highlighters settle. A few post-mount
     // frames prevent the initial bottom alignment from using stale geometry.
     for (let index = 0; index < frameCount; index += 1) {
-      await nextFrame();
+      await nextAnimationFrame();
       bindInputListeners();
       options.measure?.();
       if (state.followLatest.value) {

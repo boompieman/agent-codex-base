@@ -1,17 +1,24 @@
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
-import { useGatewayStore } from "@/stores/gateway";
+import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
+import type { AppServerThread, ThreadHistoryState } from "~~/shared/types";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 
 export function useChatWorkspaceState() {
-  const gatewayRefs = storeToRefs(useGatewayStore());
+  const bootstrapRefs = storeToRefs(useGatewayBootstrapStore());
   const navigationRefs = storeToRefs(useGatewayNavigationStore());
   const runtime = useGatewayThreadRuntimeStore();
   const viewRefs = storeToRefs(useGatewayThreadViewStore());
-  const historyTurns = computed(() => threadTurnsFromHistory(viewRefs.history.value));
+  const historyTurns = computed(() =>
+    threadTurnsFromHistory(viewRefs.history.value).flatMap((turn) => {
+      const timelineTurn = asThreadTimelineTurn(turn);
+      return timelineTurn ? [timelineTurn] : [];
+    }),
+  );
   const selectedThreadViewReady = computed(() =>
     isSelectedThreadViewReady({
       selectedThreadId: navigationRefs.selectedThreadId.value,
@@ -21,28 +28,28 @@ export function useChatWorkspaceState() {
   );
   const visibleError = computed(() =>
     scopedVisibleError({
-      error: gatewayRefs.error.value,
+      error: bootstrapRefs.error.value,
       selectedHostId: navigationRefs.selectedHostId.value,
       selectedProjectId: navigationRefs.selectedProjectId.value,
       selectedThreadId: navigationRefs.selectedThreadId.value,
     }),
   );
   return {
-    ...gatewayRefs,
+    ...bootstrapRefs,
     ...navigationRefs,
     ...viewRefs,
     historyTurns,
-    threadItems: computed(() => historyTurns.value.flatMap((turn: any) => turn.items || [])),
+    threadItems: computed(() => historyTurns.value.flatMap((turn) => turn.items)),
     openingThread: computed(
       () =>
-        Boolean(navigationRefs.selectedThreadId.value) &&
+        navigationRefs.selectedThreadId.value !== null &&
         viewRefs.loading.value &&
         historyTurns.value.length === 0,
     ),
     selectedThreadStatus: computed(() => {
       const hostId = navigationRefs.selectedHostId.value;
       const threadId = navigationRefs.selectedThreadId.value;
-      return hostId && threadId ? runtime.statusFor(hostId, threadId) : "idle";
+      return hostId !== null && threadId !== null ? runtime.statusFor(hostId, threadId) : "idle";
     }),
     selectedThreadViewReady,
     visibleError,
@@ -51,29 +58,20 @@ export function useChatWorkspaceState() {
       navigationRefs.selectedHostId.value,
       navigationRefs.selectedThreadId.value,
     ]),
-    canOpenTerminal: computed(() => Boolean(navigationRefs.selectedHostId.value)),
+    canOpenTerminal: computed(() => navigationRefs.selectedHostId.value !== null),
   };
 }
 
 function isSelectedThreadViewReady(input: {
   selectedThreadId: string | null;
-  currentThread: unknown;
-  history: unknown;
+  currentThread: AppServerThread | null;
+  history: ThreadHistoryState | null;
 }) {
-  if (!input.selectedThreadId) return true;
-  const selectedThreadId = String(input.selectedThreadId);
-  const currentThreadId = threadIdFromUnknown(input.currentThread);
-  if (currentThreadId === selectedThreadId) return true;
-  const historyValue = input.history as any;
+  if (input.selectedThreadId === null) return true;
   return (
-    (threadIdFromUnknown(historyValue?.thread) ?? threadIdFromUnknown(historyValue)) ===
-    selectedThreadId
+    input.currentThread?.id === input.selectedThreadId ||
+    input.history?.thread.id === input.selectedThreadId
   );
-}
-
-function threadIdFromUnknown(value: unknown) {
-  const id = (value as any)?.id;
-  return id == null ? null : String(id);
 }
 
 function scopedVisibleError(input: {

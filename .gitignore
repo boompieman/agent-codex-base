@@ -1,9 +1,13 @@
 # Nuxt dev/build outputs
 .output
 .data
+
+# Generated workspace package output.
+packages/*/dist
 .nuxt
 .nitro
 .cache
+.turbo
 dist
 data
 # Node dependencies

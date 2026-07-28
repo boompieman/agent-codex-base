@@ -7,12 +7,12 @@ x-ssh-target: &ssh-target
 services:
   bark-target:
     image: node:22-bookworm
-    command: ["node", "/app/bark-server.mjs"]
+    command: ["node", "/app/bark-server.ts"]
     environment:
       BARK_TEST_PORT: "8080"
       BARK_TEST_LOG: /requests/requests.jsonl
     volumes:
-      - ./bark-server.mjs:/app/bark-server.mjs:ro
+      - ./bark-server.ts:/app/bark-server.ts:ro
       - bark-requests:/requests
 
   ssh-target:

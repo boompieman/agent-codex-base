@@ -1,5 +1,6 @@
 import { gatewayDomainEvents } from "../domain-events";
 import type { GatewayEventHandlerRegistry } from "./types";
+import { stringIdFromUnknown } from "~~/shared/utils/records";
 
 export const deltaEventHandlers: GatewayEventHandlerRegistry = {
   "item/agentMessage/delta": (event, params, threadId) =>
@@ -23,7 +24,7 @@ export const deltaEventHandlers: GatewayEventHandlerRegistry = {
       hostId: event.hostId,
       threadId,
       status: "running",
-      turnId: params.turnId ? String(params.turnId) : null,
+      turnId: stringIdFromUnknown(params.turnId),
     });
     gatewayDomainEvents.emit("history-command-output-delta", {
       hostId: event.hostId,

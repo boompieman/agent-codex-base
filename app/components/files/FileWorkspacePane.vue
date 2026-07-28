@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { FilesIcon } from "@lucide/vue";
-import { useEventListener } from "@vueuse/core";
-import { computed, ref, watch } from "vue";
-import type { FilePreviewDocument } from "~~/shared/types";
+import { computed, ref, toRefs } from "vue";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -12,7 +10,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
-import { useAuthStore } from "@/stores/auth";
+import { useFileWorkspaceLifecycle } from "@/composables/files/useFileWorkspaceLifecycle";
+import { useFileDocumentGuards } from "@/composables/files/useFileDocumentGuards";
 import FilePreviewViewport from "./FilePreviewViewport.vue";
 import FileCloseDialog from "./FileCloseDialog.vue";
 import FileConflictDialog from "./FileConflictDialog.vue";
@@ -30,49 +29,16 @@ const props = defineProps<{
 }>();
 
 const fileWorkspace = useGatewayFileWorkspaceStore();
-const auth = useAuthStore();
-auth.hydrate();
 const mobileTreeOpen = ref(false);
-const pendingCloseDocument = ref<FilePreviewDocument | null>(null);
-const conflictDocument = ref<FilePreviewDocument | null>(null);
+const refs = toRefs(props);
+useFileWorkspaceLifecycle(refs);
+const guards = useFileDocumentGuards(refs);
+const { pendingCloseDocument, conflictDocument } = guards;
 const scope = computed(() => fileWorkspace.scopeFor(props.hostId, props.threadId));
 const documents = computed(() => fileWorkspace.documentsForScope(props.hostId, props.threadId));
 const activeDocument = computed(() =>
   fileWorkspace.activeDocumentFor(props.hostId, props.threadId),
 );
-
-watch(
-  () =>
-    [props.hostId, props.projectId, props.threadId, props.rootPath, auth.isAuthenticated] as const,
-  async ([hostId, projectId, threadId, rootPath, authenticated]) => {
-    if (!rootPath || !authenticated) return;
-    fileWorkspace.setScopeRoot({ hostId, projectId, threadId, rootPath });
-    await fileWorkspace.restoreScope(hostId, threadId);
-  },
-  { immediate: true },
-);
-
-watch(
-  () => props.active,
-  (active) => {
-    if (active) void revalidateWorkspace();
-  },
-  { immediate: true },
-);
-
-watch(
-  () => activeDocument.value?.stale,
-  (stale) => {
-    if (props.active && stale)
-      void fileWorkspace.revalidateActiveFile(props.hostId, props.threadId);
-  },
-);
-
-useEventListener(document, "visibilitychange", () => {
-  if (document.visibilityState === "visible" && props.active) {
-    void revalidateWorkspace();
-  }
-});
 
 function openFile(path: string) {
   mobileTreeOpen.value = false;
@@ -82,54 +48,6 @@ function openFile(path: string) {
     threadId: props.threadId,
     path,
   });
-}
-
-function requestClose(path: string) {
-  const document = documents.value.find((candidate) => candidate.path === path);
-  if (document?.dirty) {
-    pendingCloseDocument.value = document;
-    return;
-  }
-  fileWorkspace.closeFile(props.hostId, props.threadId, path);
-}
-
-async function saveAndClose() {
-  const document = pendingCloseDocument.value;
-  if (!document) return;
-  if (await fileWorkspace.saveDocument(document)) {
-    pendingCloseDocument.value = null;
-    fileWorkspace.closeFile(props.hostId, props.threadId, document.path);
-  }
-}
-
-function discardAndClose() {
-  const document = pendingCloseDocument.value;
-  if (!document) return;
-  pendingCloseDocument.value = null;
-  fileWorkspace.closeFile(props.hostId, props.threadId, document.path);
-}
-
-async function discardConflict() {
-  const document = conflictDocument.value;
-  if (!document) return;
-  conflictDocument.value = null;
-  await fileWorkspace.discardDocumentDraft(document);
-}
-
-async function overwriteConflict() {
-  const document = conflictDocument.value;
-  if (!document) return;
-  if (await fileWorkspace.saveDocument(document, true)) conflictDocument.value = null;
-}
-
-function revalidateWorkspace() {
-  if (!auth.isAuthenticated) {
-    return Promise.resolve([]);
-  }
-  return Promise.all([
-    fileWorkspace.revalidateActiveFile(props.hostId, props.threadId),
-    fileWorkspace.refreshExpandedDirectories(props.hostId, props.threadId),
-  ]);
 }
 </script>
 
@@ -151,7 +69,7 @@ function revalidateWorkspace() {
             :documents="documents"
             :active-path="scope?.activePath ?? null"
             @activate="fileWorkspace.activateFile(hostId, threadId, $event)"
-            @close="requestClose"
+            @close="guards.requestClose"
           />
           <FilePreviewViewport
             v-if="activeDocument"
@@ -189,7 +107,7 @@ function revalidateWorkspace() {
             :documents="documents"
             :active-path="scope?.activePath ?? null"
             @activate="fileWorkspace.activateFile(hostId, threadId, $event)"
-            @close="requestClose"
+            @close="guards.requestClose"
           />
         </div>
         <FilePreviewViewport
@@ -227,14 +145,14 @@ function revalidateWorkspace() {
     <FileCloseDialog
       :document="pendingCloseDocument"
       @cancel="pendingCloseDocument = null"
-      @discard="discardAndClose"
-      @save="saveAndClose"
+      @discard="guards.discardAndClose"
+      @save="guards.saveAndClose"
     />
     <FileConflictDialog
       :document="conflictDocument"
       @close="conflictDocument = null"
-      @discard="discardConflict"
-      @overwrite="overwriteConflict"
+      @discard="guards.discardConflict"
+      @overwrite="guards.overwriteConflict"
     />
   </div>
 </template>

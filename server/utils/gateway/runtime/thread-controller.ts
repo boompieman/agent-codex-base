@@ -1,10 +1,17 @@
-import type { HostRecord } from "~~/shared/types";
+import type { HostRecord, RpcEnvelope } from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
-import { CodexRpcClient } from "../infra/rpc";
+import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
+import {
+  runtimeStatusFromAppThreadStatus,
+  runtimeStatusFromSnapshotState,
+} from "~~/shared/thread-runtime-status";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { CodexRpcClient } from "../infra/rpc/rpc";
 import { bindGatewayUser } from "../state/memory";
 import { threadSnapshotStore } from "../state/thread-snapshots";
 import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
+import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
 
 export class ThreadController {
   readonly client: CodexRpcClient;
@@ -12,6 +19,8 @@ export class ThreadController {
   private connected = false;
   private subscribed = false;
   private closed = false;
+  private activeMainThread = false;
+  private subAgentThread = false;
 
   constructor(
     readonly host: HostRecord,
@@ -25,14 +34,16 @@ export class ThreadController {
     this.client = client ?? new CodexRpcClient(host);
     this.connected = connected;
     this.subscribed = subscribed;
+    const cachedSnapshot = threadSnapshotStore.get(host.id, threadId);
+    if (cachedSnapshot !== null) this.updateMonitoringStateFromSnapshot(cachedSnapshot);
     if (this.ownsClient) {
       this.client.on(
         "notification",
-        bindGatewayUser((message: any) => this.handleNotification(message)),
+        bindGatewayUser((message: RpcEnvelope) => this.handleNotification(message)),
       );
       this.client.on(
         "stderr",
-        bindGatewayUser((text) => this.handleStderr(text)),
+        bindGatewayUser((text: string) => this.handleStderr(text)),
       );
       this.client.on(
         "close",
@@ -41,7 +52,7 @@ export class ThreadController {
     }
   }
 
-  publish(method: string, payload: any) {
+  publish(method: string, payload: RpcEnvelope) {
     return threadRuntimeEvents.record(this.host.id, this.threadId, method, payload);
   }
 
@@ -59,16 +70,17 @@ export class ThreadController {
     this.connected = true;
   }
 
-  handleNotification(message: any) {
-    const method = message.method || "notification";
-    threadRuntimeEvents.record(this.host.id, this.threadId, method, message, {
-      resolveGoal: () =>
-        this.enqueue(() => this.client.request("thread/goal/get", { threadId: this.threadId })),
-      resolveThread: () =>
-        this.enqueue(() =>
-          this.client.request("thread/read", { threadId: this.threadId, includeTurns: false }),
-        ),
-    });
+  handleNotification(message: RpcEnvelope) {
+    const method =
+      message.method === undefined || message.method === "" ? "notification" : message.method;
+    this.updateMonitoringState(method, message);
+    threadRuntimeEvents.record(
+      this.host.id,
+      this.threadId,
+      method,
+      message,
+      createThreadNotificationResolvers(this.client, this.threadId),
+    );
   }
 
   handleStderr(text: string) {
@@ -85,30 +97,30 @@ export class ThreadController {
 
   async ensureSubscribed() {
     await this.ensureConnected();
-    if (this.subscribed) {
-      return;
-    }
-    if (this.isFreshUnmaterializedThread()) {
+    await this.enqueue(async () => {
+      // Check and mutation must share the serialized critical section. Two browser peers can
+      // subscribe in the same tick; checking before enqueue would make both send thread/resume
+      // even though the RPC operations themselves execute sequentially.
+      if (this.subscribed) return;
+      if (!this.isFreshUnmaterializedThread()) {
+        await this.client.request("thread/resume", { threadId: this.threadId });
+      }
       this.subscribed = true;
-      return;
-    }
-
-    await this.enqueue(() =>
-      this.client.request<any>("thread/resume", {
-        threadId: this.threadId,
-      }),
-    );
-    this.subscribed = true;
+    });
   }
 
   isSubscribed() {
     return this.subscribed;
   }
 
+  shouldTransferSubscriptionToMonitor() {
+    return this.subscribed && this.activeMainThread && !this.subAgentThread;
+  }
+
   async resumeWithInitialTurns(limit = INITIAL_TURN_PAGE_LIMIT) {
     await this.ensureConnected();
     const resume = await this.enqueue(() =>
-      this.client.request<any>("thread/resume", {
+      this.client.request("thread/resume", {
         threadId: this.threadId,
         excludeTurns: true,
         initialTurnsPage: {
@@ -123,6 +135,7 @@ export class ThreadController {
   }
 
   setOpenSnapshot(snapshot: ThreadOpenSnapshot) {
+    this.updateMonitoringStateFromSnapshot(snapshot);
     threadSnapshotStore.set(this.host.id, this.threadId, snapshot);
   }
 
@@ -132,8 +145,7 @@ export class ThreadController {
 
   private isFreshUnmaterializedThread() {
     const snapshot = this.getOpenSnapshot();
-    const turns = (snapshot?.history as any)?.thread?.turns;
-    return Boolean(snapshot && Array.isArray(turns) && turns.length === 0);
+    return Boolean(snapshot && snapshot.history.thread.turns.length === 0);
   }
 
   enqueue<T>(operation: () => Promise<T>) {
@@ -159,6 +171,18 @@ export class ThreadController {
     this.onClose?.();
   }
 
+  disposeKeepingUpstreamSubscription() {
+    if (this.closed) return;
+    // The Host session owns the shared RPC transport. When the final browser closes during an
+    // active main turn, the background monitor adopts that existing app-server subscription.
+    // Disposing only this local controller avoids both a redundant thread/resume and the brief
+    // unsubscribe gap that could otherwise lose turn/completed and its notification.
+    this.closed = true;
+    this.connected = false;
+    this.subscribed = false;
+    this.onClose?.();
+  }
+
   disposeAfterTransportClose() {
     if (this.closed) {
       return;
@@ -167,5 +191,26 @@ export class ThreadController {
     this.connected = false;
     this.subscribed = false;
     this.onClose?.();
+  }
+
+  private updateMonitoringState(method: string, message: RpcEnvelope) {
+    if (method === "turn/started") {
+      this.activeMainThread = !this.subAgentThread;
+      return;
+    }
+    if (method === "turn/completed") {
+      this.activeMainThread = false;
+      return;
+    }
+    if (method !== "thread/status/changed") return;
+    const params = recordFromUnknown(message.params);
+    this.activeMainThread = runtimeStatusFromAppThreadStatus(params?.status) === "running";
+  }
+
+  private updateMonitoringStateFromSnapshot(snapshot: ThreadOpenSnapshot) {
+    this.subAgentThread = isAppServerSubAgentThread(snapshot.thread);
+    this.activeMainThread =
+      !this.subAgentThread &&
+      runtimeStatusFromSnapshotState(snapshot.thread, snapshot.history) === "running";
   }
 }

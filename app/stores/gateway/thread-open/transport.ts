@@ -1,8 +1,13 @@
 import type { ComposerTurnOptions } from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
+import {
+  expectThreadSnapshot,
+  expectThreadStarted,
+} from "@/stores/gateway-realtime/response-parsers";
 
 export type ThreadSnapshotMessage = Extract<
   import("~~/shared/types").RealtimeServerMessage,
@@ -20,7 +25,7 @@ export function requestActivateThreadSnapshot(input: {
   threadId: string;
   limit?: number;
 }) {
-  return useGatewayRealtimeStore().request<ThreadSnapshotMessage>(
+  return useGatewayRealtimeStore().request(
     (requestId) => ({
       type: "thread.activate",
       requestId,
@@ -29,25 +34,28 @@ export function requestActivateThreadSnapshot(input: {
       threadId: input.threadId,
       limit: input.limit ?? INITIAL_TURN_PAGE_LIMIT,
     }),
+    expectThreadSnapshot,
     30_000,
   );
 }
 
 export function requestStartThread(options: ComposerTurnOptions) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
-  if (!navigation.selectedHostId) throw new Error("Host is required to start a thread");
-  return useGatewayRealtimeStore().request<ThreadStartedMessage>(
+  const hostId = navigation.selectedHostId;
+  if (hostId === null) throw new Error("Host is required to start a thread");
+  return useGatewayRealtimeStore().request(
     (requestId) => ({
       type: "thread.start",
       requestId,
-      hostId: navigation.selectedHostId!,
+      hostId,
       projectId: navigation.selectedProjectId,
-      cwd: gateway.selectedProject?.remotePath,
-      model: options.model || undefined,
-      effort: options.effort || undefined,
-      approvalPolicy: options.approvalPolicy || undefined,
+      cwd: projectById(gateway.projects, navigation.selectedProjectId)?.remotePath,
+      model: options.model === "" ? undefined : options.model,
+      effort: options.effort === "" ? undefined : options.effort,
+      approvalPolicy: options.approvalPolicy ?? undefined,
     }),
+    expectThreadStarted,
     30_000,
   );
 }

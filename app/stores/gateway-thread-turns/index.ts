@@ -40,7 +40,7 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
   function rememberRequest(input: SubmittedTurnRequestInput) {
     const key = requestKey(input.hostId, input.threadId);
     const existing = state.submittedTurnRequestsByKey[key];
-    if (existing?.retryTimer) {
+    if (existing?.retryTimer !== null && existing?.retryTimer !== undefined) {
       clearTimeout(existing.retryTimer);
     }
     state.submittedTurnRequestsByKey = {
@@ -57,7 +57,7 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
   function clearRequest(hostId: number, threadId: string) {
     const key = requestKey(hostId, threadId);
     const existing = state.submittedTurnRequestsByKey[key];
-    if (existing?.retryTimer) {
+    if (existing?.retryTimer !== null && existing?.retryTimer !== undefined) {
       clearTimeout(existing.retryTimer);
     }
     const { [key]: _removed, ...remaining } = state.submittedTurnRequestsByKey;
@@ -71,7 +71,7 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
   ) {
     const key = requestKey(hostId, threadId);
     const current = state.submittedTurnRequestsByKey[key];
-    if (!current) {
+    if (current === undefined) {
       return;
     }
     state.submittedTurnRequestsByKey = {
@@ -96,7 +96,7 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
 
   function resetState() {
     for (const request of Object.values(state.submittedTurnRequestsByKey)) {
-      if (request.retryTimer) {
+      if (request.retryTimer !== null) {
         clearTimeout(request.retryTimer);
       }
     }

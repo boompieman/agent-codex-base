@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import type { AppServerThread, GatewayEvent } from "~~/shared/types";
+import type { AppServerThread, GatewayEvent, ThreadHistoryState } from "~~/shared/types";
 import type { SubAgentPanelState, ThreadViewState } from "@/stores/gateway/types";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { createThreadLiveEventActions } from "./actions/live-events";
@@ -12,23 +12,25 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
   const subAgentPanels = ref<SubAgentPanelState[]>([]);
   const viewEpoch = ref(0);
   const currentThread = ref<AppServerThread | null>(null);
-  const history = ref<unknown>(null);
+  const history = ref<ThreadHistoryState | null>(null);
   const events = ref<GatewayEvent[]>([]);
   const loading = ref(false);
   const loadingOlderTurns = ref(false);
   const olderTurnsCursor = ref<string | null>(null);
   const newerTurnsCursor = ref<string | null>(null);
   const lastEventId = ref(0);
+  const eventEpoch = ref("");
   const scrollToLatestToken = ref(0);
+  const liveEventActions = createThreadLiveEventActions();
   const actions = {
-    ...createThreadLiveEventActions(),
+    ...liveEventActions,
     ...createThreadOpenActions(),
     ...createSubAgentPanelActions(),
   };
 
   const visibleSubAgentPanels = computed(() => {
     const navigation = useGatewayNavigationStore();
-    if (!navigation.selectedHostId || !navigation.selectedThreadId) return [];
+    if (navigation.selectedHostId === null || navigation.selectedThreadId === null) return [];
     return subAgentPanels.value.filter(
       (panel) =>
         panel.parentHostId === navigation.selectedHostId &&
@@ -45,9 +47,11 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     olderTurnsCursor.value = null;
     newerTurnsCursor.value = null;
     lastEventId.value = 0;
+    eventEpoch.value = "";
   }
 
   function resetState() {
+    liveEventActions.resetLiveEvents();
     threadViews.value = {};
     subAgentPanels.value = [];
     viewEpoch.value = 0;
@@ -67,6 +71,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     olderTurnsCursor,
     newerTurnsCursor,
     lastEventId,
+    eventEpoch,
     scrollToLatestToken,
     visibleSubAgentPanels,
     resetCurrentView,

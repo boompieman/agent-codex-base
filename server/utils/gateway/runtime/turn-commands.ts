@@ -6,6 +6,9 @@ import type { ControllerRegistry } from "./controller-registry";
 import { buildTurnStartParams, buildUserInput } from "../protocol/thread-payload";
 import { runtimeLog } from "./runtime-log";
 import type { ThreadOpenService } from "./thread-open-service";
+import { recordFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
+import { trimmedOrFallback } from "~~/shared/utils/strings";
+import { parseTurnStartResponse, parseTurnSteerResponse } from "~~/shared/runtime/app-server";
 
 export class ThreadTurnCommandService {
   constructor(
@@ -17,11 +20,16 @@ export class ThreadTurnCommandService {
     const controller = await this.registry.getController(host, threadId);
     await controller.ensureSubscribed();
     await controller.ensureConnected();
-    const clientUserMessageId = input.clientUserMessageId || `gateway-${randomUUID()}`;
+    const clientUserMessageId = trimmedOrFallback(
+      input.clientUserMessageId,
+      `gateway-${randomUUID()}`,
+    );
     return controller.enqueue(() =>
-      controller.client.request<any>(
+      controller.client.request(
         "turn/start",
         buildTurnStartParams(threadId, clientUserMessageId, input),
+        120_000,
+        parseTurnStartResponse,
       ),
     );
   }
@@ -30,15 +38,23 @@ export class ThreadTurnCommandService {
     const controller = await this.registry.getController(host, threadId);
     await controller.ensureSubscribed();
     await controller.ensureConnected();
-    const clientUserMessageId = input.clientUserMessageId || `gateway-steer-${randomUUID()}`;
+    const clientUserMessageId = trimmedOrFallback(
+      input.clientUserMessageId,
+      `gateway-steer-${randomUUID()}`,
+    );
     return controller
       .enqueue(() =>
-        controller.client.request<{ turnId?: string }>("turn/steer", {
-          threadId,
-          expectedTurnId: input.expectedTurnId,
-          clientUserMessageId,
-          input: buildUserInput(input),
-        }),
+        controller.client.request(
+          "turn/steer",
+          {
+            threadId,
+            expectedTurnId: input.expectedTurnId,
+            clientUserMessageId,
+            input: buildUserInput(input),
+          },
+          120_000,
+          parseTurnSteerResponse,
+        ),
       )
       .catch(async (error) => {
         if (isNoActiveTurnToSteer(error)) {
@@ -58,7 +74,7 @@ export class ThreadTurnCommandService {
     await controller.ensureSubscribed();
     await controller.ensureConnected();
     return controller.enqueue(() =>
-      controller.client.request<Record<string, never>>("turn/interrupt", {
+      controller.client.request("turn/interrupt", {
         threadId,
         turnId,
       }),
@@ -86,10 +102,11 @@ export class ThreadTurnCommandService {
 }
 
 function isNoActiveTurnToSteer(error: unknown) {
+  const record = recordFromUnknown(error);
+  const message = stringFromUnknown(record?.message);
   return (
-    (error as any)?.rpcMethod === "turn/steer" &&
-    String((error as any)?.message ?? "")
-      .toLowerCase()
-      .includes("no active turn")
+    record?.rpcMethod === "turn/steer" &&
+    message !== null &&
+    message.toLowerCase().includes("no active turn")
   );
 }

@@ -1,25 +1,30 @@
 import { expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { Client } from "ssh2";
+import { z } from "zod";
 import { envFile, upgradeEnvFile } from "../docker-environment";
+import { connectTestSsh, execTestSsh } from "./ssh-client";
 
 export type RemoteRuntimeFixture = "empty-runtime" | "legacy-node" | "legacy-codex";
 
-export interface RemoteCodexEnv {
-  host: string;
-  port: string;
-  username: string;
-  password: string;
-  projectPath: string;
-  imagePath: string;
-  runtimeFixture?: RemoteRuntimeFixture;
-  initialNodeVersion?: string | null;
-  initialCodexVersion?: string | null;
-  supportedCodexVersion?: string;
-  testModel?: string;
-  codexBin?: string;
-  proxyUrl?: string | null;
-}
+const remoteCodexEnvSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.string().min(1),
+    username: z.string().min(1),
+    password: z.string().min(1),
+    projectPath: z.string().min(1),
+    imagePath: z.string().min(1),
+    runtimeFixture: z.enum(["empty-runtime", "legacy-node", "legacy-codex"]).optional(),
+    initialNodeVersion: z.string().min(1).nullable().optional(),
+    initialCodexVersion: z.string().min(1).nullable().optional(),
+    supportedCodexVersion: z.string().min(1).optional(),
+    testModel: z.string().min(1).optional(),
+    codexBin: z.string().min(1).optional(),
+    proxyUrl: z.string().min(1).nullable().optional(),
+  })
+  .loose();
+
+export type RemoteCodexEnv = z.infer<typeof remoteCodexEnvSchema>;
 
 export interface UiHost {
   id: number;
@@ -32,12 +37,22 @@ export interface UiProject {
   remotePath: string;
 }
 
+const uiHostSchema = z.object({ id: z.number().int().positive() }).loose();
+const uiProjectSchema = z
+  .object({
+    id: z.number().int().positive(),
+    hostId: z.number().int().positive(),
+    name: z.string().min(1),
+    remotePath: z.string().min(1),
+  })
+  .loose();
+
 export async function readRemoteEnv() {
-  return JSON.parse(await readFile(envFile, "utf8")) as RemoteCodexEnv;
+  return remoteCodexEnvSchema.parse(JSON.parse(await readFile(envFile, "utf8")));
 }
 
 export async function readUpgradeRemoteEnvs() {
-  return JSON.parse(await readFile(upgradeEnvFile, "utf8")) as RemoteCodexEnv[];
+  return z.array(remoteCodexEnvSchema).parse(JSON.parse(await readFile(upgradeEnvFile, "utf8")));
 }
 
 export async function readContainerCodexVersion(remote: RemoteCodexEnv) {
@@ -45,9 +60,9 @@ export async function readContainerCodexVersion(remote: RemoteCodexEnv) {
 }
 
 export async function execRemoteSsh(remote: RemoteCodexEnv, command: string) {
-  const connection = await connectRemoteSsh(remote);
+  const connection = await connectTestSsh(remote);
   try {
-    return await execSsh(connection, command);
+    return await execTestSsh(connection, command);
   } finally {
     connection.end();
   }
@@ -98,7 +113,7 @@ rm -f "$daemon_dir"/app-server.pid "$daemon_dir"/app-server.pid.lock "$daemon_di
 
 export async function startRemotePreviewServer(remote: RemoteCodexEnv) {
   const nodeBin = remote.codexBin?.replace(/\/codex$/, "/node");
-  if (!nodeBin) throw new Error("Missing managed remote Node path");
+  if (nodeBin === undefined || nodeBin === "") throw new Error("Missing managed remote Node path");
   await execRemoteSsh(
     remote,
     `
@@ -144,12 +159,13 @@ export async function addRemoteHost(
     (response) => response.url().endsWith("/api/hosts") && response.request().method() === "POST",
   );
   await hostForm.getByTestId("add-host-button").click();
-  const host = (await (await hostResponsePromise).json()) as UiHost;
+  const host = uiHostSchema.parse(await (await hostResponsePromise).json());
   await closeSettings(page);
   await expect(hostConnectedIndicator(page, host.id)).toBeVisible({ timeout: 120_000 });
   if (
-    remote.initialCodexVersion &&
-    remote.supportedCodexVersion &&
+    remote.initialCodexVersion !== undefined &&
+    remote.initialCodexVersion !== null &&
+    remote.supportedCodexVersion !== undefined &&
     remote.initialCodexVersion !== remote.supportedCodexVersion
   ) {
     const upgradedVersionResponse = await runRemoteCodexVersion(remote);
@@ -178,24 +194,25 @@ export async function addRemoteProject(
       response.url().endsWith("/api/projects") && response.request().method() === "POST",
   );
   await page.getByTestId("add-project-button").click();
-  const project = (await (await projectResponsePromise).json()) as UiProject;
+  const project = uiProjectSchema.parse(await (await projectResponsePromise).json());
   await expect(page.getByTestId(`host-button-${hostId}`)).toBeVisible();
   await expect(page.getByTestId(`project-button-${project.id}`)).toBeVisible();
   return project;
 }
 
-export async function startRemoteThreadFromProjectMenu(page: Page, projectId: number) {
-  const remote = await readRemoteEnv();
+export async function startRemoteThreadFromProjectMenu(
+  page: Page,
+  remote: RemoteCodexEnv,
+  projectId: number,
+) {
   await page.getByTestId(`project-button-${projectId}`).click({ button: "right" });
   await page.getByRole("menuitem", { name: /新建/ }).click();
   const threadId = await waitForSelectedThreadId(page);
   await expect(page.getByPlaceholder("输入后续修改要求")).toBeEnabled();
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible({ timeout: 30_000 });
-  if (remote.testModel) {
+  if (remote.testModel !== undefined && remote.testModel !== "") {
     await page.evaluate(async (model) => {
-      const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-      const pinia = app?.config?.globalProperties?.$pinia;
-      const composer = pinia?._s?.get("gateway-composer");
+      const composer = window.__codexGatewayE2e?.composer;
       if (!composer) {
         throw new Error("Unable to locate gateway composer Pinia store");
       }
@@ -229,6 +246,15 @@ export async function sendTextTurn(
   await page.getByTestId("send-turn-button").click();
 }
 
+export async function selectSidebarThread(page: Page, threadId: string) {
+  const button = page.getByTestId(`thread-button-${threadId}`);
+  await button.click();
+  // Opening a remote thread crosses navigation, cache, and app-server boundaries. A click only
+  // proves input delivery; waiting on the public selected state prevents subsequent composer
+  // operations from racing the previous thread under a loaded E2E or production browser.
+  await expect(button).toHaveAttribute("data-selected", "true");
+}
+
 export async function sendSteerText(page: Page, marker: string) {
   await page.getByPlaceholder("输入后续修改要求").fill(`追加要求：${marker}`);
   await page.getByTestId("send-turn-button").click();
@@ -236,6 +262,7 @@ export async function sendSteerText(page: Page, marker: string) {
 
 export async function sendImageTurnThroughGateway(
   page: Page,
+  remote: RemoteCodexEnv,
   params: {
     hostId: number;
     threadId: string;
@@ -244,26 +271,24 @@ export async function sendImageTurnThroughGateway(
     marker: string;
   },
 ) {
-  const remote = await readRemoteEnv();
   await expect
     .poll(async () => (await currentRouteSelection(page)).threadId, { timeout: 10_000 })
     .toBe(params.threadId);
   await page.evaluate(
     async ({ marker, imagePath, model }) => {
-      const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-      const store = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-turns");
+      const store = window.__codexGatewayE2e?.turns;
       if (!store) {
         throw new Error("Unable to locate gateway thread-turns Pinia store");
       }
       await store.sendTurn(`回复：${marker}`, {
-        model: model || undefined,
+        model: model === null || model === "" ? undefined : model,
         images: [{ path: imagePath, detail: "original" }],
       });
     },
     {
       marker: params.marker,
       imagePath: params.imagePath,
-      model: remote.testModel || null,
+      model: remote.testModel ?? null,
     },
   );
 }
@@ -310,13 +335,11 @@ async function runRemoteCodexVersion(remote: RemoteCodexEnv) {
 }
 
 export function remoteCodexCommand(remote: RemoteCodexEnv) {
-  if (remote.codexBin) {
+  if (remote.codexBin !== undefined && remote.codexBin !== "") {
     const binDirectory = remote.codexBin.replace(/\/[^/]+$/, "");
     return `env PATH=${shellQuote(binDirectory)}:"$PATH" ${shellQuote(remote.codexBin)}`;
   }
-  const candidates = ["$HOME/.npm-global/bin/codex", "$HOME/.local/bin/codex"].filter(
-    Boolean,
-  ) as string[];
+  const candidates = ["$HOME/.npm-global/bin/codex", "$HOME/.local/bin/codex"];
   const candidateList = candidates.map(shellQuote).join(" ");
   return `$(
 for candidate in ${candidateList}; do
@@ -337,58 +360,7 @@ async function currentRouteSelection(page: Page) {
     return {
       hostId: Number.isInteger(hostId) && hostId > 0 ? hostId : null,
       projectId: Number.isInteger(projectId) && projectId > 0 ? projectId : null,
-      threadId: params.get("threadId") || null,
+      threadId: params.get("threadId") ?? null,
     };
   });
-}
-
-async function connectRemoteSsh(remote: RemoteCodexEnv) {
-  const client = new Client();
-  return await new Promise<Client>((resolve, reject) => {
-    client
-      .on("ready", () => resolve(client))
-      .on("error", reject)
-      .connect({
-        host: remote.host,
-        port: Number(remote.port),
-        username: remote.username,
-        password: remote.password,
-        readyTimeout: 10_000,
-      });
-  });
-}
-
-async function execSsh(connection: Client, command: string) {
-  return await new Promise<{ code: number | null; stdout: string; stderr: string }>(
-    (resolve, reject) => {
-      connection.exec(command, (error, channel) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        let stdout = "";
-        let stderr = "";
-        channel.on("data", (chunk: Buffer) => {
-          stdout += chunk.toString("utf8");
-        });
-        channel.stderr.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString("utf8");
-        });
-        channel.on("error", reject);
-        channel.on("close", (code: number | null) => {
-          if (code !== 0) {
-            reject(
-              new Error(
-                [stdout ? `stdout:\n${stdout}` : null, stderr ? `stderr:\n${stderr}` : null]
-                  .filter(Boolean)
-                  .join("\n") || `Remote command failed: ${command}`,
-              ),
-            );
-            return;
-          }
-          resolve({ code, stdout, stderr });
-        });
-      });
-    },
-  );
 }

@@ -5,7 +5,7 @@ import type {
   TmuxPaneOutput,
   TmuxSessionSnapshot,
 } from "~~/shared/types";
-import type { HostWithSecret } from "../infra/ssh-types";
+import type { HostWithSecret } from "../infra/ssh/ssh-types";
 import { TmuxMonitorNotifier } from "./monitor-notifier";
 import { logicalPaneFor, PermanentTmuxMonitorChecker } from "./permanent-monitor-checker";
 import { RemoteTmuxScanner } from "./remote-scanner";
@@ -14,13 +14,29 @@ import type { StoredTmuxMonitor } from "./types";
 import { resolveTmuxThreadBinding } from "./thread-binding";
 
 export class TmuxMonitorService {
-  readonly repository = new TmuxMonitorRepository();
+  private readonly repository = new TmuxMonitorRepository();
   private readonly scanner = new RemoteTmuxScanner();
   private readonly notifier = new TmuxMonitorNotifier(this.repository);
   private readonly permanentChecker = new PermanentTmuxMonitorChecker(this.repository);
 
   list(userId: number): TmuxMonitorListResult {
     return this.repository.listForUser(userId);
+  }
+
+  pollGroups() {
+    return this.repository.pollGroups();
+  }
+
+  removeHost(userId: number, hostId: number) {
+    this.repository.deleteHost(userId, hostId);
+  }
+
+  cancelForHost(userId: number, hostId: number, monitorId: number) {
+    const monitor = this.repository.getOwned(userId, monitorId);
+    if (!monitor || monitor.hostId !== hostId) {
+      throw createError({ statusCode: 404, statusMessage: "Active monitor not found" });
+    }
+    return this.cancel(userId, monitorId);
   }
 
   scan(host: HostWithSecret): Promise<TmuxSessionSnapshot[]> {
@@ -43,8 +59,15 @@ export class TmuxMonitorService {
       paneId: string;
       thread?: TmuxMonitorThreadBinding | null;
     },
+    hostIsCurrent: () => boolean,
   ) {
     const sessions = await this.scanner.scan(host);
+    if (!hostIsCurrent()) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: "Host changed while scanning tmux panes",
+      });
+    }
     const pane = sessions
       .find((session) => session.sessionId === target.sessionId)
       ?.panes.find((candidate) => candidate.paneId === target.paneId);
@@ -108,7 +131,7 @@ export class TmuxMonitorService {
       for (const monitor of active) {
         if (monitor.mode === "permanent") {
           const completed = this.permanentChecker.check(monitor, sessions);
-          if (completed) this.notifier.publishCompletion(host, completed);
+          if (completed) await this.notifier.publishCompletion(host, completed);
           continue;
         }
         const completion = completionFor(monitor, sessions, panes);
@@ -121,13 +144,17 @@ export class TmuxMonitorService {
           continue;
         }
         const completed = this.repository.complete(monitor, completion.reason, completion.pane);
-        if (completed) this.notifier.publishCompletion(host, completed);
+        if (completed) await this.notifier.publishCompletion(host, completed);
       }
     } catch (error) {
       this.repository.recordHostError(userId, host.id, error);
       throw error;
     }
     return this.list(userId);
+  }
+
+  async deliverPendingNotifications(host: HostWithSecret, monitors: StoredTmuxMonitor[]) {
+    for (const monitor of monitors) await this.notifier.publishCompletion(host, monitor);
   }
 }
 

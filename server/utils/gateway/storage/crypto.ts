@@ -29,7 +29,13 @@ export function hashPassword(password: string) {
 
 export function verifyPassword(password: string, storedHash: string) {
   const [version, saltText, hashText] = storedHash.split("$");
-  if (version !== PASSWORD_VERSION || !saltText || !hashText) {
+  if (
+    version !== PASSWORD_VERSION ||
+    saltText === undefined ||
+    saltText === "" ||
+    hashText === undefined ||
+    hashText === ""
+  ) {
     return false;
   }
   const expected = Buffer.from(hashText, "base64url");
@@ -61,9 +67,17 @@ export function encryptJson(value: unknown) {
   ].join("$");
 }
 
-export function decryptJson<T>(encrypted: string): T {
+export function decryptJson(encrypted: string): unknown {
   const [version, ivText, tagText, ciphertextText] = encrypted.split("$");
-  if (version !== ENCRYPTION_VERSION || !ivText || !tagText || !ciphertextText) {
+  if (
+    version !== ENCRYPTION_VERSION ||
+    ivText === undefined ||
+    ivText === "" ||
+    tagText === undefined ||
+    tagText === "" ||
+    ciphertextText === undefined ||
+    ciphertextText === ""
+  ) {
     throw new Error("Invalid encrypted config format");
   }
   const decipher = createDecipheriv(
@@ -76,15 +90,15 @@ export function decryptJson<T>(encrypted: string): T {
     decipher.update(Buffer.from(ciphertextText, "base64url")),
     decipher.final(),
   ]);
-  return JSON.parse(plaintext.toString("utf8")) as T;
+  return JSON.parse(plaintext.toString("utf8"));
 }
 
 function configEncryptionKey() {
-  const secret = process.env.CODEX_GATEWAY_CONFIG_SECRET || "";
-  if (!secret && process.env.NODE_ENV === "production") {
+  const secret = process.env.CODEX_GATEWAY_CONFIG_SECRET ?? "";
+  if (secret === "" && process.env.NODE_ENV === "production") {
     throw new Error("CODEX_GATEWAY_CONFIG_SECRET is required in production");
   }
   return createHash("sha256")
-    .update(secret || "codex-gateway-development-secret")
+    .update(secret === "" ? "codex-gateway-development-secret" : secret)
     .digest();
 }

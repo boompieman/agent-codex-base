@@ -23,7 +23,7 @@ export const clearCurrentThreadView = clearSelectedThreadView;
 
 export function rememberOpenThread(threadId: string) {
   const navigation = useGatewayNavigationStore();
-  if (!navigation.selectedHostId) return;
+  if (navigation.selectedHostId === null) return;
   navigation.rememberOpenThread({
     hostId: navigation.selectedHostId,
     projectId: navigation.selectedProjectId,

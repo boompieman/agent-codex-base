@@ -5,21 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { hostConnectionClass, hostConnectionLabelKey } from "@/components/sidebar/sidebar-utils";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 
-const store = useGatewayStore();
+const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
-const { hosts, hostConnectionStatuses } = storeToRefs(store);
+const { hosts, hostConnectionStatuses } = storeToRefs(catalog);
 const { selectedHostId } = storeToRefs(navigation);
 const { t } = useI18n();
 
 async function selectHost(hostId: number) {
-  await store.selectHost(hostId);
+  await catalog.selectHost(hostId);
 }
 
 async function deleteHost(hostId: number) {
-  await store.deleteHost(hostId);
+  await catalog.deleteHost(hostId);
 }
 
 function hostConnectionStatus(hostId: number) {

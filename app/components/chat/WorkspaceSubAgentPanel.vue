@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import type { ThreadRuntimeStatus } from "~~/shared/types";
+import type { ThreadRuntimeStatus, ThreadTimelineTurn } from "~~/shared/types";
 import SubAgentPanelBody from "@/components/thread/subagent/SubAgentPanelBody.vue";
-import type { ThreadTimelineTurn } from "@/components/thread/timeline-rows";
 import type { SubAgentPanelState, ThreadViewState } from "@/stores/gateway/types";
 
 defineProps<{
@@ -27,7 +26,7 @@ const emit = defineEmits<{
         <div class="truncate text-sm font-semibold" data-testid="workspace-panel-title">
           {{ title }}
         </div>
-        <div class="truncate font-mono text-xs text-ink-faint">
+        <div class="truncate font-mono text-xs text-ink-faint" data-testid="subagent-thread-id">
           {{ panel.threadId }}
         </div>
       </div>

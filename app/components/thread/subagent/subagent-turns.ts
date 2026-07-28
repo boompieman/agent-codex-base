@@ -1,21 +1,44 @@
-import type { ThreadTimelineTurn } from "@/components/thread/timeline-rows";
+import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
+import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
+import type { AppServerThread, ThreadHistoryState, ThreadTimelineTurn } from "~~/shared/types";
 
 export function subAgentOwnedTurns(
-  thread: Record<string, unknown> | null,
-  history: unknown,
+  thread: AppServerThread | null,
+  history: ThreadHistoryState | null,
+  parentHistory: ThreadHistoryState | null = null,
 ): ThreadTimelineTurn[] {
-  const turns = ((history as any)?.thread?.turns ??
-    (history as any)?.turns ??
-    []) as ThreadTimelineTurn[];
+  const turns = threadTurnsFromHistory(history).flatMap((turn) => {
+    const timelineTurn = asThreadTimelineTurn(turn);
+    return timelineTurn ? [timelineTurn] : [];
+  });
   const threadCreatedAt = timestampMs(thread?.createdAt);
   if (threadCreatedAt === null) return turns;
-  return turns.filter((turn) => {
-    const startedAt = timestampMs((turn as any).startedAt);
-    // Forked app-server histories include the parent's pre-fork turns. Official
-    // Thread.createdAt is the fork boundary; untimestamped turns are retained
-    // because the active turn may be emitted before startedAt is populated.
-    return startedAt === null || startedAt >= threadCreatedAt;
+  const firstOwnedTurnIndex = turns.findIndex((turn) => {
+    const startedAt = timestampMs(turn.startedAt);
+    return startedAt !== null && startedAt >= threadCreatedAt;
   });
+  if (firstOwnedTurnIndex < 0) {
+    const parentTurns = threadTurnsFromHistory(parentHistory);
+    if (parentTurns.length > 0) {
+      const parentTurnIds = new Set(parentTurns.map((turn) => String(turn.id)));
+      const parentItemIds = new Set(
+        parentTurns.flatMap((turn) => (turn.items ?? []).map((item) => String(item.id))),
+      );
+      return turns.flatMap((turn) => {
+        if (!parentTurnIds.has(String(turn.id))) return [turn];
+        const ownedItems = turn.items.filter((item) => !parentItemIds.has(String(item.id)));
+        return ownedItems.length > 0 ? [{ ...turn, items: ownedItems }] : [];
+      });
+    }
+    // Upstream permits startedAt:null. If the parent snapshot is unavailable there is no honest
+    // fork boundary; rendering the full prefix would reintroduce inherited parent history. The
+    // latest turn remains the least lossy safe fallback until the parent or timestamps arrive.
+    return turns.slice(-1);
+  }
+  // Forked histories contain parent turns before the fork boundary. Once the first owned turn is
+  // found, retain subsequent untimestamped active updates; never retain an ambiguous untimestamped
+  // prefix, because it is indistinguishable from inherited parent history.
+  return turns.slice(firstOwnedTurnIndex);
 }
 
 function timestampMs(value: unknown) {

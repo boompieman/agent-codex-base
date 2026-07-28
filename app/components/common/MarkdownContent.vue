@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { katex } from "@mdit/plugin-katex";
-import MarkdownIt from "markdown-it";
+import { createMarkdownRenderer } from "@codex-gateway/browser-runtime/markdown";
 import { useEventListener } from "@vueuse/core";
 import { computed, ref } from "vue";
 import { parseRemoteFileLink } from "@/utils/file-preview-links";
@@ -23,28 +22,7 @@ const props = withDefaults(
   },
 );
 
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  breaks: false,
-});
-
-markdown.use(katex, {
-  delimiters: "all",
-  throwOnError: false,
-  strict: false,
-  trust: false,
-});
-
-const defaultFenceRenderer = markdown.renderer.rules.fence;
-markdown.renderer.rules.fence = (tokens, index, options, environment, self) => {
-  const highlightedHtml = tokens[index]?.meta?.highlightedHtml;
-  if (typeof highlightedHtml === "string") return highlightedHtml;
-  return defaultFenceRenderer
-    ? defaultFenceRenderer(tokens, index, options, environment, self)
-    : self.renderToken(tokens, index, options);
-};
+const markdown = createMarkdownRenderer();
 
 const root = ref<HTMLElement | null>(null);
 const filePreviewContext = useFilePreviewContext();
@@ -52,7 +30,7 @@ const fileWorkspace = useGatewayFileWorkspaceStore();
 const markdownScheduler = useStreamRenderScheduler({
   source: () => [props.content || "", props.diffLanguage] as const,
   renderImmediately: ([content]) => renderMarkdownImmediately(content),
-  shouldEnhance: ([content]) => markdown.parse(content, {}).some((token) => token.type === "fence"),
+  shouldEnhance: ([content]) => markdown.hasCodeFences(content),
   renderEnhanced: ([content, diffLanguage]) => renderMarkdownEnhanced(content, diffLanguage),
   streaming: () => props.streaming,
 });
@@ -60,30 +38,17 @@ const markdownScheduler = useStreamRenderScheduler({
 const rendered = computed(() => markdownScheduler.output.value || "");
 
 function renderMarkdownImmediately(content: string) {
-  const tokens = markdown.parse(content, {});
-  return markdown.renderer.render(tokens, markdown.options, {});
+  return markdown.render(content);
 }
 
 async function renderMarkdownEnhanced(content: string, diffLanguage: string) {
-  const tokens = markdown.parse(content, {});
-  for (const token of tokens) {
-    if (token.type !== "fence") {
-      continue;
-    }
-    const normalizedLanguage = normalizeLanguage(token.info);
+  return await markdown.renderEnhanced(content, async (fence) => {
+    const normalizedLanguage = normalizeLanguage(fence.language);
     if (normalizedLanguage === "diff") {
-      token.meta = {
-        ...token.meta,
-        highlightedHtml: `<pre class="syntax-highlight language-diff"><code>${await renderDiff(token.content, diffLanguage)}</code></pre>`,
-      };
-    } else {
-      token.meta = {
-        ...token.meta,
-        highlightedHtml: `<pre class="shiki-block syntax-highlight language-${normalizeLanguage(normalizedLanguage || "text")}"><code>${await highlightCode(token.content, normalizedLanguage)}</code></pre>`,
-      };
+      return `<pre class="syntax-highlight language-diff"><code>${await renderDiff(fence.content, diffLanguage)}</code></pre>`;
     }
-  }
-  return markdown.renderer.render(tokens, markdown.options, {});
+    return `<pre class="shiki-block syntax-highlight language-${normalizeLanguage(normalizedLanguage || "text")}"><code>${await highlightCode(fence.content, normalizedLanguage)}</code></pre>`;
+  });
 }
 
 async function renderDiff(value: string, language: string) {

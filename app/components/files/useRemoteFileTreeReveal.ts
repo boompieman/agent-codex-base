@@ -32,8 +32,8 @@ export function useRemoteFileTreeReveal(options: {
       ] as const,
     async ([hostId, threadId, rootPath, path, visible]) => {
       const sequence = ++revealSequence.value;
-      if (!visible || !rootPath) return;
-      if (!path) {
+      if (!visible || rootPath === "") return;
+      if (path === null || path === "") {
         options.selected.value = undefined;
         return;
       }

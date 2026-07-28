@@ -1,7 +1,7 @@
 import { hostLifecycleBus } from "../state/host-events";
-import { codexRemoteAppServerVerifyPayload, remoteLoginShellCommand } from "./remote-command";
-import type { SshConnectionPool } from "./ssh-connection";
-import type { HostWithSecret, RemoteCodexVersionState } from "./ssh-types";
+import { codexRemoteAppServerVerifyPayload, remoteLoginShellCommand } from "./ssh/remote-command";
+import type { SshConnectionPool } from "./ssh/ssh-connection";
+import type { HostWithSecret, RemoteCodexVersionState } from "./ssh/ssh-types";
 
 export type EnsureCodexVersion = (host: HostWithSecret) => Promise<RemoteCodexVersionState>;
 
@@ -26,7 +26,7 @@ export class HostVerifyService {
       };
     }
 
-    const { CodexRpcClient } = await import("./rpc");
+    const { CodexRpcClient } = await import("./rpc/rpc");
     const client = new CodexRpcClient(host);
     try {
       await client.connect();

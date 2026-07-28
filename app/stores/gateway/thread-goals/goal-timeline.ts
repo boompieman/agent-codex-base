@@ -5,14 +5,14 @@ export function threadGoalTimelineItem(
   turnId?: string | null,
 ): ThreadGoalTimelineItem | null {
   const objective = goal.objective.trim();
-  if (!objective) {
+  if (objective === "") {
     return null;
   }
   const id = `thread-goal:${goal.threadId}:${goal.createdAt}:${hashText(objective)}`;
   return {
     type: "threadGoal",
     id,
-    ...(turnId ? { turnId } : {}),
+    ...(turnId !== null && turnId !== undefined && turnId !== "" ? { turnId } : {}),
     threadId: goal.threadId,
     objective,
     status: goal.status,

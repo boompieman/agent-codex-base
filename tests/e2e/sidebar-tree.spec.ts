@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { openApp } from "./helpers/app";
 import { installRealtimeThreadSnapshotMock, seedGatewayThread } from "./helpers/gateway-store";
+import { defaultGatewayHost, defaultGatewayProject } from "./fixtures/thread-history";
 
 test("collapses the desktop sidebar and restores the saved layout", async ({ page }) => {
   await openApp(page);
@@ -25,23 +26,26 @@ test("toggles an expanded project closed from the desktop sidebar", async ({ pag
   await seedGatewayThread(page, {
     hostId: 101,
     projectId: null,
-    host: { id: 101, name: "Toggle Host", sshHost: "localhost", sshUser: "codex" },
-    project: { id: 201, hostId: 101, name: "Toggle Project", remotePath: "/workspace/toggle" },
+    host: { ...defaultGatewayHost(101), name: "Toggle Host" },
+    project: {
+      ...defaultGatewayProject(101, 201),
+      name: "Toggle Project",
+      remotePath: "/workspace/toggle",
+    },
     threads: [
       {
         id: "toggle-thread",
         title: "Toggle Thread",
         pinned: false,
-        updatedAt: new Date().toISOString(),
+        updatedAt: Date.now(),
       },
     ],
   });
   await page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const gateway = pinia?._s?.get("gateway");
-    const navigation = pinia?._s?.get("gateway-navigation");
-    gateway.selectProject = async (projectId: number) => {
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    driver.catalog.selectProject = async (projectId: number) => {
+      const { navigation } = driver;
       navigation.selectedProjectId = projectId;
       navigation.selectedThreadId = null;
     };
@@ -62,8 +66,12 @@ test("marks completed threads as needing review until they are opened", async ({
     hostId: 102,
     projectId: 202,
     threadId: "selected-thread",
-    host: { id: 102, name: "Review Host", sshHost: "localhost", sshUser: "codex" },
-    project: { id: 202, hostId: 102, name: "Review Project", remotePath: "/workspace/review" },
+    host: { ...defaultGatewayHost(102), name: "Review Host" },
+    project: {
+      ...defaultGatewayProject(102, 202),
+      name: "Review Project",
+      remotePath: "/workspace/review",
+    },
     currentThread: { id: "selected-thread", name: "Selected Thread" },
     threads: [
       {
@@ -93,8 +101,8 @@ test("marks completed threads as needing review until they are opened", async ({
     },
   });
   await page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const runtime = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-runtime");
+    const runtime = window.__codexGatewayE2e?.runtime;
+    if (!runtime) throw new Error("Gateway E2E driver is unavailable");
     runtime.setThreadStatus(102, "review-thread", "running");
     runtime.setThreadStatus(102, "review-thread", "completed");
   });
@@ -115,74 +123,81 @@ test("marks completed threads as needing review until they are opened", async ({
 
 test("keeps non-pinned main threads in recent activity for the page session", async ({ page }) => {
   await openApp(page);
-  await page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const gateway = pinia?._s?.get("gateway");
-    const activity = pinia?._s?.get("gateway-thread-activity");
-    const runtime = pinia?._s?.get("gateway-thread-runtime");
-    if (!gateway || !activity || !runtime) {
-      throw new Error("Unable to locate sidebar activity stores");
-    }
-
-    const host = {
-      id: 104,
-      name: "Activity Host",
-      sshHost: "activity.example.internal",
-      username: "codex",
-    };
-    const project = {
-      id: 204,
-      hostId: host.id,
-      name: "Activity Project",
-      remotePath: "/workspace/activity",
-    };
-    gateway.hosts = [host];
-    gateway.projects = [project];
-    gateway.gatewayConfig.pinnedThreads = [
-      {
-        hostId: host.id,
-        projectId: project.id,
-        threadId: "already-pinned",
-        title: "Already pinned",
-      },
-    ];
-    activity.ingestThreads(
-      host.id,
-      [
+  const host = {
+    ...defaultGatewayHost(104),
+    name: "Activity Host",
+    sshHost: "activity.example.internal",
+  };
+  const project = {
+    ...defaultGatewayProject(104, 204),
+    name: "Activity Project",
+    remotePath: "/workspace/activity",
+  };
+  await page.evaluate(
+    ({ host, project }) => {
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      const { activity, catalog, config, runtime } = driver;
+      catalog.hosts = [host];
+      catalog.projects = [project];
+      config.gatewayConfig.pinnedThreads = [
         {
-          id: "recent-main",
-          title: "Recent main thread",
+          hostId: host.id,
           projectId: project.id,
-          cwd: project.remotePath,
-          updatedAt: 3,
-        },
-        {
-          id: "already-pinned",
+          threadId: "already-pinned",
           title: "Already pinned",
-          projectId: project.id,
-          updatedAt: 2,
         },
-        {
-          id: "spawned-child",
-          title: "Spawned child",
-          projectId: project.id,
-          parentThreadId: "recent-main",
-          updatedAt: 1,
-        },
-      ],
-      [project],
-    );
-    runtime.setThreadStatus(host.id, "recent-main", "running");
-    runtime.setThreadStatus(host.id, "already-pinned", "running");
-    runtime.setThreadStatus(host.id, "spawned-child", "running");
-    runtime.setThreadStatus(host.id, "recent-main", "completed");
-  });
+      ];
+      activity.ingestThreads(
+        host.id,
+        [
+          {
+            id: "recent-main",
+            title: "Recent main thread",
+            projectId: project.id,
+            cwd: project.remotePath,
+            updatedAt: 3,
+          },
+          {
+            id: "already-pinned",
+            title: "Already pinned",
+            projectId: project.id,
+            updatedAt: 2,
+          },
+          {
+            id: "spawned-child",
+            title: "Spawned child",
+            projectId: project.id,
+            parentThreadId: "recent-main",
+            updatedAt: 1,
+          },
+          {
+            id: "managed-child-before-parent-hydration",
+            title: "Inherited parent title",
+            projectId: project.id,
+            agentRole: "explorer",
+            agentNickname: "Scout",
+            updatedAt: 4,
+          },
+        ],
+        [project],
+      );
+      runtime.setThreadStatus(host.id, "recent-main", "running");
+      runtime.setThreadStatus(host.id, "already-pinned", "running");
+      runtime.setThreadStatus(host.id, "spawned-child", "running");
+      runtime.setThreadStatus(host.id, "managed-child-before-parent-hydration", "running");
+      runtime.setThreadStatus(host.id, "recent-main", "completed");
+    },
+    { host, project },
+  );
 
   await expect(page.getByText("最近运行", { exact: true })).toBeVisible();
   await expect(page.getByTestId("recent-thread-button-recent-main")).toBeVisible();
   await expect(page.getByTestId("recent-thread-button-already-pinned")).toBeHidden();
   await expect(page.getByTestId("recent-thread-button-spawned-child")).toBeHidden();
+  await expect(
+    page.getByTestId("recent-thread-button-managed-child-before-parent-hydration"),
+  ).toBeHidden();
 
   const sectionOrder = await page.getByTestId("sidebar-scroll-area").evaluate((root) => {
     const text = root.textContent ?? "";
@@ -205,14 +220,12 @@ test("long expanded tree labels truncate without displacing trailing statuses", 
     projectId,
     threadId: null,
     host: {
-      id: hostId,
+      ...defaultGatewayHost(hostId),
       name: `Long host ${"host-segment-".repeat(12)}`,
       sshHost: "very-long-hostname.example.internal",
-      sshUser: "codex",
     },
     project: {
-      id: projectId,
-      hostId,
+      ...defaultGatewayProject(hostId, projectId),
       name: `Long project ${"project-segment-".repeat(12)}`,
       remotePath: "/workspace/sidebar-layout",
     },
@@ -231,11 +244,10 @@ test("long expanded tree labels truncate without displacing trailing statuses", 
   });
   await page.evaluate(
     ({ hostId, threadId }) => {
-      const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-      const pinia = app?.config?.globalProperties?.$pinia;
-      const gateway = pinia?._s?.get("gateway");
-      const runtime = pinia?._s?.get("gateway-thread-runtime");
-      gateway.hostConnectionStatuses = { [hostId]: { status: "connected" } };
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      const { catalog, runtime } = driver;
+      catalog.hostConnectionStatuses = { [hostId]: { status: "connected" } };
       runtime.setThreadStatus(hostId, threadId, "running");
     },
     { hostId, threadId },

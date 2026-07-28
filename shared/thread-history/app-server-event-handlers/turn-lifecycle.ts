@@ -3,6 +3,7 @@ import { mergeItemIntoLatestTurn } from "../items";
 import { mergeThreadTurns, syncCompletedTurn } from "../turns";
 import { idParam, turnParam } from "./params";
 import type { AppServerHistoryReducerRegistry } from "./types";
+import { stringFromUnknown } from "../../utils/records";
 
 export const turnLifecycleReducers = {
   "turn/started": (input, params) => {
@@ -28,7 +29,7 @@ export const turnLifecycleReducers = {
       type: "turnPlan",
       id: `${turnId ?? "unknown"}-plan`,
       turnId,
-      explanation: params.explanation ?? null,
+      explanation: stringFromUnknown(params.explanation),
       plan: Array.isArray(params.plan) ? params.plan : [],
     });
   },

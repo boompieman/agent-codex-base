@@ -1,5 +1,4 @@
 import type {
-  TmuxMonitor,
   TmuxMonitorCompletionReason,
   TmuxMonitorListResult,
   TmuxMonitorMode,
@@ -8,8 +7,18 @@ import type {
 } from "~~/shared/types";
 import { gatewayDatabase, withGatewayDatabaseTransaction } from "../storage/database";
 import type { StoredTmuxMonitor, TmuxMonitorHostGroup } from "./types";
+import { z } from "zod";
 
 const HISTORY_LIMIT = 100;
+const tmuxMonitorModeSchema = z.enum(["once", "permanent"]);
+const tmuxMonitorStatusSchema = z.enum(["active", "completed", "cancelled"]);
+const tmuxMonitorCompletionReasonSchema = z.enum([
+  "returnedToShell",
+  "sessionExited",
+  "paneExited",
+  "paneReplaced",
+  "cancelled",
+]);
 
 export class TmuxMonitorRepository {
   listForUser(userId: number): TmuxMonitorListResult {
@@ -76,9 +85,13 @@ export class TmuxMonitorRepository {
     return row ? mapMonitor(row) : null;
   }
 
-  activeGroups(): TmuxMonitorHostGroup[] {
+  pollGroups(): TmuxMonitorHostGroup[] {
     const monitors = gatewayDatabase()
-      .prepare("SELECT * FROM tmux_monitors WHERE status = 'active' ORDER BY user_id, host_id, id")
+      .prepare(
+        `SELECT * FROM tmux_monitors
+         WHERE status = 'active' OR (status = 'completed' AND notification_sent_at IS NULL)
+         ORDER BY user_id, host_id, id`,
+      )
       .all()
       .map(mapMonitor);
     const groups = new Map<string, TmuxMonitorHostGroup>();
@@ -88,8 +101,10 @@ export class TmuxMonitorRepository {
         userId: monitor.userId,
         hostId: monitor.hostId,
         monitors: [],
+        pendingNotifications: [],
       };
-      group.monitors.push(monitor);
+      if (monitor.status === "active") group.monitors.push(monitor);
+      else group.pendingNotifications.push(monitor);
       groups.set(key, group);
     }
     return Array.from(groups.values());
@@ -194,7 +209,7 @@ export class TmuxMonitorRepository {
         now,
         monitor.id,
       );
-    if (!result.changes) return null;
+    if (result.changes === 0) return null;
     this.pruneHistory(monitor.userId, monitor.hostId);
     return this.getOwned(monitor.userId, monitor.id);
   }
@@ -204,7 +219,7 @@ export class TmuxMonitorRepository {
     reason: Exclude<TmuxMonitorCompletionReason, "cancelled">,
     pane: TmuxPaneSnapshot | null,
   ): StoredTmuxMonitor | null {
-    if (monitor.mode !== "permanent" || !monitor.runStartedAt) return null;
+    if (monitor.mode !== "permanent" || monitor.runStartedAt === null) return null;
     const now = new Date().toISOString();
     let historyId: number | null = null;
     withGatewayDatabaseTransaction((database) => {
@@ -225,7 +240,7 @@ export class TmuxMonitorRepository {
           now,
           monitor.id,
         );
-      if (!reset.changes) return;
+      if (reset.changes === 0) return;
       const inserted = database
         .prepare(
           `INSERT INTO tmux_monitors (
@@ -286,7 +301,7 @@ export class TmuxMonitorRepository {
         pane?.panePid ?? monitor.panePid,
         pane?.currentCommand ?? monitor.initialCommand,
         pane?.currentCommand ?? monitor.lastCommand,
-        pane?.running ? monitor.createdAt : null,
+        pane?.running === true ? monitor.createdAt : null,
         now,
         monitor.id,
         monitor.userId,
@@ -296,7 +311,7 @@ export class TmuxMonitorRepository {
 
   cancel(userId: number, id: number): StoredTmuxMonitor | null {
     const monitor = this.getOwned(userId, id);
-    if (!monitor || monitor.status !== "active") return null;
+    if (monitor === null || monitor.status !== "active") return null;
     const now = new Date().toISOString();
     gatewayDatabase()
       .prepare(
@@ -308,7 +323,7 @@ export class TmuxMonitorRepository {
     return this.getOwned(userId, id);
   }
 
-  claimNotification(userId: number, id: number) {
+  markNotificationSent(userId: number, id: number) {
     const now = new Date().toISOString();
     return Boolean(
       gatewayDatabase()
@@ -332,6 +347,7 @@ export class TmuxMonitorRepository {
         `DELETE FROM tmux_monitors WHERE id IN (
           SELECT id FROM tmux_monitors
           WHERE user_id = ? AND host_id = ? AND status != 'active'
+            AND (status = 'cancelled' OR notification_sent_at IS NOT NULL)
           ORDER BY completed_at DESC LIMIT -1 OFFSET ?
         )`,
       )
@@ -357,9 +373,11 @@ function mapMonitor(row: Record<string, unknown>): StoredTmuxMonitor {
     panePid: Number(row.pane_pid),
     initialCommand: String(row.initial_command),
     lastCommand: String(row.last_command),
-    mode: String(row.mode) as TmuxMonitor["mode"],
-    status: String(row.status) as TmuxMonitor["status"],
-    completionReason: optionalText(row.completion_reason) as TmuxMonitorCompletionReason | null,
+    mode: tmuxMonitorModeSchema.parse(row.mode),
+    status: tmuxMonitorStatusSchema.parse(row.status),
+    completionReason: tmuxMonitorCompletionReasonSchema
+      .nullable()
+      .parse(optionalText(row.completion_reason)),
     createdAt: String(row.created_at),
     runStartedAt: optionalText(row.run_started_at),
     lastCheckedAt: optionalText(row.last_checked_at),
@@ -371,7 +389,7 @@ function mapMonitor(row: Record<string, unknown>): StoredTmuxMonitor {
 }
 
 function optionalText(value: unknown) {
-  return typeof value === "string" && value ? value : null;
+  return typeof value === "string" && value !== "" ? value : null;
 }
 
 function optionalInteger(value: unknown) {

@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { trimmedOrFallback } from "~~/shared/utils/strings";
 
 let database: DatabaseSync | null = null;
 let ready = false;
 const readyCallbacks = new Set<() => void>();
 
 function gatewayDatabasePath() {
-  return resolve(process.env.CODEX_GATEWAY_DB_PATH || "/data/codex-gateway.db");
+  return resolve(trimmedOrFallback(process.env.CODEX_GATEWAY_DB_PATH, "/data/codex-gateway.db"));
 }
 
 export function gatewayDatabaseExists() {
@@ -29,7 +30,7 @@ export function onGatewayDatabaseReady(callback: () => void) {
 }
 
 export function gatewayDatabase() {
-  if (!database) {
+  if (database === null) {
     const path = gatewayDatabasePath();
     const directory = dirname(path);
     if (!existsSync(directory)) {

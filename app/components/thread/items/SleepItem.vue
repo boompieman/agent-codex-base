@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { useTimestamp } from "@vueuse/core";
 import { CheckCircle2Icon, Loader2Icon, TimerIcon } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { isItemInProgress } from "@/utils/thread-items";
 import { formatDurationMs, itemCompletedAtMs, itemStartedAtMs } from "@/utils/item-timing";
 
-const props = defineProps<{ item: Record<string, any> }>();
+const props = defineProps<{ item: ThreadHistoryItem }>();
 
 const { t } = useI18n();
 const { timestamp: now, pause, resume } = useTimestamp({ controls: true, interval: 250 });

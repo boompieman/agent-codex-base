@@ -19,7 +19,7 @@ export function useComposerSlashMenu(input: {
       title: t("app.slashCommandNewTitle"),
       description: t("app.slashCommandNewDescription"),
     },
-    ...(input.selectedThreadId.value
+    ...(input.selectedThreadId.value !== null
       ? [
           {
             id: "plan" as const,
@@ -37,7 +37,7 @@ export function useComposerSlashMenu(input: {
       : []),
   ]);
   const menuItems = computed<SlashMenuItem[]>(() => {
-    if (isGoalSlashInput(input.text.value) && input.selectedThreadId.value) {
+    if (isGoalSlashInput(input.text.value) && input.selectedThreadId.value !== null) {
       return goalSlashActions({
         goal: input.selectedThreadGoal.value,
         commandPrefix: t("app.slashCommandGoal"),

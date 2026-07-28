@@ -1,10 +1,15 @@
 import type { ThreadGoal, ThreadGoalStatus } from "~~/shared/types";
+import {
+  expectThreadGoalSnapshot,
+  expectThreadGoalUpdated,
+} from "@/stores/gateway-realtime/response-parsers";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import { gatewayDomainEvents } from "@/stores/gateway/domain-events";
 import { threadGoalTimelineItem } from "@/stores/gateway/thread-goals/goal-timeline";
-import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
+import { pinnedKey, selectedThreadScope } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function createThreadGoalActions() {
   function upsertThreadGoal(
@@ -15,7 +20,7 @@ export function createThreadGoalActions() {
   ) {
     const composer = useGatewayComposerStore();
     const key = pinnedKey(hostId, threadId);
-    if (options.showInTimeline) {
+    if (options.showInTimeline === true) {
       const item = threadGoalTimelineItem(goal, options.turnId);
       if (item) gatewayDomainEvents.emit("history-item-upsert", { hostId, threadId, item });
     }
@@ -41,64 +46,76 @@ export function createThreadGoalActions() {
     upsertThreadGoal,
     clearThreadGoalState,
     async setSelectedThreadGoal(objective: string) {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
-      if (!navigation.selectedHostId || !navigation.selectedThreadId) return;
-      const { selectedHostId: hostId, selectedThreadId: threadId } = navigation;
-      const message = await useGatewayRealtimeStore().request<{
-        type: "thread.goal.updated";
-        goal: ThreadGoal;
-      }>((requestId) => ({
-        type: "thread.goal.set",
-        requestId,
-        hostId,
-        threadId,
-        objective,
-        status: "active",
-      }));
+      const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
+      if (scope === null) return;
+      const { hostId, threadId } = scope;
+      const message = await useGatewayRealtimeStore().request(
+        (requestId) => ({
+          type: "thread.goal.set",
+          requestId,
+          hostId,
+          threadId,
+          objective,
+          status: "active",
+        }),
+        expectThreadGoalUpdated,
+      );
+      if (!sessionIsCurrent()) return;
       upsertThreadGoal(hostId, threadId, message.goal, { showInTimeline: true });
     },
     async setSelectedThreadGoalStatus(status: ThreadGoalStatus) {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
-      if (!navigation.selectedHostId || !navigation.selectedThreadId) return;
-      const { selectedHostId: hostId, selectedThreadId: threadId } = navigation;
-      const message = await useGatewayRealtimeStore().request<{
-        type: "thread.goal.updated";
-        goal: ThreadGoal;
-      }>((requestId) => ({
-        type: "thread.goal.set",
-        requestId,
-        hostId,
-        threadId,
-        status,
-      }));
+      const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
+      if (scope === null) return;
+      const { hostId, threadId } = scope;
+      const message = await useGatewayRealtimeStore().request(
+        (requestId) => ({
+          type: "thread.goal.set",
+          requestId,
+          hostId,
+          threadId,
+          status,
+        }),
+        expectThreadGoalUpdated,
+      );
+      if (!sessionIsCurrent()) return;
       upsertThreadGoal(hostId, threadId, message.goal);
     },
     async clearSelectedThreadGoal() {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
-      if (!navigation.selectedHostId || !navigation.selectedThreadId) return;
-      const { selectedHostId: hostId, selectedThreadId: threadId } = navigation;
+      const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
+      if (scope === null) return;
+      const { hostId, threadId } = scope;
       await useGatewayRealtimeStore().request((requestId) => ({
         type: "thread.goal.clear",
         requestId,
         hostId,
         threadId,
       }));
+      if (!sessionIsCurrent()) return;
       clearThreadGoalState(hostId, threadId);
     },
     async refreshSelectedThreadGoal() {
+      const sessionIsCurrent = captureSessionEpoch();
       const navigation = useGatewayNavigationStore();
-      if (!navigation.selectedHostId || !navigation.selectedThreadId) return;
-      const { selectedHostId: hostId, selectedThreadId: threadId } = navigation;
-      const message = await useGatewayRealtimeStore().request<{
-        type: "thread.goal.snapshot";
-        goal: ThreadGoal | null;
-      }>((requestId) => ({
-        type: "thread.goal.get",
-        requestId,
-        hostId,
-        threadId,
-      }));
-      if (message.goal) upsertThreadGoal(hostId, threadId, message.goal);
+      const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
+      if (scope === null) return;
+      const { hostId, threadId } = scope;
+      const message = await useGatewayRealtimeStore().request(
+        (requestId) => ({
+          type: "thread.goal.get",
+          requestId,
+          hostId,
+          threadId,
+        }),
+        expectThreadGoalSnapshot,
+      );
+      if (!sessionIsCurrent()) return;
+      if (message.goal !== null) upsertThreadGoal(hostId, threadId, message.goal);
       else clearThreadGoalState(hostId, threadId);
     },
   };

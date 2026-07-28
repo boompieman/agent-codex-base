@@ -17,16 +17,16 @@ export function authenticatePeer(
   if (current.authenticated) {
     throw new Error("Realtime connection is already authenticated");
   }
-  const token = String(request.token || "");
+  const token = request.token;
   const user = userStore.authenticateToken(token);
-  if (!user) {
+  if (user === null) {
     throw new Error("Missing or invalid bearer token");
   }
-  if (current.authTimer) {
+  if (current.authTimer !== undefined) {
     clearTimeout(current.authTimer);
   }
   const connectionId = randomUUID();
-  peer.context.realtime = {
+  Object.assign(current, {
     authenticated: true,
     userId: user.id,
     threadUnsubscribers: new Map(),
@@ -40,7 +40,7 @@ export function authenticatePeer(
     pinnedThreadsUnsubscribe: pinnedThreadEvents.subscribe(user.id, () => {
       sendRealtimePeerMessage(peer, { type: "config.pinnedThreads.changed" });
     }),
-  };
+  });
   sendRealtimePeerMessage(peer, { type: "ready", connectionId });
   subscribeTerminalEvents(peer);
   subscribeBrowserPreviewEvents(peer);

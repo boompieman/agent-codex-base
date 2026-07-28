@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 
 const open = defineModel<boolean>("open", { required: true });
@@ -21,7 +21,7 @@ const props = defineProps<{
   project?: ProjectRecord | null;
 }>();
 
-const store = useGatewayStore();
+const catalog = useGatewayCatalogStore();
 const { t } = useI18n();
 const errorLabels = computed(() => errorMessageLabels(t));
 const projectForm = ref({ name: "", remotePath: "" });
@@ -53,9 +53,9 @@ async function saveProject() {
       remotePath: projectForm.value.remotePath,
     };
     if (props.project) {
-      await store.updateProject(props.project.id, input);
+      await catalog.updateProject(props.project.id, input);
     } else {
-      await store.createProject(input);
+      await catalog.createProject(input);
     }
     open.value = false;
   } finally {
@@ -70,10 +70,10 @@ async function browseDirectories() {
   browsing.value = true;
   directoryError.value = "";
   try {
-    const result = await store.listRemoteDirectories(directoryPath.value || "~", props.host.id);
+    const result = await catalog.listRemoteDirectories(directoryPath.value || "~", props.host.id);
     directoryPath.value = result.path;
     directories.value = result.entries;
-  } catch (error: any) {
+  } catch (error: unknown) {
     directories.value = [];
     directoryError.value = messageFromError(error, t("app.browseFailed"), errorLabels.value);
   } finally {

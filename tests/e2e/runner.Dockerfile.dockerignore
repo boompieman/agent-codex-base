@@ -3,6 +3,10 @@
 !app/**
 !i18n/
 !i18n/**
+!packages/
+!packages/**
+packages/*/dist
+packages/*/node_modules
 !public/
 !public/**
 !scripts/
@@ -16,6 +20,7 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!turbo.json
 !playwright.config.ts
 !tailwind.config.ts
 !tsconfig.json

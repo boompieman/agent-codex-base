@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { ChevronDownIcon, ChevronRightIcon, ImageIcon, SearchIcon, WrenchIcon } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import { isItemInProgress } from "@/utils/thread-items";
 import { presentToolCall } from "./tool-call-presenters";
 
 const props = defineProps<{
-  item: Record<string, any>;
+  item: ThreadHistoryItem;
 }>();
 const { t } = useI18n();
 const presentation = computed(() => presentToolCall(props.item, t));

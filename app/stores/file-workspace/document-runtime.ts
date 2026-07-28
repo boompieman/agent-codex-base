@@ -1,6 +1,7 @@
 import { markRaw, reactive } from "vue";
 import { Mutex } from "async-mutex";
 import type { FilePreviewDocument } from "~~/shared/types";
+import { useAuthStore } from "@/stores/auth";
 import {
   fetchRemoteFile,
   RemoteFileConflictError,
@@ -37,15 +38,18 @@ export function createFileDocument(input: OpenWorkspaceFileInput) {
   });
 }
 
-export async function loadFileDocument(document: FilePreviewDocument) {
+export async function loadFileDocument(document: FilePreviewDocument, signal?: AbortSignal) {
   if (!import.meta.client) {
     return undefined;
   }
   const hasContent = Boolean(document.objectUrl);
+  const auth = useAuthStore();
+  const sessionEpoch = auth.sessionEpoch;
   document.loading = !hasContent;
   document.error = null;
   try {
-    const response = await fetchRemoteFile(document.hostId, document.path, document.etag);
+    const response = await fetchRemoteFile(document.hostId, document.path, document.etag, signal);
+    if (!auth.isCurrentSession(sessionEpoch) || isAborted(signal)) return undefined;
     if (!response.changed) {
       document.stale = false;
       return undefined;
@@ -58,14 +62,18 @@ export async function loadFileDocument(document: FilePreviewDocument) {
       document.stale = false;
       return undefined;
     }
+    const savedText = response.previewKind === "text" ? await response.blob.text() : "";
+    if (!auth.isCurrentSession(sessionEpoch) || isAborted(signal)) return undefined;
     const file = markRaw(new File([response.blob], document.title, { type: response.contentType }));
+    // Create the URL only after asynchronous text decoding and the cancellation check. Creating
+    // it earlier lets a close/reload during blob.text() orphan a URL that no document can revoke.
     const objectUrl = URL.createObjectURL(response.blob);
     disposeFileObjectUrl(document);
     document.contentType = response.contentType;
     document.previewKind = response.previewKind;
     document.size = response.blob.size;
     document.objectUrl = objectUrl;
-    document.savedText = response.previewKind === "text" ? await response.blob.text() : "";
+    document.savedText = savedText;
     document.draftText = document.savedText;
     document.dirty = false;
     document.saveError = null;
@@ -76,12 +84,19 @@ export async function loadFileDocument(document: FilePreviewDocument) {
     document.updatedAt = Date.now();
     return file;
   } catch (error) {
+    if (isAborted(signal)) return undefined;
     document.error = error instanceof Error ? error.message : String(error);
     document.stale = true;
     return hasContent ? undefined : null;
   } finally {
     document.loading = false;
   }
+}
+
+function isAborted(signal: AbortSignal | undefined) {
+  // Keep each check live across await boundaries. TypeScript may otherwise retain a previous
+  // `signal.aborted === false` narrowing even though AbortSignal is mutable external state.
+  return signal?.aborted ?? false;
 }
 
 const saveLocks = new Map<string, Mutex>();
@@ -141,11 +156,11 @@ export async function discardFileDocumentDraft(document: FilePreviewDocument) {
 
 export function disposeFileDocument(document: FilePreviewDocument | undefined) {
   disposeFileObjectUrl(document);
-  if (document) saveLocks.delete(document.key);
+  if (document !== undefined) saveLocks.delete(document.key);
 }
 
 function disposeFileObjectUrl(document: FilePreviewDocument | undefined) {
-  if (!document?.objectUrl) return;
+  if (document?.objectUrl === undefined || document.objectUrl === "") return;
   URL.revokeObjectURL(document.objectUrl);
   document.objectUrl = "";
 }

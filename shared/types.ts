@@ -56,3 +56,15 @@ export type {
   UploadedFileRecord,
   UploadResult,
 } from "./types/files";
+export type {
+  ThreadHistoryItem,
+  ThreadFileChange,
+  ThreadHistoryState,
+  ThreadHistoryStatus,
+  ThreadHistoryTurn,
+} from "./thread-history/types";
+export type {
+  ThreadTimelineItem,
+  ThreadTimelineItemType,
+  ThreadTimelineTurn,
+} from "./thread-history/types";

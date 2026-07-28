@@ -1,6 +1,6 @@
-import { EventEmitter } from "@posva/event-emitter";
 import type { RealtimeClientMessage } from "~~/shared/types";
 import { runPeerScoped, stateFor, type RealtimePeer } from "./peer-state";
+import { match } from "ts-pattern";
 
 export type RealtimeClientMessageMap = {
   [K in RealtimeClientMessage["type"]]: Extract<RealtimeClientMessage, { type: K }>;
@@ -24,16 +24,6 @@ export class RealtimeAuthenticationRequiredError extends Error {
   }
 }
 
-type RealtimeMessageEnvelope<K extends keyof RealtimeClientMessageMap> = {
-  peer: RealtimePeer;
-  request: RealtimeClientMessageMap[K];
-  accept: (task: Promise<void>) => void;
-};
-
-type RealtimeMessageEnvelopeMap = {
-  [K in keyof RealtimeClientMessageMap]: RealtimeMessageEnvelope<K>;
-};
-
 type RealtimeMessageHandlerEntry<K extends keyof RealtimeClientMessageMap> =
   | RealtimeMessageHandler<K>
   | {
@@ -46,77 +36,99 @@ type RealtimeMessageHandlerRegistry = {
 };
 
 export class RealtimeMessageDispatcher {
-  private readonly emitter = new EventEmitter<RealtimeMessageEnvelopeMap>();
-  private readonly authRequirements = new Map<
-    keyof RealtimeClientMessageMap,
-    RealtimeMessageAuth
-  >();
-
-  constructor(handlers: RealtimeMessageHandlerRegistry) {
-    this.register(handlers);
-  }
+  constructor(private readonly handlers: RealtimeMessageHandlerRegistry) {}
 
   dispatch(peer: RealtimePeer, request: RealtimeClientMessage) {
-    this.assertCanDispatch(peer, request.type);
-    return new Promise<void>((resolve, reject) => {
-      let handled = false;
-      const envelope = {
-        peer,
-        request,
-        accept: (handlerTask: Promise<void>) => {
-          handled = true;
-          handlerTask.then(resolve, reject);
-        },
-      } as RealtimeMessageEnvelope<keyof RealtimeClientMessageMap>;
-      try {
-        this.emitter.emit(request.type, envelope as never);
-      } catch (error) {
-        reject(error);
-        return;
-      }
-      if (!handled) {
-        reject(new Error(`Unsupported realtime message: ${request.type}`));
-      }
-    });
+    return match(request)
+      .with({ type: "auth.authenticate" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "browser.allowInsecureTls" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "browser.close" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "browser.open" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "host.lifecycle.subscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "host.lifecycle.unsubscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "ping" }, (value) => this.dispatchEntry(peer, value, this.handlers[value.type]))
+      .with({ type: "serverRequest.respond" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "terminal.close" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "terminal.input" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "terminal.list" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "terminal.open" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "terminal.resize" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.activate" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.goal.clear" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.goal.get" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.goal.set" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.start" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.subscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.turns.load" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "thread.unsubscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "turn.interrupt" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "turn.start" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "turn.steer" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .exhaustive();
   }
 
-  private register(handlers: RealtimeMessageHandlerRegistry) {
-    Object.entries(handlers).forEach(([type, entry]) => {
-      this.on(type as keyof RealtimeClientMessageMap, entry as never);
-    });
-  }
-
-  private on<K extends keyof RealtimeClientMessageMap>(
-    type: K,
-    entry: RealtimeMessageHandlerEntry<K>,
-  ) {
-    const normalized = normalizeHandlerEntry(entry);
-    this.authRequirements.set(type, normalized.auth);
-    this.emitter.on(type, (envelope) => {
-      envelope.accept(
-        Promise.resolve(this.runHandler(normalized.handler, envelope.peer, envelope.request)),
-      );
-    });
-  }
-
-  private runHandler<K extends keyof RealtimeClientMessageMap>(
-    handler: RealtimeMessageHandler<K>,
+  private dispatchEntry<K extends keyof RealtimeClientMessageMap>(
     peer: RealtimePeer,
     request: RealtimeClientMessageMap[K],
+    entry: RealtimeMessageHandlerEntry<K> | undefined,
   ) {
-    return stateFor(peer).authenticated
-      ? runPeerScoped(peer, () => handler(peer, request))
-      : handler(peer, request);
-  }
-
-  private assertCanDispatch(peer: RealtimePeer, type: keyof RealtimeClientMessageMap) {
-    const auth = this.authRequirements.get(type);
-    if (!auth) {
-      throw new Error(`Unsupported realtime message: ${type}`);
+    if (entry === undefined) {
+      return Promise.reject(new Error(`Unsupported realtime message: ${request.type}`));
     }
-    if (auth === "authenticated" && !stateFor(peer).authenticated) {
+    const normalized = normalizeHandlerEntry(entry);
+    if (normalized.auth === "authenticated" && !stateFor(peer).authenticated) {
       throw new RealtimeAuthenticationRequiredError();
     }
+    const task = stateFor(peer).authenticated
+      ? runPeerScoped(peer, () => normalized.handler(peer, request))
+      : normalized.handler(peer, request);
+    return Promise.resolve(task);
   }
 }
 

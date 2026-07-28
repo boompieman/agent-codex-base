@@ -1,4 +1,5 @@
 import type { HostCreateInput, HostRecord, HostUpdateInput } from "~~/shared/types";
+import { trimmedOrNull } from "~~/shared/utils/strings";
 import { gatewayMemoryState, nextId, nowIso, type StoredHostRecord } from "./memory";
 
 function sanitizeHost(host: StoredHostRecord): HostRecord {
@@ -15,15 +16,15 @@ function normalizeHost(input: HostCreateInput, id = nextId(gatewayMemoryState.ho
     id,
     name: input.name.trim(),
     sshHost: input.sshHost.trim(),
-    username: input.username?.trim() || null,
-    port: input.port || null,
+    username: trimmedOrNull(input.username),
+    port: input.port ?? null,
     authMode: input.authMode,
-    privateKeyPath: input.privateKeyPath?.trim() || null,
-    privateKey: input.privateKey || null,
-    password: input.authMode === "password" ? input.password || null : input.password || null,
-    proxyUrl: input.proxyUrl?.trim() || null,
+    privateKeyPath: trimmedOrNull(input.privateKeyPath),
+    privateKey: input.privateKey ?? null,
+    password: input.password ?? null,
+    proxyUrl: trimmedOrNull(input.proxyUrl),
     hasPassword: Boolean(input.password),
-    createdAt: existing?.createdAt || timestamp,
+    createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
 }
@@ -32,7 +33,7 @@ export const hostStore = {
   replaceHosts(hosts: HostRecord[]) {
     gatewayMemoryState.hosts = hosts.map((host) => ({
       ...host,
-      proxyUrl: host.proxyUrl?.trim() || null,
+      proxyUrl: trimmedOrNull(host.proxyUrl),
       hasPassword: Boolean(host.password),
     }));
   },

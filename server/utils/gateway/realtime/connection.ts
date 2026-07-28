@@ -1,4 +1,5 @@
 import type { RealtimeClientMessage } from "~~/shared/types";
+import { parseRealtimeClientMessage } from "~~/shared/runtime/realtime";
 import {
   isStaleThreadCursorErrorLike,
   STALE_THREAD_CURSOR_ERROR_CODE,
@@ -7,6 +8,7 @@ import { realtimeMessageDispatcher } from "./message-handlers";
 import { RealtimeAuthenticationRequiredError } from "./message-dispatcher";
 import { hostStore } from "../state/hosts";
 import { browserPreviewManager } from "../browser-preview/browser-preview-manager";
+import { recordFromUnknown } from "~~/shared/utils/records";
 import { runPeerScoped, sendRealtimePeerMessage, stateFor, type RealtimePeer } from "./peer-state";
 
 export function openRealtimePeer(peer: RealtimePeer) {
@@ -27,14 +29,19 @@ export async function handleRealtimePeerMessage(peer: RealtimePeer, rawMessage: 
   try {
     request = parseClientMessage(rawMessage);
     await realtimeMessageDispatcher.dispatch(peer, request);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    console.error("[gateway] realtime message failed", {
+      requestType: request?.type ?? null,
+      requestId: request && "requestId" in request ? request.requestId : null,
+      message: error instanceof Error ? error.message : String(error),
+    });
     if (error instanceof RealtimeAuthenticationRequiredError) {
       rejectUnauthenticatedPeer(peer, request);
       return;
     }
     sendRealtimePeerMessage(peer, {
       type: "error",
-      message: error?.message || "Realtime message failed",
+      message: error instanceof Error ? error.message : "Realtime message failed",
       requestId: request && "requestId" in request ? request.requestId : undefined,
       request,
       code: realtimeErrorCode(error),
@@ -45,7 +52,7 @@ export async function handleRealtimePeerMessage(peer: RealtimePeer, rawMessage: 
 
 export function cleanupRealtimePeer(peer: RealtimePeer) {
   const state = stateFor(peer);
-  if (state.authTimer) {
+  if (state.authTimer !== undefined) {
     clearTimeout(state.authTimer);
     state.authTimer = undefined;
   }
@@ -59,7 +66,7 @@ export function cleanupRealtimePeer(peer: RealtimePeer) {
   state.pinnedThreadsUnsubscribe = undefined;
   state.browserPreviewUnsubscribe?.();
   state.browserPreviewUnsubscribe = undefined;
-  if (state.browserOwnerId) browserPreviewManager.closeOwner(state.browserOwnerId);
+  if (state.browserOwnerId !== undefined) browserPreviewManager.closeOwner(state.browserOwnerId);
   state.sessionRevocationUnsubscribe?.();
   state.sessionRevocationUnsubscribe = undefined;
   for (const unsubscribe of state.threadUnsubscribers.values()) {
@@ -78,19 +85,18 @@ function rejectUnauthenticatedPeer(peer: RealtimePeer, request: RealtimeClientMe
 }
 
 function parseClientMessage(raw: string): RealtimeClientMessage {
-  const parsed = JSON.parse(raw) as RealtimeClientMessage;
-  if (!parsed || typeof parsed !== "object" || typeof parsed.type !== "string") {
-    throw new Error("Invalid realtime message");
-  }
-  return parsed;
+  const parsed: unknown = JSON.parse(raw);
+  return parseRealtimeClientMessage(parsed);
 }
 
 function realtimeErrorDetails(
   peer: RealtimePeer,
   request: RealtimeClientMessage | undefined,
-  error: any,
+  error: unknown,
 ) {
   const code = realtimeErrorCode(error);
+  const errorRecord = recordFromUnknown(error);
+  const cause = recordFromUnknown(errorRecord?.cause);
   return {
     requestType: request?.type ?? null,
     requestId: request && "requestId" in request ? request.requestId : null,
@@ -100,14 +106,14 @@ function realtimeErrorDetails(
     sessionId: request && "sessionId" in request ? request.sessionId : null,
     serverRequestId: request && "serverRequestId" in request ? request.serverRequestId : null,
     code,
-    errorName: error?.name ?? null,
-    statusCode: error?.statusCode ?? error?.cause?.statusCode ?? null,
-    statusMessage: error?.statusMessage ?? error?.cause?.statusMessage ?? null,
+    errorName: typeof errorRecord?.name === "string" ? errorRecord.name : null,
+    statusCode: errorRecord?.statusCode ?? cause?.statusCode ?? null,
+    statusMessage: errorRecord?.statusMessage ?? cause?.statusMessage ?? null,
   };
 }
 
 function realtimeRequestHostName(peer: RealtimePeer, request: RealtimeClientMessage | undefined) {
-  if (!request || !("hostId" in request) || !stateFor(peer).authenticated) {
+  if (request === undefined || !("hostId" in request) || stateFor(peer).authenticated === false) {
     return null;
   }
   return runPeerScoped(peer, () => hostStore.get(request.hostId)?.name ?? null);

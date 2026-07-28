@@ -1,18 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import { configureBarkNotifications, useBarkReceiver } from "./helpers/bark";
 import { openApp, reloadApp } from "./helpers/app";
-import {
-  addRemoteHost,
-  addRemoteProject,
-  execRemoteSsh,
-  readRemoteEnv,
-  startRemoteThreadFromProjectMenu,
-} from "./helpers/remote-codex";
+import { execRemoteSsh, type RemoteCodexEnv } from "./helpers/remote-codex";
 
 test("monitors a real tmux pane, persists it, and notifies once when it returns to shell", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   const bark = await useBarkReceiver();
   const suffix = Date.now();
   const sessionName = `train-${suffix}`;
@@ -50,9 +45,8 @@ done
 
   await openApp(page);
   await configureBarkNotifications(page, bark.url);
-  const host = await addRemoteHost(page, remote, hostName);
-  const project = await addRemoteProject(page, remote, host.id);
-  await startRemoteThreadFromProjectMenu(page, project.id);
+  const { host, project } = await remoteWorkspace.provision({ hostName });
+  await remoteWorkspace.startThread(project.id);
 
   await page.getByTestId("open-tmux-button").click();
   const panel = page.getByTestId("tmux-monitor-panel");
@@ -198,8 +192,9 @@ done`,
 
 test("permanently monitors repeated runs and reattaches to the same logical pane", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   const bark = await useBarkReceiver();
   const suffix = Date.now();
   const sessionName = `permanent-${suffix}`;
@@ -213,9 +208,8 @@ tmux new-session -d -s ${shellQuote(sessionName)} -n train`,
 
   await openApp(page);
   await configureBarkNotifications(page, bark.url);
-  const host = await addRemoteHost(page, remote, hostName);
-  const project = await addRemoteProject(page, remote, host.id);
-  await startRemoteThreadFromProjectMenu(page, project.id);
+  const { host, project } = await remoteWorkspace.provision({ hostName });
+  await remoteWorkspace.startThread(project.id);
   await page.getByTestId("open-tmux-button").click();
 
   const panel = page.getByTestId("tmux-monitor-panel");
@@ -276,10 +270,7 @@ function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-async function startTmuxRun(
-  remote: Awaited<ReturnType<typeof readRemoteEnv>>,
-  sessionName: string,
-) {
+async function startTmuxRun(remote: RemoteCodexEnv, sessionName: string) {
   await execRemoteSsh(
     remote,
     `tmux send-keys -t ${shellQuote(`${sessionName}:0.0`)} ${shellQuote("sleep 300")} Enter`,
@@ -298,7 +289,7 @@ async function startTmuxRun(
     .toBe("sleep");
 }
 
-async function stopTmuxRun(remote: Awaited<ReturnType<typeof readRemoteEnv>>, sessionName: string) {
+async function stopTmuxRun(remote: RemoteCodexEnv, sessionName: string) {
   await execRemoteSsh(remote, `tmux send-keys -t ${shellQuote(`${sessionName}:0.0`)} C-c`);
   await expect
     .poll(

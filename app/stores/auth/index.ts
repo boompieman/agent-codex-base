@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { useLocalStorage } from "@vueuse/core";
 
 export const AUTH_STORAGE_KEY = "codex-gateway-auth-token";
 
@@ -6,15 +7,25 @@ export const useAuthStore = defineStore("auth", () => {
   const token = ref("");
   const username = ref("");
   const initialized = ref(false);
+  const sessionEpoch = ref(0);
+  const storedToken = useLocalStorage<string | null>(AUTH_STORAGE_KEY, null);
+  const storedUsername = useLocalStorage<string | null>(`${AUTH_STORAGE_KEY}:username`, null);
 
-  const isAuthenticated = computed(() => Boolean(token.value));
+  const isAuthenticated = computed(() => token.value !== "");
+
+  watch([storedToken, storedUsername], ([nextToken, nextUsername]) => {
+    if (!initialized.value) return;
+    // VueUse synchronizes useLocalStorage across same-origin tabs. Mirror that durable state into
+    // the live session so logout/account switches advance sessionEpoch and cancel stale HTTP/RAF
+    // work in every open Gateway tab without waiting for a refresh.
+    replaceSession(nextToken ?? "", nextUsername ?? "");
+  });
 
   function hydrate() {
     if (!import.meta.client || initialized.value) {
       return;
     }
-    token.value = localStorage.getItem(AUTH_STORAGE_KEY) || "";
-    username.value = localStorage.getItem(`${AUTH_STORAGE_KEY}:username`) || "";
+    replaceSession(storedToken.value ?? "", storedUsername.value ?? "");
     initialized.value = true;
   }
 
@@ -32,18 +43,15 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function setSession(nextToken: string, nextUsername: string) {
-    token.value = nextToken;
-    username.value = nextUsername;
+    replaceSession(nextToken, nextUsername);
     initialized.value = true;
-    if (import.meta.client) {
-      localStorage.setItem(AUTH_STORAGE_KEY, nextToken);
-      localStorage.setItem(`${AUTH_STORAGE_KEY}:username`, nextUsername);
-    }
+    storedToken.value = nextToken;
+    storedUsername.value = nextUsername;
   }
 
   async function logout() {
     const currentToken = token.value;
-    if (currentToken) {
+    if (currentToken !== "") {
       try {
         await $fetch("/api/auth/logout", {
           method: "POST",
@@ -58,22 +66,31 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function clearSession() {
-    token.value = "";
-    username.value = "";
+    replaceSession("", "");
     initialized.value = true;
-    if (import.meta.client) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(`${AUTH_STORAGE_KEY}:username`);
-    }
+    storedToken.value = null;
+    storedUsername.value = null;
+  }
+
+  function replaceSession(nextToken: string, nextUsername: string) {
+    if (token.value !== nextToken) sessionEpoch.value += 1;
+    token.value = nextToken;
+    username.value = nextUsername;
+  }
+
+  function isCurrentSession(epoch: number) {
+    return sessionEpoch.value === epoch;
   }
 
   return {
     token,
     username,
     initialized,
+    sessionEpoch,
     isAuthenticated,
     hydrate,
     login,
     logout,
+    isCurrentSession,
   };
 });

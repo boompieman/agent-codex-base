@@ -1,11 +1,13 @@
 import { SERVER_TURN_CACHE_LIMIT } from "~~/shared/config";
 import { applyAppServerEventToHistory } from "~~/shared/thread-history/app-server-events";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
+import type { ApprovalPolicy, RpcEnvelope, ThreadHistoryState } from "~~/shared/types";
+import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
 import type { ThreadOpenSnapshot } from "./types";
 
 type SnapshotEventReducer = (
   snapshot: ThreadOpenSnapshot,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
 ) => ThreadOpenSnapshot;
 
 const snapshotEventReducers: Record<string, SnapshotEventReducer> = {
@@ -14,9 +16,9 @@ const snapshotEventReducers: Record<string, SnapshotEventReducer> = {
   "thread/settings/updated": (snapshot, params) => ({
     ...snapshot,
     threadSettings: {
-      model: params.threadSettings?.model ?? null,
-      effort: params.threadSettings?.effort ?? null,
-      approvalPolicy: params.threadSettings?.approvalPolicy ?? null,
+      model: fieldFromRecord(params.threadSettings, "model"),
+      effort: fieldFromRecord(params.threadSettings, "effort"),
+      approvalPolicy: approvalPolicyFromRecord(params.threadSettings),
     },
   }),
   "thread/tokenUsage/updated": (snapshot, params) => ({
@@ -28,98 +30,96 @@ const snapshotEventReducers: Record<string, SnapshotEventReducer> = {
 export function applyEventToOpenSnapshot(
   snapshot: ThreadOpenSnapshot | null,
   method: string,
-  payload: any,
+  payload: RpcEnvelope,
   createdAt?: string | null,
 ) {
-  if (!snapshot) {
+  if (snapshot === null) {
     return snapshot;
   }
 
-  const params = payload?.params ?? {};
-  const history = trimSnapshotHistory(
-    applyAppServerEventToHistory({
-      history: snapshot.history,
-      currentThread: snapshot.thread,
-      threadId: String(params.threadId ?? snapshotThread(snapshot).id ?? ""),
-      method,
-      payload,
-      createdAt,
-    }),
-  );
+  const params = eventParams(payload.params);
+  const eventThreadId =
+    idFromUnknown(params.threadId) ?? idFromUnknown(snapshotThread(snapshot).id);
+  const reducedHistory = applyAppServerEventToHistory({
+    history: snapshot.history,
+    currentThread: snapshot.thread,
+    threadId: eventThreadId === null ? "" : String(eventThreadId),
+    method,
+    payload: { id: payload.id, params },
+    createdAt,
+  });
+  const history = trimSnapshotHistory(reducedHistory ?? snapshot.history);
   let nextSnapshot = withSnapshotHistory(snapshot, history);
   nextSnapshot = snapshotEventReducers[method]?.(nextSnapshot, params) ?? nextSnapshot;
   return nextSnapshot;
 }
 
-function trimSnapshotHistory(history: unknown) {
-  if (!history || typeof history !== "object") {
-    return history;
-  }
-  const thread = (history as any).thread;
-  if (!thread || typeof thread !== "object" || !Array.isArray(thread.turns)) {
-    return history;
-  }
+function eventParams(value: unknown): Record<string, unknown> {
+  return recordFromUnknown(value) ?? {};
+}
+
+function trimSnapshotHistory(history: ThreadHistoryState): ThreadHistoryState {
   return {
-    ...(history as Record<string, unknown>),
+    ...history,
     thread: {
-      ...thread,
-      turns: thread.turns.slice(-SERVER_TURN_CACHE_LIMIT),
+      ...history.thread,
+      turns: history.thread.turns.slice(-SERVER_TURN_CACHE_LIMIT),
     },
   };
 }
 
 function updateSnapshotThreadStatus(snapshot: ThreadOpenSnapshot, status: unknown) {
   const value = statusValue(status);
-  if (!value) {
+  if (value === null) {
     return snapshot;
   }
   return withSnapshotHistory(snapshot, {
-    ...(snapshot.history as any),
+    ...snapshot.history,
     thread: {
-      ...snapshotThread(snapshot),
+      ...snapshot.history.thread,
       status: value,
     },
   });
 }
 
-function withSnapshotHistory(snapshot: ThreadOpenSnapshot, history: unknown): ThreadOpenSnapshot {
-  const thread = snapshotHistoryThread(history) ?? snapshotThread(snapshot);
+function withSnapshotHistory(
+  snapshot: ThreadOpenSnapshot,
+  history: ThreadHistoryState,
+): ThreadOpenSnapshot {
   return {
     ...snapshot,
     history,
     thread: {
-      ...(snapshot.thread as any),
-      ...(isNestedThread(snapshot.thread) ? { thread } : thread),
+      ...snapshot.thread,
+      ...history.thread,
     },
   };
 }
 
-function snapshotHistoryThread(history: unknown) {
-  const thread = (history as any)?.thread;
-  return thread && typeof thread === "object" ? thread : null;
-}
-
 function snapshotThread(snapshot: ThreadOpenSnapshot) {
-  const historyThread = snapshotHistoryThread(snapshot.history);
-  if (historyThread) {
-    return historyThread;
-  }
-  const thread = isNestedThread(snapshot.thread)
-    ? (snapshot.thread as any).thread
-    : snapshot.thread;
-  return thread && typeof thread === "object" ? thread : { id: "" };
-}
-
-function isNestedThread(thread: unknown) {
-  return Boolean(thread && typeof thread === "object" && (thread as any).thread);
+  return snapshot.history.thread;
 }
 
 function statusValue(status: unknown) {
   if (typeof status === "string") {
     return status;
   }
-  if (status && typeof status === "object" && typeof (status as any).type === "string") {
-    return (status as any).type;
+  const record = recordFromUnknown(status);
+  if (record !== null) {
+    const type = record.type;
+    return typeof type === "string" ? type : null;
   }
   return null;
+}
+
+function fieldFromRecord(value: unknown, key: string) {
+  const record = recordFromUnknown(value);
+  if (record === null) return null;
+  const field = record[key];
+  return typeof field === "string" ? field : null;
+}
+
+function approvalPolicyFromRecord(value: unknown): ApprovalPolicy | null {
+  const policy = fieldFromRecord(value, "approvalPolicy");
+  return policy === "untrusted" || policy === "on-request" || policy === "never" ? policy : null;
 }

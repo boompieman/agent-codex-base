@@ -1,4 +1,22 @@
 import type { Locator, Page } from "@playwright/test";
+import type { RealtimeServerMessage } from "../../../shared/types";
+import {
+  installRealtimeThreadTurnsLoadRoute,
+  realtimeThreadTurnsLoadRequests,
+  releaseRealtimeThreadTurnsLoadRoute,
+} from "./realtime-route";
+
+interface FrameTracker {
+  animationFrameId: number | undefined;
+  samples: number[];
+  timeoutId: number | undefined;
+}
+
+declare global {
+  interface Window {
+    __codexGatewayFrameTracker?: FrameTracker;
+  }
+}
 
 export function buildTextTurns(start: number, end: number, prefix: string, lineCount = 1) {
   return Array.from({ length: end - start + 1 }, (_, index) => {
@@ -31,66 +49,30 @@ export function buildTextTurns(start: number, end: number, prefix: string, lineC
 
 export async function threadTurnCount(page: Page) {
   return await page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
+    const views = window.__codexGatewayE2e?.views;
     if (!views) throw new Error("Unable to locate gateway thread-view Pinia store");
     return views.history?.thread?.turns?.length ?? 0;
   });
 }
 
-export async function installDeferredThreadTurnsLoadStub(page: Page, response: unknown) {
-  await installThreadTurnsLoadStub(page, response, true);
-}
-
-export async function installThreadTurnsLoadStub(page: Page, response: unknown, deferred: boolean) {
-  await page.evaluate(
-    ({ response, deferred }) => {
-      const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-      const realtime = app?.config?.globalProperties?.$pinia?._s?.get("gateway-realtime");
-      if (!realtime) throw new Error("Unable to locate gateway realtime Pinia store");
-      const original = realtime.request.bind(realtime);
-      (window as any).__threadTurnsLoadRequests = [];
-      if (deferred) {
-        (window as any).__threadTurnsLoadResponse = response;
-        (window as any).__threadTurnsLoadPromise = new Promise((resolve) => {
-          (window as any).__releaseThreadTurnsLoad = () =>
-            resolve((window as any).__threadTurnsLoadResponse);
-        });
-      }
-      let requestSequence = 0;
-      realtime.request = async (buildMessage: (requestId: string) => any, timeoutMs?: number) => {
-        requestSequence += 1;
-        const requestId = `e2e-thread-turns-${requestSequence}`;
-        const request = buildMessage(requestId);
-        if (request?.type !== "thread.turns.load") {
-          return original(buildMessage, timeoutMs);
-        }
-        (window as any).__threadTurnsLoadRequests.push(request);
-        return deferred ? await (window as any).__threadTurnsLoadPromise : response;
-      };
-    },
-    { response, deferred },
-  );
+export async function installDeferredThreadTurnsLoadStub(
+  page: Page,
+  response: Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
+) {
+  installRealtimeThreadTurnsLoadRoute(page, response, true);
 }
 
 export async function releaseDeferredThreadTurnsLoad(page: Page) {
-  await page.evaluate(() => {
-    const release = (window as any).__releaseThreadTurnsLoad;
-    if (typeof release !== "function") {
-      throw new Error("Missing deferred thread turns release callback");
-    }
-    release();
-  });
+  releaseRealtimeThreadTurnsLoadRoute(page);
 }
 
 export async function threadTurnsLoadRequests(page: Page) {
-  return await page.evaluate(() => (window as any).__threadTurnsLoadRequests ?? []);
+  return realtimeThreadTurnsLoadRequests(page);
 }
 
 export async function requestOlderTurnsFromStore(page: Page) {
   await page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const turns = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-turns");
+    const turns = window.__codexGatewayE2e?.turns;
     if (!turns) throw new Error("Unable to locate gateway thread-turns Pinia store");
     void turns.loadOlderTurns();
   });
@@ -103,16 +85,21 @@ export async function startElementTopTracking(page: Page, text: string) {
 export async function startLocatorTopTracking(locator: Locator) {
   await locator.evaluate((element) => {
     const samples: number[] = [element.getBoundingClientRect().top];
+    const tracker: FrameTracker = {
+      animationFrameId: undefined,
+      samples,
+      timeoutId: undefined,
+    };
     const track = () => {
-      (window as any).__frameTrackerId = requestAnimationFrame(() => {
-        (window as any).__frameTrackerTimerId = window.setTimeout(() => {
+      tracker.animationFrameId = requestAnimationFrame(() => {
+        tracker.timeoutId = window.setTimeout(() => {
           samples.push(element.getBoundingClientRect().top);
           track();
         }, 0);
       });
     };
-    (window as any).__frameTrackerSamples = samples;
-    (window as any).__frameTrackerId = requestAnimationFrame(track);
+    window.__codexGatewayFrameTracker = tracker;
+    tracker.animationFrameId = requestAnimationFrame(track);
   });
 }
 
@@ -122,24 +109,31 @@ export async function startBottomDistanceTracking(page: Page) {
     if (!viewport) throw new Error("Missing chat viewport");
     const distance = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
     const samples: number[] = [distance()];
+    const tracker: FrameTracker = {
+      animationFrameId: undefined,
+      samples,
+      timeoutId: undefined,
+    };
     const track = () => {
-      (window as any).__frameTrackerId = requestAnimationFrame(() => {
-        (window as any).__frameTrackerTimerId = window.setTimeout(() => {
+      tracker.animationFrameId = requestAnimationFrame(() => {
+        tracker.timeoutId = window.setTimeout(() => {
           samples.push(distance());
           track();
         }, 0);
       });
     };
-    (window as any).__frameTrackerSamples = samples;
-    (window as any).__frameTrackerId = requestAnimationFrame(track);
+    window.__codexGatewayFrameTracker = tracker;
+    tracker.animationFrameId = requestAnimationFrame(track);
   });
 }
 
 export async function stopFrameTracking(page: Page) {
   return await page.evaluate(() => {
-    cancelAnimationFrame((window as any).__frameTrackerId);
-    clearTimeout((window as any).__frameTrackerTimerId);
-    return ((window as any).__frameTrackerSamples ?? []) as number[];
+    const tracker = window.__codexGatewayFrameTracker;
+    if (tracker?.animationFrameId !== undefined) cancelAnimationFrame(tracker.animationFrameId);
+    if (tracker?.timeoutId !== undefined) clearTimeout(tracker.timeoutId);
+    window.__codexGatewayFrameTracker = undefined;
+    return tracker?.samples ?? [];
   });
 }
 

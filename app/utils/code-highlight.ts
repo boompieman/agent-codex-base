@@ -1,56 +1,4 @@
-import {
-  bundledLanguages,
-  getSingletonHighlighter,
-  type BundledLanguage,
-  type Highlighter,
-} from "shiki";
-
-const SHIKI_THEMES = {
-  light: "github-light-default",
-  dark: "github-dark-default",
-} as const;
-const SHIKI_LANGUAGES = [
-  "bash",
-  "c",
-  "cpp",
-  "csharp",
-  "css",
-  "diff",
-  "dockerfile",
-  "go",
-  "graphql",
-  "html",
-  "javascript",
-  "json",
-  "jsx",
-  "markdown",
-  "nginx",
-  "php",
-  "python",
-  "ruby",
-  "rust",
-  "scss",
-  "shell",
-  "sql",
-  "stylus",
-  "tsx",
-  "toml",
-  "typescript",
-  "vue",
-  "xml",
-  "yaml",
-] as const satisfies readonly BundledLanguage[];
-
-let highlighterPromise: Promise<Highlighter> | null = null;
-const languageLoadPromises = new Map<string, Promise<void>>();
-
-export function getCodeHighlighter() {
-  highlighterPromise ??= getSingletonHighlighter({
-    langs: [...SHIKI_LANGUAGES],
-    themes: Object.values(SHIKI_THEMES),
-  });
-  return highlighterPromise;
-}
+import { loadCodeHighlighterRuntime } from "@/utils/browser-runtime/code-highlighter";
 
 export function escapeHtml(value: string) {
   return value
@@ -103,33 +51,28 @@ export function normalizeLanguage(value: string) {
     yml: "yaml",
     zsh: "shell",
   };
-  const normalized = (value || "").trim().toLowerCase();
-  return aliases[normalized] || normalized;
+  const normalized = (value ?? "").trim().toLowerCase();
+  return aliases[normalized] ?? normalized;
 }
 
 export async function highlightCode(value: string, language = "") {
   const normalizedLanguage = normalizeLanguage(language);
-  if (!normalizedLanguage || normalizedLanguage === "text" || normalizedLanguage === "plain") {
+  if (
+    normalizedLanguage === "" ||
+    normalizedLanguage === "text" ||
+    normalizedLanguage === "plain"
+  ) {
     return escapeHtml(value);
   }
-  if (!isBundledLanguage(normalizedLanguage)) {
-    return escapeHtml(value);
-  }
-  const highlighter = await getCodeHighlighter();
-  await ensureLanguageLoaded(highlighter, normalizedLanguage);
-  return highlighter.codeToHtml(value, {
-    lang: normalizedLanguage,
-    themes: SHIKI_THEMES,
-    // Shiki emits --shiki-light/--shiki-dark per token. CSS chooses the active variable, so a
-    // system or user theme change does not re-run syntax highlighting for every open document.
-    defaultColor: false,
-    structure: "inline",
-  });
+  const highlighter = await loadCodeHighlighterRuntime();
+  // The runtime emits --shiki-light/--shiki-dark per token. CSS switches variables without
+  // re-running syntax highlighting for every open document when the application theme changes.
+  return (await highlighter.highlightCode(value, normalizedLanguage)) ?? escapeHtml(value);
 }
 
 export function languageFromPath(path: string) {
-  const cleanPath = path.split("?")[0]?.split("#")[0] || "";
-  const fileName = cleanPath.split("/").pop()?.toLowerCase() || "";
+  const cleanPath = path.split("?")[0]?.split("#")[0] ?? "";
+  const fileName = cleanPath.split("/").pop()?.toLowerCase() ?? "";
   if (fileName === ".env" || fileName.startsWith(".env.")) {
     return "dotenv";
   }
@@ -162,10 +105,11 @@ export function languageFromPath(path: string) {
     "requirements.txt": "text",
     ssh_config: "ssh-config",
   };
-  if (byFileName[fileName]) {
-    return byFileName[fileName];
+  const fileNameLanguage = byFileName[fileName];
+  if (fileNameLanguage !== undefined) {
+    return fileNameLanguage;
   }
-  const extension = cleanPath.split(".").pop()?.toLowerCase() || "";
+  const extension = cleanPath.split(".").pop()?.toLowerCase() ?? "";
   const byExtension: Record<string, string> = {
     awk: "awk",
     bash: "shell",
@@ -276,27 +220,5 @@ export function languageFromPath(path: string) {
     zig: "zig",
     zsh: "shell",
   };
-  return byExtension[extension] || "";
-}
-
-function isBundledLanguage(language: string): language is BundledLanguage {
-  return language in bundledLanguages;
-}
-
-async function ensureLanguageLoaded(highlighter: Highlighter, language: BundledLanguage) {
-  if (highlighter.getLoadedLanguages().includes(language)) {
-    return;
-  }
-  const existing = languageLoadPromises.get(language);
-  if (existing) {
-    await existing;
-    return;
-  }
-  const next = highlighter.loadLanguage(language).then(() => undefined);
-  languageLoadPromises.set(language, next);
-  try {
-    await next;
-  } finally {
-    languageLoadPromises.delete(language);
-  }
+  return byExtension[extension] ?? "";
 }

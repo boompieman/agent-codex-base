@@ -26,13 +26,17 @@ export function normalizeNotificationSettings(
   settings?: Partial<GatewayNotificationSettings> | null,
 ): GatewayNotificationSettings {
   const defaults = defaultNotificationSettings();
+  const serverUrl = settings?.bark?.serverUrl?.trim();
+  const deviceKey = settings?.bark?.deviceKey?.trim();
+  const group = settings?.bark?.group?.trim();
   return {
     bark: {
       ...defaults.bark,
       ...settings?.bark,
-      serverUrl: settings?.bark?.serverUrl?.trim() || defaults.bark.serverUrl,
-      deviceKey: settings?.bark?.deviceKey?.trim() || "",
-      group: settings?.bark?.group?.trim() || defaults.bark.group,
+      serverUrl:
+        serverUrl === "" ? defaults.bark.serverUrl : (serverUrl ?? defaults.bark.serverUrl),
+      deviceKey: deviceKey ?? "",
+      group: group === "" ? defaults.bark.group : (group ?? defaults.bark.group),
     },
   };
 }

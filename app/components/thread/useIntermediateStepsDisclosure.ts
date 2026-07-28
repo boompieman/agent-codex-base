@@ -1,10 +1,11 @@
 import { reactive, watch, type ComputedRef } from "vue";
 import { itemStatusSignature, statusValue } from "./thread-turn-sections";
+import type { ThreadTimelineItem } from "~~/shared/types";
 
 interface IntermediateDisclosureTurn {
   id: string;
   status: unknown;
-  items: any[];
+  items: ThreadTimelineItem[];
   turnIsActive: boolean;
 }
 

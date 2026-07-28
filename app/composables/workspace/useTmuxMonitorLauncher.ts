@@ -2,12 +2,12 @@ import { createSharedComposable, useDocumentVisibility } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, watch } from "vue";
 import { useAuthStore } from "@/stores/auth";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
 
 export const useTmuxMonitorLauncher = createSharedComposable(() => {
   const auth = useAuthStore();
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const tmux = useGatewayTmuxStore();
   const { hosts } = storeToRefs(gateway);
   const { isAuthenticated } = storeToRefs(auth);

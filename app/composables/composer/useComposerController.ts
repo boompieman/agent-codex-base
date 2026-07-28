@@ -5,7 +5,7 @@ import { useComposerDraft } from "./useComposerDraft";
 import { useComposerSlashActions } from "./useComposerSlashActions";
 import { useComposerTurnSubmit } from "./useComposerTurnSubmit";
 import { useThreadSettingsControls } from "./useThreadSettingsControls";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
@@ -14,7 +14,7 @@ import { latestThreadPlanItem, planItemSummary } from "@/utils/thread-plan";
 import { useComposerSlashMenu } from "./useComposerSlashMenu";
 
 export function useComposerController() {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
@@ -26,7 +26,7 @@ export function useComposerController() {
     storeToRefs(composer);
   const { history } = storeToRefs(threadView);
   const selectedThreadStatus = computed(() =>
-    selectedHostId.value && selectedThreadId.value
+    selectedHostId.value !== null && selectedThreadId.value !== null
       ? runtime.statusFor(selectedHostId.value, selectedThreadId.value)
       : "idle",
   );
@@ -35,19 +35,19 @@ export function useComposerController() {
   const settings = useThreadSettingsControls();
   const attachmentUpload = useAttachmentUpload(selectedHostId, attachedFiles);
   const selectedRuntime = computed(() =>
-    selectedHostId.value && selectedThreadId.value
+    selectedHostId.value !== null && selectedThreadId.value !== null
       ? runtime.threadRuntimeProjection(selectedHostId.value, selectedThreadId.value)
       : null,
   );
-  const isThreadRunning = computed(() => Boolean(selectedRuntime.value?.canInterrupt));
-  const composerInputEnabled = computed(() =>
-    Boolean(selectedThreadId.value || selectedProjectId.value),
+  const isThreadRunning = computed(() => selectedRuntime.value?.canInterrupt === true);
+  const composerInputEnabled = computed(
+    () => selectedThreadId.value !== null || selectedProjectId.value !== null,
   );
   const selectedTurnOptions = () => {
     const effort =
       settings.selectedEffort.value === "default" ? undefined : settings.selectedEffort.value;
     return {
-      model: settings.activeModel.value || undefined,
+      model: settings.activeModel.value === "" ? undefined : settings.activeModel.value,
       effort,
       approvalPolicy:
         settings.selectedApprovalMode.value === "custom"
@@ -68,15 +68,15 @@ export function useComposerController() {
   const activePlanSummary = computed(() =>
     submit.planModeActive.value ? planItemSummary(latestThreadPlanItem(history.value)) : "",
   );
-  const canSendTurn = computed(() =>
-    Boolean(
-      selectedThreadId.value &&
+  const canSendTurn = computed(
+    () =>
+      selectedThreadId.value !== null &&
       submit.hasComposerInput.value &&
       !attachmentUpload.uploadingAttachments.value,
-    ),
   );
-  const canInterruptTurn = computed(() =>
-    Boolean(selectedThreadId.value && isThreadRunning.value && !submit.hasComposerInput.value),
+  const canInterruptTurn = computed(
+    () =>
+      selectedThreadId.value !== null && isThreadRunning.value && !submit.hasComposerInput.value,
   );
   const canUsePrimaryAction = computed(() =>
     Boolean(
@@ -125,7 +125,7 @@ export function useComposerController() {
       return;
     }
     event.preventDefault();
-    if (!selectedThreadId.value) {
+    if (selectedThreadId.value === null) {
       return;
     }
     void submitComposer();

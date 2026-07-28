@@ -3,6 +3,7 @@ import { Loader2Icon } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth";
+import { gatewayErrorMessage } from "@/utils/gateway-error";
 
 const auth = useAuthStore();
 const { t } = useI18n();
@@ -16,8 +17,8 @@ async function submit() {
   loading.value = true;
   try {
     await auth.login({ username: username.value, password: password.value });
-  } catch (caught: any) {
-    error.value = caught?.data?.message || caught?.message || t("app.loginFailed");
+  } catch (caught: unknown) {
+    error.value = gatewayErrorMessage(caught, t("app.loginFailed"));
   } finally {
     loading.value = false;
   }

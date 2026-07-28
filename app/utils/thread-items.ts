@@ -1,19 +1,27 @@
-export function threadItemText(item: Record<string, any>) {
+import type { ThreadHistoryItem } from "~~/shared/types";
+import { recordFromUnknown } from "~~/shared/utils/records";
+
+export function threadItemText(item: ThreadHistoryItem) {
   if (item.type === "userMessage") {
-    return (item.content || [])
-      .map((part: any) => part?.text || part?.content || "")
+    return (Array.isArray(item.content) ? item.content : [])
+      .map((part) => {
+        const record = recordFromUnknown(part);
+        return textValue(record?.text) || textValue(record?.content);
+      })
       .filter(Boolean)
       .join("\n");
   }
   if (item.type === "agentMessage" || item.type === "plan") {
-    return item.text || "";
+    return textValue(item.text);
   }
   if (item.type === "reasoning") {
-    return [...(item.summary || []), ...(item.content || [])].filter(Boolean).join("\n");
+    const summary = Array.isArray(item.summary) ? item.summary : [];
+    const content = Array.isArray(item.content) ? item.content : [];
+    return [...summary, ...content].map(textValue).filter(Boolean).join("\n");
   }
   if (item.type === "hookPrompt") {
-    return (item.fragments || [])
-      .map((fragment: any) => fragment?.text || "")
+    return (Array.isArray(item.fragments) ? item.fragments : [])
+      .map((fragment) => textValue(recordFromUnknown(fragment)?.text))
       .filter(Boolean)
       .join("\n");
   }
@@ -21,7 +29,10 @@ export function threadItemText(item: Record<string, any>) {
     return [
       item.explanation,
       ...(Array.isArray(item.plan)
-        ? item.plan.map((step: any) => `- [${step?.status || "pending"}] ${step?.step || ""}`)
+        ? item.plan.map((step) => {
+            const record = recordFromUnknown(step);
+            return `- [${textValue(record?.status) || "pending"}] ${textValue(record?.step)}`;
+          })
         : []),
     ]
       .filter(Boolean)
@@ -34,11 +45,11 @@ export function truncateText(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit)}\n...` : value;
 }
 
-export function statusValue(status: any) {
-  return typeof status === "string" ? status : status?.type;
+export function statusValue(status: unknown) {
+  return typeof status === "string" ? status : recordFromUnknown(status)?.type;
 }
 
-export function isItemInProgress(item: Record<string, any>) {
+export function isItemInProgress(item: ThreadHistoryItem) {
   const status = statusValue(item.status);
   return (
     status === "inProgress" ||
@@ -48,6 +59,15 @@ export function isItemInProgress(item: Record<string, any>) {
     status === "pending" ||
     status === "starting"
   );
+}
+
+export function threadItemResultText(item: ThreadHistoryItem) {
+  if (typeof item.result === "string") return item.result;
+  return typeof item.result?.text === "string" ? item.result.text : "";
+}
+
+function textValue(value: unknown) {
+  return typeof value === "string" ? value : "";
 }
 
 export function jsonPreview(value: unknown) {

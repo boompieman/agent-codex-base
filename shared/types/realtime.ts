@@ -35,6 +35,7 @@ export type RealtimeClientMessage =
       hostId: number;
       threadId: string;
       afterId?: number;
+      afterEpoch?: string;
     }
   | {
       type: "thread.unsubscribe";
@@ -194,12 +195,21 @@ export type RealtimeServerMessage =
       type: "thread.event";
       event: GatewayEvent;
     }
+  | {
+      type: "thread.events.gap";
+      hostId: number;
+      threadId: string;
+      afterId: number;
+      lastEventId: number;
+      eventEpoch: string;
+    }
   | ({
       type: "thread.snapshot";
       requestId: string;
       hostId: number;
       threadId: string;
       lastEventId: number;
+      eventEpoch: string;
     } & ThreadOpenResult)
   | ({
       type: "thread.started";
@@ -207,6 +217,7 @@ export type RealtimeServerMessage =
       hostId: number;
       threadId: string;
       lastEventId: number;
+      eventEpoch: string;
     } & ThreadOpenResult)
   | ({
       type: "thread.turns.page";

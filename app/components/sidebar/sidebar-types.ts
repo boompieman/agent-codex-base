@@ -1,6 +1,6 @@
-import type { HostRecord, ProjectRecord } from "~~/shared/types";
+import type { HostRecord, PinnedThreadRecord, ProjectRecord } from "~~/shared/types";
 
-export type { HostRecord, ProjectRecord };
+export type { HostRecord, PinnedThreadRecord, ProjectRecord };
 
 /** App-server thread list fields vary by Codex release. Keep the UI boundary explicit without
  * leaking `any` through the Host/Project tree. */
@@ -9,3 +9,5 @@ export interface SidebarThread extends Record<string, unknown> {
   updatedAt?: number | null;
   pinned?: boolean;
 }
+
+export type SidebarThreadRow = SidebarThread | PinnedThreadRecord;

@@ -1,18 +1,21 @@
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
+import { useGatewayConfigStore } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { appServerTurnErrorFromNotification } from "../errors";
 import { pinnedKey, titleForThread } from "../thread-utils/identity";
 import type { GatewayEventHandlerRegistry } from "./types";
+import { idFromUnknown } from "~~/shared/utils/records";
 
 export const errorEventHandlers: GatewayEventHandlerRegistry = {
   error: (event, params, threadId) => {
-    const gateway = useGatewayStore();
+    const gateway = useGatewayBootstrapStore();
     const error = appServerTurnErrorFromNotification(params, gateway.t);
-    const turnId = typeof params.turnId === "string" ? params.turnId : String(params.turnId ?? "");
+    const turnIdValue = idFromUnknown(params.turnId);
+    const turnId = turnIdValue === null ? "" : String(turnIdValue);
     if (
-      turnId &&
+      turnId !== "" &&
       useGatewayThreadTurnsStore().maybeQueueServerOverloadedRetry(
         event.hostId,
         threadId,
@@ -24,17 +27,17 @@ export const errorEventHandlers: GatewayEventHandlerRegistry = {
     gateway.setError(threadScopedErrorMessage(event.hostId, threadId, error.toDisplayMessage()), {
       hostId: event.hostId,
       threadId,
-      turnId: turnId || null,
+      turnId: turnId === "" ? null : turnId,
       transient: error.willRetry,
     });
   },
   "thread/realtime/error": (event, params, threadId) => {
-    const gateway = useGatewayStore();
+    const gateway = useGatewayBootstrapStore();
     gateway.setError(
       threadScopedErrorMessage(
         event.hostId,
         threadId,
-        params.message || gateway.t("app.appServerError"),
+        typeof params.message === "string" ? params.message : gateway.t("app.appServerError"),
       ),
       { hostId: event.hostId, threadId },
     );
@@ -42,17 +45,17 @@ export const errorEventHandlers: GatewayEventHandlerRegistry = {
 };
 
 function threadScopedErrorMessage(hostId: number, threadId: string, message: string) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   return [
     gateway.t("app.threadErrorContext", { title: threadErrorTitle(hostId, threadId) }),
     message,
   ]
-    .filter(Boolean)
+    .filter((value) => value !== "")
     .join("\n");
 }
 
 function threadErrorTitle(hostId: number, threadId: string) {
-  const gateway = useGatewayStore();
+  const config = useGatewayConfigStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   const key = pinnedKey(hostId, threadId);
@@ -61,9 +64,9 @@ function threadErrorTitle(hostId: number, threadId: string) {
       ? views.currentThread
       : null;
   const view = views.threadViews[key]?.currentThread;
-  const listed = navigation.threads.find((thread: any) => String(thread?.id) === threadId);
-  const pinned = gateway.gatewayConfig.pinnedThreads.find(
+  const listed = navigation.threads.find((thread) => String(thread.id) === threadId);
+  const pinned = config.gatewayConfig.pinnedThreads.find(
     (thread) => thread.hostId === hostId && thread.threadId === threadId,
   );
-  return titleForThread(selected || view || listed || pinned || { id: threadId });
+  return titleForThread(selected ?? view ?? listed ?? pinned ?? { id: threadId });
 }

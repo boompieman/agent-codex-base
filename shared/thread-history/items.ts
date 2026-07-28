@@ -1,31 +1,29 @@
 import { findTurnForItem, sameItem, syntheticTurnIdForItem, turnId } from "./item-identity";
 import { mergeThreadItem } from "./item-merge";
 import { ensureHistoryThread } from "./shape";
-import type { ThreadHistoryItem } from "./types";
+import type { AppServerThread } from "../types/thread";
+import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
 
 export function mergeItemIntoLatestTurn(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   item: ThreadHistoryItem,
-) {
-  if (!item || typeof item !== "object") {
-    return history;
-  }
-  const itemTurnId = item.turnId ? String(item.turnId) : "";
+): ThreadHistoryState {
+  const nextHistory = ensureHistoryThread(history, currentThread, threadId);
+  const itemTurnId =
+    typeof item.turnId === "string" || typeof item.turnId === "number" ? String(item.turnId) : "";
   const syntheticTurnId = syntheticTurnIdForItem(item);
   if (!itemTurnId && !syntheticTurnId) {
-    return history;
+    return nextHistory;
   }
-
-  const nextHistory = ensureHistoryThread(history, currentThread, threadId);
   const turns = nextHistory.thread.turns;
   const existing = findTurnForItem(turns, item);
   if (existing) {
-    const existingItems = Array.isArray(existing.turn.items) ? [...existing.turn.items] : [];
+    const existingItems = [...(existing.turn.items ?? [])];
     const existingItem = existingItems[existing.itemIndex];
     if (!existingItem) {
-      return history;
+      return nextHistory;
     }
     existing.turn.items = existingItems;
     existing.turn.items[existing.itemIndex] = mergeThreadItem(existingItem, item);
@@ -42,7 +40,7 @@ export function mergeItemIntoLatestTurn(
     turnIndex = turns.length - 1;
   }
   if (!Array.isArray(turn.items)) {
-    return history;
+    return nextHistory;
   } else {
     turn.items = [...turn.items];
   }
@@ -77,17 +75,16 @@ function isActiveItemStatus(status: unknown) {
 }
 
 export function insertSteerItemIntoActiveTurn(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   turnIdValue: string,
   item: ThreadHistoryItem,
-) {
-  if (!item || typeof item !== "object" || !turnIdValue) {
-    return history;
-  }
-
+): ThreadHistoryState {
   const nextHistory = ensureHistoryThread(history, currentThread, threadId);
+  if (turnIdValue.length === 0) {
+    return nextHistory;
+  }
   const turns = nextHistory.thread.turns;
   let turnIndex = turns.findIndex((candidate) => turnId(candidate) === turnIdValue);
   let turn = turnIndex >= 0 ? turns[turnIndex] : null;
@@ -97,15 +94,15 @@ export function insertSteerItemIntoActiveTurn(
     turnIndex = turns.length - 1;
   }
   if (!Array.isArray(turn.items)) {
-    return history;
+    return nextHistory;
   }
 
   const existing = findTurnForItem(turns, item);
   if (existing) {
-    const existingItems = Array.isArray(existing.turn.items) ? [...existing.turn.items] : [];
+    const existingItems = [...(existing.turn.items ?? [])];
     const existingItem = existingItems[existing.itemIndex];
     if (!existingItem) {
-      return history;
+      return nextHistory;
     }
     existing.turn.items = existingItems;
     existing.turn.items[existing.itemIndex] = mergeThreadItem(existingItem, item);

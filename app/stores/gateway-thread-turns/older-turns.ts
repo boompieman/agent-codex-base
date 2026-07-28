@@ -1,7 +1,7 @@
 import { OLDER_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import { mergeThreadTurns } from "~~/shared/thread-history/turns";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { cacheSelectedThreadView } from "@/stores/gateway/thread-open/view-state";
@@ -9,15 +9,17 @@ import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-ut
 import { isStaleThreadCursorError } from "./stale-cursor";
 import { requestThreadTurnsPage } from "./transport";
 import type { Translate } from "./types";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export async function loadOlderTurns(t: Translate, options: { limit?: number } = {}) {
-  const gateway = useGatewayStore();
+  const sessionIsCurrent = captureSessionEpoch();
+  const gateway = useGatewayBootstrapStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   if (
-    !navigation.selectedHostId ||
-    !navigation.selectedThreadId ||
-    !views.olderTurnsCursor ||
+    navigation.selectedHostId === null ||
+    navigation.selectedThreadId === null ||
+    views.olderTurnsCursor === null ||
     views.loadingOlderTurns
   ) {
     return;
@@ -35,6 +37,13 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
       limit: options.limit ?? OLDER_TURN_PAGE_LIMIT,
       sortDirection: "desc",
     });
+    if (
+      !sessionIsCurrent() ||
+      navigation.selectedHostId !== hostId ||
+      navigation.selectedThreadId !== threadId
+    ) {
+      return;
+    }
     const turns = threadTurnsFromHistory(result.history);
     views.history = mergeThreadTurns(
       views.history,
@@ -47,6 +56,7 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
     views.newerTurnsCursor = result.turnsPage.backwardsCursor ?? views.newerTurnsCursor;
     cacheSelectedThreadView();
   } catch (error: unknown) {
+    if (!sessionIsCurrent()) return;
     if (isStaleThreadCursorError(error)) {
       if (navigation.selectedHostId !== hostId || navigation.selectedThreadId !== threadId) {
         return;
@@ -62,6 +72,12 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
       { hostId, projectId, threadId },
     );
   } finally {
-    views.loadingOlderTurns = false;
+    if (
+      sessionIsCurrent() &&
+      navigation.selectedHostId === hostId &&
+      navigation.selectedThreadId === threadId
+    ) {
+      views.loadingOlderTurns = false;
+    }
   }
 }

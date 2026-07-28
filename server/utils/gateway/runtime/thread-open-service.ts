@@ -1,4 +1,4 @@
-import type { HostRecord } from "~~/shared/types";
+import type { AppServerThread, HostRecord } from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import {
@@ -16,6 +16,7 @@ import { runtimeLog } from "./runtime-log";
 import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
 import { currentGatewayUserId } from "../state/memory";
+import { parseThreadResumeResult, parseThreadStartResult } from "~~/shared/runtime/app-server";
 
 export class ThreadOpenService {
   private readonly pendingRefreshes = new Map<
@@ -79,17 +80,22 @@ export class ThreadOpenService {
   startedThreadResult(
     host: HostRecord,
     projectId: number | null,
-    rawResult: any,
+    rawResult: unknown,
     defaultCwd: unknown,
   ) {
-    const thread = {
-      ...(rawResult.thread ?? rawResult),
-      cwd: (rawResult.thread ?? rawResult)?.cwd ?? defaultCwd ?? null,
+    const parsed = parseThreadStartResult(rawResult);
+    const thread: AppServerThread = {
+      ...parsed.thread,
+      cwd:
+        (typeof parsed.thread.cwd === "string" ? parsed.thread.cwd : null) ??
+        (typeof defaultCwd === "string" ? defaultCwd : null),
     };
     const threadId = String(thread.id);
     threadMetadataStore.record(host.id, projectId, thread);
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
-    const history = { thread: { ...thread, turns: thread.turns ?? [] } };
+    const history = {
+      thread: { ...thread, turns: Array.isArray(thread.turns) ? thread.turns : [] },
+    };
     const turnsPage = {
       nextCursor: null,
       backwardsCursor: null,
@@ -99,7 +105,7 @@ export class ThreadOpenService {
       history,
       projectId,
       turnsPage,
-      threadSettings: extractThreadSettings(rawResult),
+      threadSettings: extractThreadSettings(parsed.raw),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
     return {
@@ -114,7 +120,7 @@ export class ThreadOpenService {
         threadSettings: snapshot.threadSettings,
         tokenUsage: snapshot.tokenUsage,
         projectId,
-        project: projectId ? projectStore.get(projectId) : null,
+        project: projectId === null ? null : projectStore.get(projectId),
         turnsPage,
         recentEvents: snapshotRecentEvents(),
       },
@@ -129,7 +135,7 @@ export class ThreadOpenService {
   ): Promise<ReturnTypeResult> {
     const key = refreshKey(host.id, threadId);
     const pending = this.pendingRefreshes.get(key);
-    if (pending) {
+    if (pending !== undefined) {
       // A wider resume may reuse an equal/wider in-flight request, but it must
       // never inherit a narrower one. Wait for the narrow refresh to settle,
       // then retry so the server cache monotonically expands to the requested
@@ -178,7 +184,7 @@ export class ThreadOpenService {
       history: snapshot.history,
       runtimeStatus: runtimeStatusFromThreadState(snapshot.thread, snapshot.history, recentEvents),
       projectId: resolvedProjectId,
-      project: resolvedProjectId ? projectStore.get(resolvedProjectId) : null,
+      project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
@@ -204,7 +210,7 @@ export class ThreadOpenService {
       history: snapshot.history,
       runtimeStatus: runtimeStatusFromThreadState(snapshot.thread, snapshot.history, recentEvents),
       projectId: resolvedProjectId,
-      project: resolvedProjectId ? projectStore.get(resolvedProjectId) : null,
+      project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
@@ -219,16 +225,11 @@ export class ThreadOpenService {
     limit: number,
   ) {
     const controller = await this.registry.getController(host, threadId);
-    const resume = await controller.resumeWithInitialTurns(limit);
-    const thread = resume.thread ?? resume;
+    const resume = parseThreadResumeResult(await controller.resumeWithInitialTurns(limit));
+    const thread = resume.thread;
     const initialTurnsPage = resume.initialTurnsPage;
-    if (!initialTurnsPage) {
-      throw new Error("thread/resume did not return initialTurnsPage");
-    }
-
-    const threadRecord = thread.thread ?? thread;
-    const resolvedProjectId = resolveProjectId(host.id, projectId, threadRecord?.cwd);
-    threadMetadataStore.record(host.id, resolvedProjectId, threadRecord);
+    const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
+    threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
     const snapshot = {
@@ -255,14 +256,14 @@ function snapshotSatisfiesTurnLimit(snapshot: ThreadOpenSnapshot, limit: number)
 
 function refreshKey(hostId: number, threadId: string) {
   const userId = currentGatewayUserId();
-  if (!userId) {
+  if (userId === null) {
     throw new Error("Thread refresh requires an authenticated user scope");
   }
   return `${userId}:${hostId}:${threadId}`;
 }
 
 function resolveProjectId(hostId: number, projectId: number | null, cwd: unknown) {
-  if (projectId || typeof cwd !== "string" || !cwd.trim()) {
+  if (projectId !== null || typeof cwd !== "string" || cwd.trim() === "") {
     return projectId;
   }
   return projectStore.ensureForPath(hostId, cwd).id;

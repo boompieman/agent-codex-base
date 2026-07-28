@@ -3,8 +3,11 @@ import { Socket } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "ssh2";
-import { SUPPORTED_CODEX_VERSION } from "../../server/utils/gateway/infra/codex-version";
+import type { Client } from "ssh2";
+import { SUPPORTED_CODEX_VERSION } from "../../server/utils/gateway/infra/codex/codex-version";
+import { connectTestSsh, execTestSsh } from "./helpers/ssh-client";
+import { nodeErrorCode } from "./helpers/node-errors";
+import { firstNonEmptyString } from "../../shared/utils/strings";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const runtimeDir = join(rootDir, ".e2e-runtime", "ssh-container");
@@ -32,21 +35,22 @@ interface RemoteEnv {
 
 export async function startDockerEnvironment() {
   await mkdir(runtimeDir, { recursive: true });
-  const password = process.env.E2E_REMOTE_PASSWORD || "codex";
+  const password = firstNonEmptyString([process.env.E2E_REMOTE_PASSWORD]) ?? "codex";
   const shared = {
-    port: process.env.E2E_REMOTE_PORT || "22",
-    username: process.env.E2E_REMOTE_USERNAME || "codex",
+    port: firstNonEmptyString([process.env.E2E_REMOTE_PORT]) ?? "22",
+    username: firstNonEmptyString([process.env.E2E_REMOTE_USERNAME]) ?? "codex",
     password,
-    projectPath: process.env.E2E_REMOTE_PROJECT_PATH || "/workspace/codex-gateway",
+    projectPath:
+      firstNonEmptyString([process.env.E2E_REMOTE_PROJECT_PATH]) ?? "/workspace/codex-gateway",
     imagePath: "/home/codex/e2e-image.png",
     supportedCodexVersion: SUPPORTED_CODEX_VERSION,
-    testModel: process.env.E2E_CODEX_MODEL || "gpt-5.4-mini",
+    testModel: firstNonEmptyString([process.env.E2E_CODEX_MODEL]) ?? "gpt-5.4-mini",
     proxyUrl: null,
   };
   const environments: RemoteEnv[] = [
     {
       ...shared,
-      host: process.env.E2E_REMOTE_HOST || "ssh-target",
+      host: firstNonEmptyString([process.env.E2E_REMOTE_HOST]) ?? "ssh-target",
       runtimeFixture: "empty-runtime",
       initialNodeVersion: null,
       initialCodexVersion: null,
@@ -54,7 +58,8 @@ export async function startDockerEnvironment() {
     },
     {
       ...shared,
-      host: process.env.E2E_LEGACY_NODE_REMOTE_HOST || "ssh-target-legacy-node",
+      host:
+        firstNonEmptyString([process.env.E2E_LEGACY_NODE_REMOTE_HOST]) ?? "ssh-target-legacy-node",
       runtimeFixture: "legacy-node",
       initialNodeVersion: "14.21.3",
       initialCodexVersion: null,
@@ -62,10 +67,12 @@ export async function startDockerEnvironment() {
     },
     {
       ...shared,
-      host: process.env.E2E_LEGACY_CODEX_REMOTE_HOST || "ssh-target-legacy-codex",
+      host:
+        firstNonEmptyString([process.env.E2E_LEGACY_CODEX_REMOTE_HOST]) ??
+        "ssh-target-legacy-codex",
       runtimeFixture: "legacy-codex",
       initialNodeVersion: "22.23.1",
-      initialCodexVersion: process.env.E2E_CODEX_CLI_VERSION || "0.140.0",
+      initialCodexVersion: firstNonEmptyString([process.env.E2E_CODEX_CLI_VERSION]) ?? "0.140.0",
       codexBin: "/home/codex/.nvm/versions/node/v22.23.1/bin/codex",
     },
   ];
@@ -92,16 +99,16 @@ async function waitForSsh(host: string, port: string) {
   while (Date.now() < deadline) {
     try {
       await waitForPort(host, Number(port), 2_000);
-      const connection = await connectSsh({
+      const connection = await connectTestSsh({
         host,
         port,
         username: "codex",
-        password: process.env.E2E_REMOTE_PASSWORD || "codex",
+        password: firstNonEmptyString([process.env.E2E_REMOTE_PASSWORD]) ?? "codex",
       });
       connection.end();
       return;
-    } catch (error: any) {
-      lastError = error?.message || String(error);
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error.message : String(error);
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
@@ -131,13 +138,14 @@ function waitForPort(host: string, port: number, timeoutMs: number) {
 
 async function prepareRemoteCodexHome(env: RemoteEnv) {
   const sourceCodexHome =
-    process.env.E2E_CODEX_HOME || process.env.CODEX_HOME || join(homedir(), ".codex");
+    firstNonEmptyString([process.env.E2E_CODEX_HOME, process.env.CODEX_HOME]) ??
+    join(homedir(), ".codex");
   const codexHome = join(runtimeDir, "codex-home");
   await prepareCodexHome(sourceCodexHome, codexHome);
 
-  const connection = await connectSsh(env);
+  const connection = await connectTestSsh(env);
   try {
-    await execSsh(connection, "rm -rf /home/codex/.codex && mkdir -p /home/codex/.codex");
+    await execTestSsh(connection, "rm -rf /home/codex/.codex && mkdir -p /home/codex/.codex");
     await uploadDirectory(connection, codexHome, "/home/codex/.codex");
   } finally {
     connection.end();
@@ -145,9 +153,9 @@ async function prepareRemoteCodexHome(env: RemoteEnv) {
 }
 
 async function writeRemoteImage(env: RemoteEnv) {
-  const connection = await connectSsh(env);
+  const connection = await connectTestSsh(env);
   try {
-    await execSsh(
+    await execTestSsh(
       connection,
       `printf %s iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg== | base64 -d > ${env.imagePath}`,
     );
@@ -156,53 +164,10 @@ async function writeRemoteImage(env: RemoteEnv) {
   }
 }
 
-async function connectSsh(env: Pick<RemoteEnv, "host" | "port" | "username" | "password">) {
-  const client = new Client();
-  return await new Promise<Client>((resolve, reject) => {
-    client
-      .on("ready", () => resolve(client))
-      .on("error", reject)
-      .connect({
-        host: env.host,
-        port: Number(env.port),
-        username: env.username,
-        password: env.password,
-        readyTimeout: 10_000,
-      });
-  });
-}
-
-async function execSsh(connection: Client, command: string) {
-  const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
-    (resolve, reject) => {
-      connection.exec(command, (error, channel) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        let stdout = "";
-        let stderr = "";
-        channel.on("data", (chunk: Buffer) => {
-          stdout += chunk.toString("utf8");
-        });
-        channel.stderr.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString("utf8");
-        });
-        channel.on("error", reject);
-        channel.on("close", (code: number | null) => resolve({ code, stdout, stderr }));
-      });
-    },
-  );
-  if (result.code !== 0) {
-    throw new Error(result.stderr || result.stdout || `Remote command failed: ${command}`);
-  }
-  return result;
-}
-
 export async function execRemoteSsh(env: RemoteEnv, command: string) {
-  const connection = await connectSsh(env);
+  const connection = await connectTestSsh(env);
   try {
-    return await execSsh(connection, command);
+    return await execTestSsh(connection, command);
   } finally {
     connection.end();
   }
@@ -252,7 +217,7 @@ async function uploadDirectoryEntries(
 async function mkdirRemote(sftp: import("ssh2").SFTPWrapper, path: string) {
   await new Promise<void>((resolve, reject) => {
     sftp.mkdir(path, (error) => {
-      if (!error || (error as any).code === 4) {
+      if (error === undefined || error === null || nodeErrorCode(error) === 4) {
         resolve();
         return;
       }
@@ -290,8 +255,8 @@ async function copyOptional(source: string, target: string) {
   try {
     await mkdir(dirname(target), { recursive: true });
     await copyFile(source, target);
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if (nodeErrorCode(error) !== "ENOENT") {
       throw error;
     }
   }

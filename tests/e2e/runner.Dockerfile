@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.61.1-noble
+FROM mcr.microsoft.com/playwright:v1.62.0-noble
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -11,7 +11,10 @@ RUN corepack enable
 
 WORKDIR /workspace/codex-gateway
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Turbo's task graph and workspace package sources are dependency inputs, not application inputs.
+# Copy them before the mutable app tree so ordinary UI edits reuse pnpm and prebuilt vendor layers.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages ./packages
 RUN --mount=type=cache,id=codex-gateway-e2e-pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile
 

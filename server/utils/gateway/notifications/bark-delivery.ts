@@ -1,37 +1,43 @@
 import { normalizeNotificationSettings } from "~~/shared/config";
-import { gatewayMemoryState } from "../state/memory";
-import { sendBarkNotification } from "./bark-provider";
+import { currentGatewayUserId, gatewayMemoryState } from "../state/memory";
+import { BarkRequestError, sendBarkNotification } from "./bark-provider";
 import type { ServerNotification } from "~~/shared/types";
+import pRetry from "p-retry";
 
 const MAX_DELIVERED_NOTIFICATION_KEYS = 1_000;
+const pendingDeliveries = new Map<string, Promise<void>>();
 
-export function deliverBarkNotification(notification: ServerNotification) {
+export async function deliverBarkNotification(notification: ServerNotification) {
+  const userId = currentGatewayUserId();
+  if (userId === null) throw new Error("Bark delivery requires an authenticated user scope");
+  const deliveryKey = `${userId}:${notification.key}`;
   const settings = normalizeNotificationSettings(gatewayMemoryState.notifications).bark;
   if (!settings.enabled || !settings.deviceKey) {
     return;
   }
-  if (alreadyDelivered(notification.key) || deliveryPending(notification.key)) {
-    return;
-  }
+  if (alreadyDelivered(notification.key)) return;
+  const pending = pendingDeliveries.get(deliveryKey);
+  if (pending !== undefined) return pending;
   markPending(notification.key);
 
-  void sendBarkNotification(settings, notification)
+  const delivery = pRetry(() => sendBarkNotification(settings, notification), {
+    retries: 4,
+    minTimeout: 1_000,
+    maxTimeout: 15_000,
+    factor: 2,
+    shouldRetry: ({ error }) => !(error instanceof BarkRequestError) || error.retryable,
+  })
     .then(() => markDelivered(notification.key))
-    .catch((error) => {
-      console.error("[gateway] Bark notification failed", {
-        key: notification.key,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    })
-    .finally(() => clearPending(notification.key));
+    .finally(() => {
+      pendingDeliveries.delete(deliveryKey);
+      clearPending(notification.key);
+    });
+  pendingDeliveries.set(deliveryKey, delivery);
+  return delivery;
 }
 
 function alreadyDelivered(key: string) {
   return gatewayMemoryState.deliveredNotificationKeys.includes(key);
-}
-
-function deliveryPending(key: string) {
-  return gatewayMemoryState.pendingNotificationKeys.includes(key);
 }
 
 function markPending(key: string) {

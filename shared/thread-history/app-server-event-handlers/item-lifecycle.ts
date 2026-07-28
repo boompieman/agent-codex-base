@@ -5,6 +5,8 @@ import type {
   AppServerHistoryReducerRegistry,
   ApplyAppServerEventInput,
 } from "./types";
+import { recordFromUnknown, stringFromUnknown } from "../../utils/records";
+import type { ThreadFileChange } from "../types";
 
 let fileChangeSequence = 0;
 
@@ -19,8 +21,8 @@ export const itemLifecycleReducers = {
       id: idParam(params.itemId),
       turnId: idParam(params.turnId),
       status: "waitingForApproval",
-      command: params.command,
-      cwd: params.cwd,
+      command: stringFromUnknown(params.command),
+      cwd: stringFromUnknown(params.cwd),
       pendingApproval: {
         requestId,
         method: input.method,
@@ -57,26 +59,36 @@ function upsertStartedOrCompletedItem(
   phase: "started" | "completed",
 ) {
   const item = itemParam(params);
-  if (!item) {
+  if (item === null) {
     return input.history;
   }
-  const eventIso = input.createdAt || new Date().toISOString();
+  const eventIso = input.createdAt ?? new Date().toISOString();
   return mergeItemIntoLatestTurn(input.history, input.currentThread, input.threadId, {
     ...item,
     turnId: idParam(params.turnId),
     status: item.status ?? (phase === "started" ? "inProgress" : "completed"),
-    ...(phase === "started" && !item.startedAt ? { startedAt: eventIso } : {}),
-    ...(phase === "completed" && !item.completedAt ? { completedAt: eventIso } : {}),
+    ...(phase === "started" && item.startedAt == null ? { startedAt: eventIso } : {}),
+    ...(phase === "completed" && item.completedAt == null ? { completedAt: eventIso } : {}),
   });
 }
 
-function tagFileChanges(changes: unknown) {
+function tagFileChanges(changes: unknown): ThreadFileChange[] {
   if (!Array.isArray(changes)) {
     return [];
   }
-  return changes.map((change) =>
-    change && typeof change === "object"
-      ? { ...(change as Record<string, unknown>), sequence: ++fileChangeSequence }
-      : change,
-  );
+  return changes.flatMap((change) => {
+    const record = recordFromUnknown(change);
+    if (record === null) return [];
+    const kindRecord = recordFromUnknown(record.kind);
+    const kind =
+      typeof record.kind === "string"
+        ? record.kind
+        : kindRecord
+          ? {
+              type: stringFromUnknown(kindRecord.type),
+              kind: stringFromUnknown(kindRecord.kind),
+            }
+          : null;
+    return [{ ...record, kind, sequence: ++fileChangeSequence }];
+  });
 }

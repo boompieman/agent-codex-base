@@ -1,15 +1,15 @@
 import type { ThreadHistoryItem, ThreadHistoryTurn } from "./types";
 
 export function itemId(item: ThreadHistoryItem | null | undefined) {
-  return item?.id ? String(item.id) : "";
+  return identifier(item?.id);
 }
 
 export function itemClientId(item: ThreadHistoryItem | null | undefined) {
-  return item?.clientId ? String(item.clientId) : "";
+  return identifier(item?.clientId);
 }
 
 export function turnId(turn: ThreadHistoryTurn | null | undefined) {
-  return turn?.id ? String(turn.id) : "";
+  return identifier(turn?.id);
 }
 
 export function paramsTurnId(params: Record<string, unknown> | null | undefined) {
@@ -18,17 +18,25 @@ export function paramsTurnId(params: Record<string, unknown> | null | undefined)
 }
 
 export function isClientOnlyItem(item: ThreadHistoryItem | null | undefined) {
-  return item?.type === "userMessage" && item?.clientId && !item?.turnId;
+  return item?.type === "userMessage" && itemClientId(item) !== "" && turnIdForItem(item) === "";
 }
 
 export function syntheticTurnIdForItem(item: ThreadHistoryItem | null | undefined) {
   if (isClientOnlyItem(item)) {
-    return item?.clientId ? `client-${item.clientId}` : "";
+    return `client-${itemClientId(item)}`;
   }
-  if (item?.type === "threadGoal" && item?.id && !item?.turnId) {
-    return `system-${item.id}`;
+  if (item?.type === "threadGoal" && itemId(item) !== "" && turnIdForItem(item) === "") {
+    return `system-${itemId(item)}`;
   }
   return "";
+}
+
+function turnIdForItem(item: ThreadHistoryItem | null | undefined) {
+  return identifier(item?.turnId);
+}
+
+function identifier(value: unknown) {
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
 export function sameItem(

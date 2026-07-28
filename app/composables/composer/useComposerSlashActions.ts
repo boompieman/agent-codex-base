@@ -1,6 +1,7 @@
 import type { Ref } from "vue";
+import { z } from "zod";
 import type { SlashMenuItem } from "./useSlashCommands";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 
 type ComposerSlashCommand = Extract<SlashMenuItem["id"], "new" | "plan" | "goal">;
@@ -18,7 +19,7 @@ export function useComposerSlashActions(input: {
   activatePlanMode: () => void;
   missingGoalObjectiveMessage: Ref<string>;
 }) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
 
   const slashCommandActions: Record<ComposerSlashCommand, SlashCommandAction> = {
@@ -88,11 +89,11 @@ export function useComposerSlashActions(input: {
   }
 
   async function runGoalCommand(args: string) {
-    if (!input.selectedThreadId.value) {
+    if (input.selectedThreadId.value === null) {
       return;
     }
     const control = args.trim().toLowerCase();
-    if (!control) {
+    if (control === "") {
       gateway.setError(input.missingGoalObjectiveMessage.value);
       return;
     }
@@ -128,11 +129,11 @@ function isGoalMenuCommand(id: SlashMenuItem["id"]): id is GoalMenuCommand {
 
 function parseSlashCommand(text: string): { id: ComposerSlashCommand; args: string } | null {
   const match = text.trim().match(/^\/(new|plan|goal)(?:\s+([\s\S]*))?$/i);
-  if (!match) {
+  if (match === null || match[1] === undefined) {
     return null;
   }
   return {
-    id: match[1]!.toLowerCase() as ComposerSlashCommand,
+    id: z.enum(["new", "plan", "goal"]).parse(match[1].toLowerCase()),
     args: match[2] ?? "",
   };
 }

@@ -1,9 +1,20 @@
 import pLimit from "p-limit";
-import type { HostRecord } from "~~/shared/types";
+import type { AppServerThread, HostRecord } from "~~/shared/types";
+import {
+  appServerThreadFromUnknown,
+  isAppServerSubAgentThread,
+  parseLoadedThreadsPage,
+  parseThreadListPage,
+  type AppServerThreadListPage,
+  type LoadedThreadsPage,
+} from "~~/shared/runtime/app-server";
+import { recordFromUnknown } from "~~/shared/utils/records";
 import { threadIdFromNotification } from "../protocol/thread-payload";
 import { currentGatewayUserId } from "../state/memory";
-import type { CodexRpcClient } from "../infra/rpc";
+import type { CodexRpcClient } from "../infra/rpc/rpc";
 import { runtimeLog } from "./runtime-log";
+import { runtimeStatusFromAppThreadStatus } from "~~/shared/thread-runtime-status";
+import { threadMetadataStore } from "../state/thread-metadata";
 
 const RECOVERY_CONCURRENCY = 2;
 const RECOVERY_TIMEOUT_MS = 15_000;
@@ -61,12 +72,14 @@ class ActiveMainThreadMonitor {
   }
 
   handleNotification(context: MonitorContext, message: unknown) {
-    const method = (message as any)?.method;
+    const method = recordFromUnknown(message)?.method;
     const threadId = threadIdFromNotification(message);
-    if (!threadId) return;
+    if (threadId === null) return;
 
     if (method === "thread/started") {
-      if (isSubagentThread(message)) return;
+      const thread = startedThread(message);
+      if (thread !== null) threadMetadataStore.record(context.host.id, null, thread);
+      if (thread !== null && isAppServerSubAgentThread(thread)) return;
       void this.observeThread(context, threadId).catch((error) => {
         runtimeLog("active main thread subscribe failed", {
           hostId: context.host.id,
@@ -78,9 +91,58 @@ class ActiveMainThreadMonitor {
       return;
     }
 
+    if (method === "thread/status/changed") {
+      const params = recordFromUnknown(recordFromUnknown(message)?.params);
+      if (runtimeStatusFromAppThreadStatus(params?.status) === "running") {
+        // Existing idle threads do not emit thread/started for every new turn. The global status
+        // broadcast is therefore the ownership signal for work started by VS Code and other
+        // app-server clients; resume validates main-vs-subagent before retaining the subscription.
+        void this.observeThread(context, threadId).catch((error) => {
+          runtimeLog("active main thread status subscribe failed", {
+            hostId: context.host.id,
+            hostName: context.host.name,
+            threadId,
+            message: messageFromError(error),
+          });
+        });
+      } else {
+        void this.releaseThread(context, threadId);
+      }
+      return;
+    }
+
     if (method === "turn/completed") {
       void this.releaseThread(context, threadId);
     }
+  }
+
+  adoptSubscribedThread(context: MonitorContext, threadId: string) {
+    const hostKey = this.hostKey(context.host.id);
+    let observed = this.observedByHost.get(hostKey);
+    if (observed === undefined) {
+      observed = new Set();
+      this.observedByHost.set(hostKey, observed);
+    }
+    if (observed.has(threadId)) return;
+    // ControllerRegistry calls this synchronously before removing the final browser-owned
+    // controller. The app-server subscription is already live, so resuming here would duplicate
+    // work on the Host's single RPC channel; recording ownership is the complete handoff.
+    observed.add(threadId);
+    runtimeLog("adopted active main thread subscription", {
+      hostId: context.host.id,
+      hostName: context.host.name,
+      threadId,
+    });
+  }
+
+  reclaimSubscribedThread(hostId: number, threadId: string) {
+    const hostKey = this.hostKey(hostId);
+    const observed = this.observedByHost.get(hostKey);
+    if (observed?.delete(threadId) !== true) return false;
+    if (observed.size === 0) this.observedByHost.delete(hostKey);
+    // The new controller inherits the already-live subscription. Do not unsubscribe or resume:
+    // both operations create an avoidable delivery gap/duplicate on the shared Host RPC channel.
+    return true;
   }
 
   forgetHost(userId: number, hostId: number) {
@@ -96,39 +158,30 @@ class ActiveMainThreadMonitor {
   }
 
   private async recoverLoadedThreads(context: MonitorContext, hostKey: string, generation: number) {
-    const threadIds = await loadedThreadIds(context.client);
+    const threads = await activeLoadedMainThreads(context.client);
     const limit = pLimit(RECOVERY_CONCURRENCY);
     await Promise.all(
-      threadIds.map((threadId) =>
+      threads.map((thread) =>
         limit(async () => {
           if (!this.isCurrent(hostKey, generation)) return;
-          await this.observeThread(context, threadId, true);
+          await this.observeThread(context, thread.id);
         }),
       ),
     );
   }
 
-  private async observeThread(
-    context: MonitorContext,
-    threadId: string,
-    releaseIdleThread = false,
-  ) {
+  private async observeThread(context: MonitorContext, threadId: string) {
     if (context.hasController(threadId)) return;
     const hostKey = this.hostKey(context.host.id);
     const observed = this.observedByHost.get(hostKey);
-    if (observed?.has(threadId)) return;
+    if (observed?.has(threadId) === true) return;
 
     const key = `${hostKey}:${threadId}`;
     const pending = this.pendingByThread.get(key);
-    if (pending) return pending;
+    if (pending !== undefined) return pending;
 
     const generation = this.generation(hostKey);
-    const subscription = this.resumeMonitorOnlyThread(
-      context,
-      threadId,
-      releaseIdleThread,
-      generation,
-    ).finally(() => {
+    const subscription = this.resumeMonitorOnlyThread(context, threadId, generation).finally(() => {
       if (this.pendingByThread.get(key) === subscription) {
         this.pendingByThread.delete(key);
       }
@@ -140,32 +193,24 @@ class ActiveMainThreadMonitor {
   private async resumeMonitorOnlyThread(
     context: MonitorContext,
     threadId: string,
-    releaseIdleThread: boolean,
     generation: number,
   ) {
-    const result = await context.client.request<any>(
+    const result = await context.client.request(
       "thread/resume",
       { threadId, excludeTurns: true },
       RECOVERY_TIMEOUT_MS,
     );
-    const thread = result?.thread ?? result;
+    const resultRecord = recordFromUnknown(result);
+    const thread = appServerThreadFromUnknown(resultRecord?.thread ?? result);
     const hostKey = this.hostKey(context.host.id);
     if (!this.isCurrent(hostKey, generation) || context.hasController(threadId)) return;
 
-    // A loaded list is not restricted to active main threads. Resume is the one
-    // request that both tells us its metadata and attaches the event listener, so
-    // immediately release idle/subagent results discovered during recovery.
-    if (isSubagentThread({ params: { thread } }) || (releaseIdleThread && !isActive(thread))) {
+    if (thread === null || isAppServerSubAgentThread(thread) || !isActive(thread)) {
       await this.unsubscribe(context, threadId);
       return;
     }
 
-    let observed = this.observedByHost.get(hostKey);
-    if (!observed) {
-      observed = new Set();
-      this.observedByHost.set(hostKey, observed);
-    }
-    observed.add(threadId);
+    this.adoptSubscribedThread(context, threadId);
     runtimeLog("subscribed to active main thread", {
       hostId: context.host.id,
       hostName: context.host.name,
@@ -176,8 +221,8 @@ class ActiveMainThreadMonitor {
   private async releaseThread(context: MonitorContext, threadId: string) {
     const hostKey = this.hostKey(context.host.id);
     const observed = this.observedByHost.get(hostKey);
-    if (!observed?.delete(threadId)) return;
-    if (!observed.size) this.observedByHost.delete(hostKey);
+    if (observed?.delete(threadId) !== true) return;
+    if (observed.size === 0) this.observedByHost.delete(hostKey);
     if (!context.hasController(threadId)) {
       await this.unsubscribe(context, threadId);
     }
@@ -210,40 +255,90 @@ class ActiveMainThreadMonitor {
 }
 
 async function loadedThreadIds(client: CodexRpcClient) {
-  const threadIds: string[] = [];
+  const threadIds = new Set<string>();
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
   do {
-    const page: { data?: unknown; nextCursor?: unknown } = await client.request(
+    const page: LoadedThreadsPage = await client.request(
       "thread/loaded/list",
       { cursor, limit: 100 },
       RECOVERY_TIMEOUT_MS,
+      parseLoadedThreadsPage,
     );
-    for (const threadId of Array.isArray(page.data) ? page.data : []) {
-      if (typeof threadId === "string" && threadId.trim()) threadIds.push(threadId);
+    for (const threadId of page.data) {
+      if (threadId.trim() !== "") threadIds.add(threadId);
     }
-    const nextCursor = typeof page.nextCursor === "string" ? page.nextCursor : null;
-    if (!nextCursor || seenCursors.has(nextCursor)) break;
+    const nextCursor: string | null = page.nextCursor ?? null;
+    if (nextCursor === null || nextCursor === "" || seenCursors.has(nextCursor)) break;
     seenCursors.add(nextCursor);
     cursor = nextCursor;
-  } while (cursor);
+  } while (cursor !== null);
   return threadIds;
 }
 
-function isActive(thread: any) {
-  const status = typeof thread?.status === "string" ? thread.status : thread?.status?.type;
-  return ["active", "inProgress", "in_progress", "running"].includes(status);
+async function activeLoadedMainThreads(client: CodexRpcClient) {
+  const loadedIds = await loadedThreadIds(client);
+  if (loadedIds.size === 0) return [];
+
+  const activeThreads: AppServerThread[] = [];
+  const unresolvedIds = new Set(loadedIds);
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    // `thread/loaded/list` exposes ids only. Resuming every id merely to inspect metadata
+    // attaches Gateway to an unbounded history and competes with foreground work on the
+    // Host's single RPC connection. The state-DB list is the official metadata path; only
+    // active main-thread candidates are resumed below.
+    const page: AppServerThreadListPage = await client.request(
+      "thread/list",
+      {
+        cursor,
+        limit: 100,
+        sortDirection: "desc",
+        useStateDbOnly: true,
+        sourceKinds: ["cli", "vscode", "exec", "appServer"],
+      },
+      RECOVERY_TIMEOUT_MS,
+      parseThreadListPage,
+    );
+    for (const thread of page.data) {
+      if (!unresolvedIds.delete(thread.id)) continue;
+      if (isActive(thread) && !isAppServerSubAgentThread(thread)) activeThreads.push(thread);
+    }
+    const nextCursor: string | null = page.nextCursor;
+    if (
+      unresolvedIds.size === 0 ||
+      nextCursor === null ||
+      nextCursor === "" ||
+      seenCursors.has(nextCursor)
+    ) {
+      break;
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor !== null);
+  return activeThreads;
 }
 
-function isSubagentThread(message: unknown) {
-  const thread = (message as any)?.params?.thread;
-  const parentThreadId = thread?.parentThreadId ?? thread?.parent_thread_id;
-  return typeof parentThreadId === "string" && parentThreadId.trim().length > 0;
+function isActive(thread: AppServerThread) {
+  const statusRecord = recordFromUnknown(thread.status);
+  const status = typeof thread.status === "string" ? thread.status : statusRecord?.type;
+  return (
+    typeof status === "string" &&
+    ["active", "inProgress", "in_progress", "running"].includes(status)
+  );
+}
+
+function startedThread(message: unknown) {
+  const params = recordFromUnknown(recordFromUnknown(message)?.params);
+  return appServerThreadFromUnknown(params?.thread);
 }
 
 function requiredUserId() {
   const userId = currentGatewayUserId();
-  if (!userId) throw new Error("Active main thread monitor requires an authenticated user scope");
+  if (userId === null) {
+    throw new Error("Active main thread monitor requires an authenticated user scope");
+  }
   return userId;
 }
 

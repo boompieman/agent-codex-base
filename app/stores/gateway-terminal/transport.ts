@@ -1,4 +1,3 @@
-import type { TerminalSessionSnapshot } from "~~/shared/types";
 import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
@@ -7,6 +6,8 @@ import type { ErrorMessageLabels } from "../gateway/thread-utils/identity";
 import { messageFromError } from "../gateway/thread-utils/identity";
 import type { GatewayErrorContext } from "../gateway/errors";
 import type { TerminalOpenInput } from "../gateway/types";
+import { expectTerminalOpened } from "../gateway-realtime/response-parsers";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export interface GatewayTerminalTransportContext {
   t: (key: string, values?: Record<string, unknown>) => string;
@@ -18,9 +19,10 @@ export async function openTerminalSession(
   ctx: GatewayTerminalTransportContext,
   input: TerminalOpenInput,
 ) {
+  const sessionIsCurrent = captureSessionEpoch();
   const terminalStore = useGatewayTerminalStore();
   try {
-    const response = await useGatewayRealtimeStore().request<{ session: TerminalSessionSnapshot }>(
+    const response = await useGatewayRealtimeStore().request(
       (requestId) => ({
         type: "terminal.open",
         requestId,
@@ -28,14 +30,17 @@ export async function openTerminalSession(
         cols: input.cols ?? 80,
         rows: input.rows ?? 24,
       }),
+      expectTerminalOpened,
       30_000,
     );
+    if (!sessionIsCurrent()) return response.session;
     terminalStore.upsertTerminalSession(response.session);
     useGatewayWorkspaceLayoutStore().requestPanelActivation(
       terminalWorkspacePanelId(response.session.sessionId),
     );
     return response.session;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (!sessionIsCurrent()) throw error;
     ctx.setError(messageFromError(error, ctx.t("app.openTerminalFailed"), ctx.errorLabels), {
       hostId: input.hostId,
       projectId: input.projectId ?? null,

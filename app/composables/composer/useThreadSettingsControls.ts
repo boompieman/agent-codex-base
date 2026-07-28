@@ -2,12 +2,13 @@ import { computed, nextTick, ref, watch } from "vue";
 
 import { storeToRefs } from "pinia";
 import type { ApprovalPolicy, ReasoningEffort } from "~~/shared/types";
-import { useGatewayStore } from "@/stores/gateway";
+import { firstNonEmptyString, trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 
 export function useThreadSettingsControls() {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
   const { models, defaultModel } = storeToRefs(gateway);
@@ -20,7 +21,12 @@ export function useThreadSettingsControls() {
   let syncingSettings = false;
 
   const activeModel = computed(
-    () => selectedModel.value || defaultModel.value?.model || defaultModel.value?.id || "",
+    () =>
+      firstNonEmptyString([
+        selectedModel.value,
+        defaultModel.value?.model,
+        defaultModel.value?.id,
+      ]) ?? "",
   );
   const activeModelRecord = computed(() =>
     models.value.find(
@@ -29,12 +35,12 @@ export function useThreadSettingsControls() {
   );
   const activeModelLabel = computed(() => {
     const model = activeModelRecord.value;
-    return model?.displayName || model?.model || activeModel.value || "模型";
+    return firstNonEmptyString([model?.displayName, model?.model, activeModel.value]) ?? "模型";
   });
   const activeEffortValue = computed(() => {
     return selectedEffort.value !== "default"
       ? selectedEffort.value
-      : activeModelRecord.value?.defaultReasoningEffort || "";
+      : (activeModelRecord.value?.defaultReasoningEffort ?? "");
   });
   const effortOptions = computed(() => {
     const supportedEfforts = activeModelRecord.value?.supportedReasoningEfforts ?? [];
@@ -56,7 +62,7 @@ export function useThreadSettingsControls() {
   const activeEffortCompactLabel = computed(() => compactEffortLabel(activeEffortValue.value));
 
   function compactEffortLabel(value: string) {
-    if (!value) return "";
+    if (value === "") return "";
     const normalized = value.toLowerCase().replaceAll("_", "-");
     const knownLabels: Record<string, string> = {
       low: "Light",
@@ -66,23 +72,24 @@ export function useThreadSettingsControls() {
       "extra-high": "Extra High",
       xhigh: "Extra High",
     };
-    if (knownLabels[normalized]) {
-      return knownLabels[normalized];
-    }
+    const knownLabel = knownLabels[normalized];
+    if (knownLabel !== undefined) return knownLabel;
     return value
       .split(/[-_\s]+/)
-      .filter(Boolean)
+      .filter((part) => part !== "")
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ");
   }
 
   function labelEffortOption(option: { value: ReasoningEffort; label?: string } | undefined) {
-    if (!option) return activeEffortCompactLabel.value || t("app.reasoningDefault");
-    return compactEffortLabel(option.label || option.value);
+    if (option === undefined) {
+      return trimmedOrFallback(activeEffortCompactLabel.value, t("app.reasoningDefault"));
+    }
+    return compactEffortLabel(trimmedOrFallback(option.label, option.value));
   }
 
   function modelOptionValue(modelOption: { model?: string; id: string }) {
-    return modelOption.model || modelOption.id;
+    return trimmedOrFallback(modelOption.model, modelOption.id);
   }
 
   function setSelectedModel(model: string) {
@@ -100,12 +107,13 @@ export function useThreadSettingsControls() {
   function syncComposerFromThreadSettings() {
     syncingSettings = true;
     selectedModel.value =
-      selectedThreadSettings.value.model ||
-      defaultModel.value?.model ||
-      defaultModel.value?.id ||
-      "";
-    selectedEffort.value = selectedThreadSettings.value.effort || "default";
-    selectedApprovalMode.value = selectedThreadSettings.value.approvalPolicy || "custom";
+      firstNonEmptyString([
+        selectedThreadSettings.value.model,
+        defaultModel.value?.model,
+        defaultModel.value?.id,
+      ]) ?? "";
+    selectedEffort.value = selectedThreadSettings.value.effort ?? "default";
+    selectedApprovalMode.value = selectedThreadSettings.value.approvalPolicy ?? "custom";
     void nextTick(() => {
       syncingSettings = false;
     });
@@ -125,21 +133,21 @@ export function useThreadSettingsControls() {
   );
 
   watch(selectedModel, (model) => {
-    if (syncingSettings || !selectedThreadId.value) {
+    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
       return;
     }
-    void composer.saveSelectedThreadSettings({ model: model || null });
+    void composer.saveSelectedThreadSettings({ model: trimmedOrNull(model) });
   });
 
   watch(selectedEffort, (effort) => {
-    if (syncingSettings || !selectedThreadId.value) {
+    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
       return;
     }
     void composer.saveSelectedThreadSettings({ effort: effort === "default" ? null : effort });
   });
 
   watch(selectedApprovalMode, (approvalPolicy) => {
-    if (syncingSettings || !selectedThreadId.value) {
+    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
       return;
     }
     void composer.saveSelectedThreadSettings({

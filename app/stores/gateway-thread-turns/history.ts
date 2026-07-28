@@ -3,7 +3,12 @@ import {
   mergeItemIntoLatestTurn,
 } from "~~/shared/thread-history/items";
 import { mergeThreadTurns } from "~~/shared/thread-history/turns";
-import type { ThreadHistoryItem, ThreadHistoryTurn } from "~~/shared/thread-history/types";
+import type { AppServerThread } from "~~/shared/types";
+import type {
+  ThreadHistoryItem,
+  ThreadHistoryState,
+  ThreadHistoryTurn,
+} from "~~/shared/thread-history/types";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { cacheSelectedThreadView } from "@/stores/gateway/thread-open/view-state";
@@ -66,7 +71,7 @@ export function mergeTurnItems(threadId: string, turn: ThreadHistoryTurn) {
 export function upsertHistoryItem(hostId: number, threadId: string, item: ThreadHistoryItem) {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
-  const update = (history: unknown, currentThread: unknown) =>
+  const update = (history: ThreadHistoryState | null, currentThread: AppServerThread | null) =>
     mergeItemIntoLatestTurn(history, currentThread, threadId, item);
   if (navigation.selectedHostId === hostId && navigation.selectedThreadId === threadId) {
     views.history = update(views.history, views.currentThread);

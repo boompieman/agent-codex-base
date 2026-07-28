@@ -19,11 +19,11 @@ export const threadSnapshotStore = {
     const record = gatewayMemoryState.threadSnapshots.find(
       (candidate) => candidate.hostId === hostId && candidate.threadId === threadId,
     );
-    if (!record) {
+    if (record === undefined) {
       return null;
     }
     record.updatedAt = nowIso();
-    return record.snapshot as ThreadOpenSnapshot;
+    return record.snapshot;
   },
 
   listForHost(hostId: number) {
@@ -31,7 +31,7 @@ export const threadSnapshotStore = {
       .filter((record) => record.hostId === hostId)
       .map((record) => ({
         ...record,
-        snapshot: record.snapshot as ThreadOpenSnapshot,
+        snapshot: record.snapshot,
       }));
   },
 
@@ -55,7 +55,7 @@ export const threadSnapshotStore = {
     updater: (snapshot: ThreadOpenSnapshot | null) => ThreadOpenSnapshot | null,
   ) {
     const nextSnapshot = updater(this.get(hostId, threadId));
-    if (nextSnapshot) {
+    if (nextSnapshot !== null) {
       this.set(hostId, threadId, nextSnapshot);
     }
     return nextSnapshot;

@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { ImageIcon } from "@lucide/vue";
 import { computed } from "vue";
 import ThreadImageAttachment from "@/components/thread/attachments/ThreadImageAttachment.vue";
 
 const props = defineProps<{
-  item: Record<string, any>;
+  item: ThreadHistoryItem;
   hostId: number | null;
 }>();
 

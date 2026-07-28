@@ -1,8 +1,9 @@
 import { computed, ref, unref, type MaybeRef } from "vue";
 
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 type RequestId = string | number;
 
@@ -13,7 +14,7 @@ interface ServerRequestResponderSource {
 }
 
 export function useServerRequestResponder(source: ServerRequestResponderSource) {
-  const store = useGatewayStore();
+  const store = useGatewayBootstrapStore();
   const threadTurns = useGatewayThreadTurnsStore();
   const { t } = useI18n();
   const responding = ref(false);
@@ -25,14 +26,33 @@ export function useServerRequestResponder(source: ServerRequestResponderSource) 
     const hostId = unref(source.hostId);
     const threadId = unref(source.threadId);
     const requestId = unref(source.requestId);
-    return Boolean(hostId && threadId && requestId != null && requestId !== "");
+    return (
+      hostId !== null &&
+      hostId !== undefined &&
+      threadId !== null &&
+      threadId !== undefined &&
+      threadId !== "" &&
+      requestId !== null &&
+      requestId !== undefined &&
+      requestId !== ""
+    );
   });
 
   async function respond(result: unknown) {
+    const sessionIsCurrent = captureSessionEpoch();
     const hostId = unref(source.hostId);
     const threadId = unref(source.threadId);
     const requestId = unref(source.requestId);
-    if (!hostId || !threadId || requestId == null || requestId === "") {
+    if (
+      hostId === null ||
+      hostId === undefined ||
+      threadId === null ||
+      threadId === undefined ||
+      threadId === "" ||
+      requestId === null ||
+      requestId === undefined ||
+      requestId === ""
+    ) {
       store.setError(t("app.serverRequestMissingContext"), context.value);
       return false;
     }
@@ -40,15 +60,17 @@ export function useServerRequestResponder(source: ServerRequestResponderSource) 
     responding.value = true;
     try {
       await threadTurns.respondToServerRequest(hostId, threadId, requestId, result);
+      if (!sessionIsCurrent()) return false;
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (!sessionIsCurrent()) return false;
       store.setError(
         messageFromError(error, t("app.submitResponseFailed"), errorMessageLabels(t)),
         context.value,
       );
       return false;
     } finally {
-      responding.value = false;
+      if (sessionIsCurrent()) responding.value = false;
     }
   }
 

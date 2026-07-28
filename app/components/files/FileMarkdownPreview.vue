@@ -4,6 +4,7 @@ import { nextTick, onMounted, useTemplateRef, watch } from "vue";
 import type { FilePreviewDocument } from "~~/shared/types";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
+import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 const props = defineProps<{ document: FilePreviewDocument }>();
 const fileWorkspace = useGatewayFileWorkspaceStore();
@@ -16,9 +17,8 @@ onMounted(async () => {
   const position = fileWorkspace.viewPositionFor(props.document.key, "markdown");
   x.value = position.left;
   y.value = position.top;
-  requestAnimationFrame(() => {
-    restoring = false;
-  });
+  await nextAnimationFrame();
+  restoring = false;
 });
 
 watch([x, y], ([left, top]) => {

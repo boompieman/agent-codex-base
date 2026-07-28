@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { SettingsIcon } from "@lucide/vue";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,44 +13,91 @@ import SettingsPanel from "@/components/settings/SettingsPanel.vue";
 import BrowserOpenDialog from "@/components/browser/BrowserOpenDialog.vue";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
 import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceLaunchActions";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import AddProjectDialog from "./AddProjectDialog.vue";
-import HostTree from "./HostTree.vue";
-import PinnedThreadList from "./PinnedThreadList.vue";
-import RecentThreadList from "./RecentThreadList.vue";
+import HostTree from "./host-tree/HostTree.vue";
+import PinnedThreadList from "./thread-list/PinnedThreadList.vue";
+import RecentThreadList from "./thread-list/RecentThreadList.vue";
 import SidebarScrollArea from "./SidebarScrollArea.vue";
 import { SidebarFooter } from "@/components/ui/sidebar";
-import { useSidebarTree } from "./useSidebarTree";
-import { useThreadRename } from "./useThreadRename";
-import { useRecentThreadActivity } from "./useRecentThreadActivity";
+import { useSidebarTree } from "./host-tree/useSidebarTree";
+import { useThreadRename } from "./thread-list/useThreadRename";
+import { useRecentThreadActivity } from "./thread-list/useRecentThreadActivity";
 import SidebarWorkspaceToolbar from "./SidebarWorkspaceToolbar.vue";
 import { useTmuxMonitorLauncher } from "@/composables/workspace/useTmuxMonitorLauncher";
+import type { HostTreeController } from "./host-tree/controller";
+import type { HostRecord, ProjectRecord } from "./sidebar-types";
 
-const store = useGatewayStore();
+const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
 withDefaults(defineProps<{ workspaceToolbar?: boolean }>(), { workspaceToolbar: true });
 const { t } = useI18n();
 const showSettings = ref(false);
 const showBrowserDialog = ref(false);
-const projectEditor = ref<{ host: any; project: any | null } | null>(null);
+const projectEditor = ref<{ host: HostRecord; project: ProjectRecord | null } | null>(null);
 const { longPressTriggered, longPressContextMenuHandlers } = useLongPressContextMenu();
 const sidebarTree = useSidebarTree(longPressTriggered);
 const threadRename = useThreadRename();
 const recentActivity = useRecentThreadActivity();
 const workspaceActions = useWorkspaceLaunchActions();
 const tmuxLauncher = useTmuxMonitorLauncher();
+const {
+  hosts,
+  pinnedThreads,
+  selectedHostId,
+  selectedThreadId,
+  openPinnedThread,
+  pinnedRuntimeStatus,
+  pinnedCompletionAttention,
+} = sidebarTree;
+const { renamingThreadKey, renameValue } = threadRename;
+const { recentThreads } = recentActivity;
+const { selectedHostTitle, canLaunch } = workspaceActions;
+const { activeCount: tmuxActiveCount } = tmuxLauncher;
+const hostTreeController = computed<HostTreeController>(() => ({
+  hosts: sidebarTree.hosts.value,
+  availableProjectsByHost: sidebarTree.availableProjectsByHost.value,
+  missingProjectsByHost: sidebarTree.missingProjectsByHost.value,
+  projectThreads: sidebarTree.projectThreads.value,
+  expandedHostIds: sidebarTree.expandedHostIds.value,
+  expandedProjectIds: sidebarTree.expandedProjectIds.value,
+  expandedMissingProjectHostIds: sidebarTree.expandedMissingProjectHostIds.value,
+  selectedHostId: sidebarTree.selectedHostId.value,
+  selectedProjectId: sidebarTree.selectedProjectId.value,
+  selectedThreadId: sidebarTree.selectedThreadId.value,
+  hostConnectionStatuses: sidebarTree.hostConnectionStatuses.value,
+  renamingThreadKey: threadRename.renamingThreadKey.value,
+  renameValue: threadRename.renameValue.value,
+  longPressHandlers: longPressContextMenuHandlers,
+  selectHost: sidebarTree.selectHost,
+  addProject: openAddProject,
+  deleteHost: catalog.deleteHost,
+  selectProject: sidebarTree.selectProject,
+  toggleMissingProjects: sidebarTree.toggleMissingProjects,
+  editProject: openEditProject,
+  deleteProject: catalog.deleteProject,
+  startThreadInProject: sidebarTree.startThreadInProject,
+  openThread: sidebarTree.openThread,
+  toggleThreadPin: navigation.setThreadPinned,
+  rename: threadRename.startInlineRename,
+  submitRename: threadRename.submitRename,
+  renameKeydown: threadRename.handleRenameKeydown,
+  updateRenameValue: (value) => (threadRename.renameValue.value = value),
+  threadRuntimeStatus: sidebarTree.threadRuntimeStatus,
+  threadCompletionAttention: sidebarTree.threadCompletionAttention,
+}));
 
 defineOptions({
   inheritAttrs: false,
 });
 
-function openAddProject(host: any) {
+function openAddProject(host: HostRecord) {
   projectEditor.value = { host, project: null };
 }
 
-function openEditProject(project: any) {
-  const host = sidebarTree.hosts.value.find((item: any) => item.id === project.hostId);
+function openEditProject(project: ProjectRecord) {
+  const host = hosts.value.find((item) => item.id === project.hostId);
   if (!host) {
     return;
   }
@@ -65,9 +112,9 @@ function openEditProject(project: any) {
   >
     <SidebarWorkspaceToolbar
       v-if="workspaceToolbar"
-      :title="workspaceActions.selectedHostTitle.value"
-      :can-launch="workspaceActions.canLaunch.value"
-      :tmux-active-count="tmuxLauncher.activeCount.value"
+      :title="selectedHostTitle"
+      :can-launch="canLaunch"
+      :tmux-active-count="tmuxActiveCount"
       @open-tmux="tmuxLauncher.open"
       @open-terminal="workspaceActions.openTerminal"
       @open-browser="showBrowserDialog = true"
@@ -76,70 +123,39 @@ function openEditProject(project: any) {
       <SidebarScrollArea>
         <div class="min-w-0 max-w-full space-y-4 overflow-hidden pr-1">
           <PinnedThreadList
-            :threads="sidebarTree.pinnedThreads.value"
-            :hosts="sidebarTree.hosts.value"
-            :selected-host-id="sidebarTree.selectedHostId.value"
-            :selected-thread-id="sidebarTree.selectedThreadId.value"
-            :renaming-thread-key="threadRename.renamingThreadKey.value"
-            :rename-value="threadRename.renameValue.value"
+            :threads="pinnedThreads"
+            :hosts="hosts"
+            :selected-host-id="selectedHostId"
+            :selected-thread-id="selectedThreadId"
+            :renaming-thread-key="renamingThreadKey"
+            :rename-value="renameValue"
             :long-press-handlers="longPressContextMenuHandlers"
-            :runtime-status="sidebarTree.pinnedRuntimeStatus"
-            :completion-attention="sidebarTree.pinnedCompletionAttention"
-            @open="sidebarTree.openPinnedThread"
+            :runtime-status="pinnedRuntimeStatus"
+            :completion-attention="pinnedCompletionAttention"
+            @open="openPinnedThread"
             @unpin="navigation.setPinnedThread($event, false)"
             @rename="threadRename.startInlineRename"
             @submit-rename="threadRename.submitRename"
             @rename-keydown="threadRename.handleRenameKeydown"
-            @update:rename-value="threadRename.renameValue.value = $event"
+            @update:rename-value="renameValue = $event"
           />
 
           <RecentThreadList
-            :threads="recentActivity.recentThreads.value"
-            :selected-host-id="sidebarTree.selectedHostId.value"
-            :selected-thread-id="sidebarTree.selectedThreadId.value"
-            :renaming-thread-key="threadRename.renamingThreadKey.value"
-            :rename-value="threadRename.renameValue.value"
+            :threads="recentThreads"
+            :selected-host-id="selectedHostId"
+            :selected-thread-id="selectedThreadId"
+            :renaming-thread-key="renamingThreadKey"
+            :rename-value="renameValue"
             :long-press-handlers="longPressContextMenuHandlers"
             @open="recentActivity.openRecentThread"
             @pin="recentActivity.pinRecentThread"
             @rename="threadRename.startInlineRename"
             @submit-rename="threadRename.submitRename"
             @rename-keydown="threadRename.handleRenameKeydown"
-            @update:rename-value="threadRename.renameValue.value = $event"
+            @update:rename-value="renameValue = $event"
           />
 
-          <HostTree
-            :hosts="sidebarTree.hosts.value"
-            :available-projects-by-host="sidebarTree.availableProjectsByHost.value"
-            :missing-projects-by-host="sidebarTree.missingProjectsByHost.value"
-            :project-threads="sidebarTree.projectThreads.value"
-            :expanded-host-ids="sidebarTree.expandedHostIds.value"
-            :expanded-project-ids="sidebarTree.expandedProjectIds.value"
-            :expanded-missing-project-host-ids="sidebarTree.expandedMissingProjectHostIds.value"
-            :selected-host-id="sidebarTree.selectedHostId.value"
-            :selected-project-id="sidebarTree.selectedProjectId.value"
-            :selected-thread-id="sidebarTree.selectedThreadId.value"
-            :host-connection-statuses="sidebarTree.hostConnectionStatuses.value"
-            :renaming-thread-key="threadRename.renamingThreadKey.value"
-            :rename-value="threadRename.renameValue.value"
-            :long-press-handlers="longPressContextMenuHandlers"
-            :thread-runtime-status="sidebarTree.threadRuntimeStatus"
-            :thread-completion-attention="sidebarTree.threadCompletionAttention"
-            @select-host="sidebarTree.selectHost"
-            @add-project="openAddProject"
-            @delete-host="store.deleteHost"
-            @select-project="sidebarTree.selectProject"
-            @toggle-missing-projects="sidebarTree.toggleMissingProjects"
-            @edit-project="openEditProject"
-            @delete-project="store.deleteProject"
-            @start-thread-in-project="sidebarTree.startThreadInProject"
-            @open-thread="sidebarTree.openThread"
-            @toggle-thread-pin="navigation.setThreadPinned"
-            @rename="threadRename.startInlineRename"
-            @submit-rename="threadRename.submitRename"
-            @rename-keydown="threadRename.handleRenameKeydown"
-            @update:rename-value="threadRename.renameValue.value = $event"
-          />
+          <HostTree :controller="hostTreeController" />
         </div>
       </SidebarScrollArea>
     </div>

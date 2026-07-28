@@ -6,7 +6,8 @@ import type {
   TerminalSessionSnapshot,
   TerminalScope,
 } from "~~/shared/types";
-import { shellQuote } from "../infra/shell";
+import { shellQuote } from "../infra/ssh/shell";
+import { trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
 import { sshConnections } from "../infra/host-services";
 import { terminalEventBus } from "./events";
 
@@ -47,9 +48,9 @@ export class TerminalManager {
       userId,
       hostId: host.id,
       projectId: target.projectId ?? null,
-      threadId: target.threadId?.trim() || null,
-      cwd: target.cwd?.trim() || null,
-      title: target.title?.trim() || titleForScope(target.scope, host),
+      threadId: trimmedOrNull(target.threadId),
+      cwd: trimmedOrNull(target.cwd),
+      title: trimmedOrFallback(target.title, titleForScope(target.scope, host)),
       scope: target.scope,
       cols: normalizeDimension(target.cols, 80),
       rows: normalizeDimension(target.rows, 24),
@@ -150,7 +151,7 @@ export class TerminalManager {
   }
 
   private enterWorkingDirectory(session: TerminalSession) {
-    if (!session.cwd) {
+    if (session.cwd === null) {
       return;
     }
     session.channel.write(`cd -- ${shellQuote(session.cwd)}\n`);
@@ -158,7 +159,7 @@ export class TerminalManager {
 
   private requireSession(userId: number, sessionId: string) {
     const session = this.sessions.get(sessionId);
-    if (!session || session.userId !== userId || session.status !== "open") {
+    if (session === undefined || session.userId !== userId || session.status !== "open") {
       throw new Error("Terminal session not found");
     }
     return session;

@@ -4,7 +4,7 @@ import { runWithGatewayUser } from "../state/memory";
 export interface RealtimePeer {
   send(message: string): void;
   close(code?: number, reason?: string): void;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
 }
 
 export interface RealtimePeerState {
@@ -21,22 +21,24 @@ export interface RealtimePeerState {
   threadUnsubscribers: Map<string, () => void>;
 }
 
+const peerStates = new WeakMap<RealtimePeer, RealtimePeerState>();
+
 export function sendRealtimePeerMessage(peer: RealtimePeer, message: RealtimeServerMessage) {
   peer.send(JSON.stringify(message));
 }
 
 export function stateFor(peer: RealtimePeer) {
-  let state = peer.context.realtime as RealtimePeerState | undefined;
-  if (!state) {
+  let state = peerStates.get(peer);
+  if (state === undefined) {
     state = { authenticated: false, userId: null, threadUnsubscribers: new Map() };
-    peer.context.realtime = state;
+    peerStates.set(peer, state);
   }
   return state;
 }
 
 export function runPeerScoped<T>(peer: RealtimePeer, callback: () => T): T {
   const userId = stateFor(peer).userId;
-  if (!userId) {
+  if (userId === null) {
     throw new Error("Realtime connection is not authenticated");
   }
   return runWithGatewayUser(userId, callback);
@@ -44,7 +46,7 @@ export function runPeerScoped<T>(peer: RealtimePeer, callback: () => T): T {
 
 export function authenticatedUserId(peer: RealtimePeer) {
   const userId = stateFor(peer).userId;
-  if (!userId) {
+  if (userId === null) {
     throw new Error("Realtime connection is not authenticated");
   }
   return userId;

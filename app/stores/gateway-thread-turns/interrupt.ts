@@ -1,5 +1,5 @@
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
@@ -15,7 +15,7 @@ import type { Translate } from "./types";
 
 export async function interruptActiveTurn(t: Translate) {
   const navigation = useGatewayNavigationStore();
-  if (!navigation.selectedHostId || !navigation.selectedThreadId) {
+  if (navigation.selectedHostId === null || navigation.selectedThreadId === null) {
     return;
   }
   await interruptThreadTurn(t, {
@@ -29,12 +29,12 @@ export async function interruptThreadTurn(
   t: Translate,
   input: { hostId: number; threadId: string; projectId?: number | null },
 ) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   const runtime = useGatewayThreadRuntimeStore();
   const views = useGatewayThreadViewStore();
   const projectId = input.projectId ?? null;
   const turnId = runtime.threadRuntimeProjection(input.hostId, input.threadId).activeTurnId;
-  if (!turnId) {
+  if (turnId === null) {
     runtime.setThreadStatus(input.hostId, input.threadId, "completed");
     gateway.setError(noActiveTurnToInterruptMessage(t, input.hostId, input.threadId), {
       hostId: input.hostId,

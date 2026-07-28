@@ -1,14 +1,19 @@
-export function activeRemoteTurnId(history: unknown) {
-  const turns = (history as any)?.thread?.turns ?? (history as any)?.turns ?? [];
+import type { ThreadHistoryItem, ThreadHistoryState, ThreadHistoryTurn } from "~~/shared/types";
+import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
+import { recordFromUnknown } from "~~/shared/utils/records";
+
+export function activeRemoteTurnId(history: ThreadHistoryState | null | undefined) {
+  const turns = threadTurnsFromHistory(history ?? null);
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index];
-    const status = typeof turn?.status === "string" ? turn.status : turn?.status?.type;
-    const id = turn?.id ? String(turn.id) : "";
+    if (turn === undefined) continue;
+    const status = statusValue(turn.status);
+    const id = turn.id === undefined || turn.id === null ? "" : String(turn.id);
     if (
       (isRunningTurnStatus(status) ||
         hasPostTurnActiveItems(turn) ||
         (!isTerminalTurnStatus(status) && hasRunningItems(turn))) &&
-      id &&
+      id !== "" &&
       !id.startsWith("client-")
     ) {
       return id;
@@ -18,10 +23,15 @@ export function activeRemoteTurnId(history: unknown) {
 }
 
 export function activeTurnIdFromRuntimeState(
-  history: unknown,
+  history: ThreadHistoryState | null | undefined,
   activeTurnId: string | null | undefined,
 ) {
-  return activeRemoteTurnId(history) ?? (activeTurnId ? String(activeTurnId) : null);
+  return (
+    activeRemoteTurnId(history) ??
+    (activeTurnId === null || activeTurnId === undefined || activeTurnId === ""
+      ? null
+      : activeTurnId)
+  );
 }
 
 function isRunningTurnStatus(status: unknown) {
@@ -41,22 +51,24 @@ function isTerminalTurnStatus(status: unknown) {
   return status === "completed" || status === "failed" || status === "interrupted";
 }
 
-function hasRunningItems(turn: any) {
+function hasRunningItems(turn: ThreadHistoryTurn) {
   return (
     Array.isArray(turn?.items) &&
-    turn.items.some((item: any) =>
-      isRunningTurnStatus(typeof item?.status === "string" ? item.status : item?.status?.type),
-    )
+    turn.items.some((item) => isRunningTurnStatus(statusValue(item.status)))
   );
 }
 
-function hasPostTurnActiveItems(turn: any) {
+function hasPostTurnActiveItems(turn: ThreadHistoryTurn) {
   return (
     Array.isArray(turn?.items) &&
-    turn.items.some((item: any) => {
+    turn.items.some((item: ThreadHistoryItem) => {
       const type = typeof item?.type === "string" ? item.type : "";
-      const status = typeof item?.status === "string" ? item.status : item?.status?.type;
+      const status = statusValue(item.status);
       return (type === "contextCompaction" || type === "sleep") && isRunningTurnStatus(status);
     })
   );
+}
+
+function statusValue(status: unknown) {
+  return typeof status === "string" ? status : recordFromUnknown(status)?.type;
 }

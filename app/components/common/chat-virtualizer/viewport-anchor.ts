@@ -7,17 +7,19 @@ export function captureViewportRowAnchor(
   viewport: HTMLElement | null,
   options: { canAnchor?: (element: HTMLElement) => boolean } = {},
 ) {
-  if (!viewport) return null;
+  if (viewport === null) return null;
   const viewportRect = viewport.getBoundingClientRect();
   const element = Array.from(viewport.querySelectorAll<HTMLElement>("[data-row-key]")).find(
     (candidate) => {
-      if (options.canAnchor && !options.canAnchor(candidate)) return false;
+      if (options.canAnchor !== undefined && !options.canAnchor(candidate)) return false;
       const rect = candidate.getBoundingClientRect();
       return rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1;
     },
   );
   const key = element?.dataset.rowKey;
-  return element && key ? { key, top: element.getBoundingClientRect().top } : null;
+  return element !== undefined && key !== undefined && key !== ""
+    ? { key, top: element.getBoundingClientRect().top }
+    : null;
 }
 
 export function findViewportRowByKey(viewport: HTMLElement | null, key: string) {

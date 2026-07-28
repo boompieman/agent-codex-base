@@ -1,10 +1,17 @@
+import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
 import { itemKey, userMessageVariant, type ThreadTurnSections } from "./thread-turn-sections";
 
-export type ThreadTimelineTurn = Record<string, any> & {
-  id: string;
-};
+export type { ThreadTimelineTurn } from "~~/shared/types";
 
 type ThreadTimelineItemSection = "user" | "intermediate" | "final";
+
+const estimatedItemHeights: Partial<Record<ThreadTimelineItem["type"], number>> = {
+  commandExecution: 48,
+  fileChange: 440,
+  agentMessage: 144,
+  reasoning: 128,
+  userMessage: 160,
+};
 
 export type ThreadTimelineRow =
   | {
@@ -19,7 +26,7 @@ export type ThreadTimelineRow =
       type: "item";
       turnId: string;
       section: ThreadTimelineItemSection;
-      item: any;
+      item: ThreadTimelineItem;
       userMessageVariant: "normal" | "steer";
     };
 
@@ -65,23 +72,22 @@ export function buildThreadTimelineRows(input: {
   });
 }
 
+export function reuseUnchangedTimelineRows(
+  previous: ThreadTimelineRow[] | undefined,
+  next: ThreadTimelineRow[],
+) {
+  if (previous === undefined || previous.length === 0) return next;
+  const previousByKey = new Map(previous.map((row) => [row.key, row]));
+  return next.map((row) => {
+    const candidate = previousByKey.get(row.key);
+    return candidate !== undefined && sameTimelineRow(candidate, row) ? candidate : row;
+  });
+}
+
 export function estimateThreadTimelineRow(row: ThreadTimelineRow | undefined) {
-  if (!row) return 96;
+  if (row === undefined) return 96;
   if (row.type === "intermediateHeader") return 48;
-  switch (row.item?.type) {
-    case "commandExecution":
-      return 48;
-    case "fileChange":
-      return 440;
-    case "agentMessage":
-      return 144;
-    case "reasoning":
-      return 128;
-    case "userMessage":
-      return 160;
-    default:
-      return 96;
-  }
+  return estimatedItemHeights[row.item.type] ?? 96;
 }
 
 function appendItemRows(
@@ -89,7 +95,7 @@ function appendItemRows(
   threadId: string | null,
   turnId: string,
   section: ThreadTimelineItemSection,
-  items: any[],
+  items: ThreadTimelineItem[],
   sections: ThreadTurnSections,
 ) {
   items.forEach((item, index) => {
@@ -102,4 +108,23 @@ function appendItemRows(
       userMessageVariant: userMessageVariant(item, sections),
     });
   });
+}
+
+function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
+  if (left.type !== right.type) return false;
+  if (left.type === "intermediateHeader" && right.type === "intermediateHeader") {
+    return left.count === right.count && left.open === right.open && left.turnId === right.turnId;
+  }
+  if (left.type === "item" && right.type === "item") {
+    // App-server reducers preserve reactive item proxies for output deltas and replace the item for
+    // structural updates. Reusing the wrapper in the first case still reacts to nested text/output,
+    // while preventing every unrelated Markdown row from receiving a fresh prop on each token.
+    return (
+      left.item === right.item &&
+      left.turnId === right.turnId &&
+      left.section === right.section &&
+      left.userMessageVariant === right.userMessageVariant
+    );
+  }
+  return false;
 }

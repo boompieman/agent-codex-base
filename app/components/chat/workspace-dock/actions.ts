@@ -6,7 +6,7 @@ import type {
   IDockviewPanel,
 } from "dockview-vue";
 import { toast } from "vue-sonner";
-import type { WorkspaceDockPanelParams } from "./types";
+import { workspaceDockPanelParamsFromUnknown } from "./types";
 import { workspacePanelPolicy } from "./panel-registry";
 
 export function floatDockItem(api: DockviewApi, item: IDockviewPanel | DockviewGroupPanel) {
@@ -58,8 +58,8 @@ export function createDockTabMenu(options: {
         }),
     },
   ];
-  const kind = (panel.params as WorkspaceDockPanelParams).kind;
-  if (workspacePanelPolicy(kind).closable) {
+  const params = workspaceDockPanelParamsFromUnknown(panel.params);
+  if (params !== null && workspacePanelPolicy(params.kind).closable) {
     items.push("separator", { label: labels.close, action: () => options.closeDynamic(panel) });
   }
   return items;

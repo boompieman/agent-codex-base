@@ -1,11 +1,11 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 const chatScrollAreaTestId = "chat-scroll-area";
 
 export async function parkChatViewportInMiddle(page: Page) {
   await expect.poll(() => chatViewportMaxScrollTop(page)).toBeGreaterThan(400);
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -240 }));
     viewport.scrollTop = Math.floor((viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -17,7 +17,7 @@ export async function parkChatViewportInMiddle(page: Page) {
 export async function detachChatViewportNearBottom(page: Page) {
   await expect.poll(() => chatViewportMaxScrollTop(page)).toBeGreaterThan(400);
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight - 48);
     viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -28,7 +28,7 @@ export async function detachChatViewportNearBottom(page: Page) {
 
 export async function chatViewportScrollTop(page: Page) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     return viewport.scrollTop;
   });
@@ -36,10 +36,20 @@ export async function chatViewportScrollTop(page: Page) {
 
 export async function chatViewportBottomDistance(page: Page) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     return Math.max(0, viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight);
   });
+}
+
+export async function waitForScrollableChatViewportAtBottom(page: Page, minimumScrollRange = 400) {
+  // WebKit can expose the first visible rows before ResizeObserver has committed the virtual
+  // document height. Starting a synthetic gesture in that window only changes the intent state:
+  // scrollTop is still zero, so the test never models a reader moving away from the latest edge.
+  // Wait on user-visible geometry rather than framework timers, then require the initial chat
+  // contract (newly opened timelines start at the latest content) before touching the viewport.
+  await expect.poll(() => chatViewportMaxScrollTop(page)).toBeGreaterThan(minimumScrollRange);
+  await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
 }
 
 export async function captureVisibleAgentLineAnchor(page: Page) {
@@ -48,7 +58,7 @@ export async function captureVisibleAgentLineAnchor(page: Page) {
 
 export async function captureVisibleTextAnchor(page: Page, prefix: string) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, prefix) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const viewportRect = viewport.getBoundingClientRect();
     const paragraphs = Array.from(viewport.querySelectorAll("p"));
@@ -77,7 +87,7 @@ export async function captureVisibleTextAnchor(page: Page, prefix: string) {
 
 export async function captureTextAnchor(page: Page, text: string) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, text) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const element = Array.from(viewport.querySelectorAll("p")).find(
       (candidate) => candidate.textContent?.trim() === text,
@@ -98,7 +108,7 @@ export async function visibleAgentLineTop(page: Page, text: string) {
 
 export async function visibleTextTop(page: Page, text: string) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, text) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const element = Array.from(viewport.querySelectorAll("p")).find(
       (candidate) => candidate.textContent?.trim() === text,
@@ -110,9 +120,56 @@ export async function visibleTextTop(page: Page, text: string) {
   }, text);
 }
 
+export async function captureVisibleTimelineRowAnchor(page: Page) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!viewport) throw new Error("Missing chat viewport");
+    const viewportRect = viewport.getBoundingClientRect();
+    const rows = Array.from(viewport.querySelectorAll<HTMLElement>("[data-row-key]"));
+    const fullyVisible = rows.find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top >= viewportRect.top + 8 && rect.bottom <= viewportRect.bottom - 8;
+    });
+    const intersecting = rows.find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.bottom >= viewportRect.top + 8 && rect.top <= viewportRect.bottom - 8;
+    });
+    const row = fullyVisible ?? intersecting;
+    const key = row?.dataset.rowKey;
+    if (row === undefined || key === undefined || key === "") {
+      throw new Error("Missing visible timeline row anchor");
+    }
+    return { key, top: row.getBoundingClientRect().top };
+  });
+}
+
+export async function visibleTimelineRowTop(page: Page, key: string) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, rowKey) => {
+    const row = Array.from(root.querySelectorAll<HTMLElement>("[data-row-key]")).find(
+      (candidate) => candidate.dataset.rowKey === rowKey,
+    );
+    if (!row) throw new Error(`Missing visible timeline row ${rowKey}`);
+    return row.getBoundingClientRect().top;
+  }, key);
+}
+
+export async function expectSyntheticWebKitTouchToRemainReadable(page: Page) {
+  // Playwright WebKit can dispatch touch events, but it cannot produce Safari's native
+  // touch-driven scroll and momentum. Direct scrollTop writes deliberately bypass the browser
+  // anchoring that TanStack's iOS deferred adjustment complements, so pixel and bottom-distance
+  // assertions after its flush would test an impossible hybrid. The reliable browser contract in
+  // this project is that streaming never re-enables following and a measured timeline row remains
+  // mounted/readable. Chromium covers exact active-scroll anchoring with real wheel ownership.
+  await expect(page.getByTestId(chatScrollAreaTestId)).toHaveAttribute(
+    "data-follow-latest",
+    "false",
+  );
+  await captureVisibleTimelineRowAnchor(page);
+}
+
 export async function scrollChatViewportToBottom(page: Page) {
   await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     // Production intentionally ignores programmatic scroll deltas when deciding
     // whether a detached reader returned to the latest content. Model the real
@@ -125,7 +182,7 @@ export async function scrollChatViewportToBottom(page: Page) {
 
 export async function scrollChatViewportToTop(page: Page) {
   await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -240 }));
     viewport.scrollTop = 0;
@@ -133,9 +190,37 @@ export async function scrollChatViewportToTop(page: Page) {
   });
 }
 
+export async function revealVirtualizedChatLocator(page: Page, locator: Locator) {
+  // TanStack deliberately unmounts timeline rows outside its overscan window. Playwright's native
+  // scrollIntoViewIfNeeded cannot target a node that does not exist yet, so walk the real viewport
+  // one screen at a time and let the virtualizer mount each window. Keeping this in the scroll
+  // helper avoids weakening production virtualization merely to make an off-screen assertion work.
+  await scrollChatViewportToTop(page);
+  await waitForBrowserFrames(page, 2);
+  for (let index = 0; index < 100; index += 1) {
+    if (await locator.isVisible().catch(() => false)) return;
+    const moved = await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
+      const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (!viewport) throw new Error("Missing chat viewport");
+      const before = viewport.scrollTop;
+      const deltaY = Math.max(1, Math.floor(viewport.clientHeight * 0.8));
+      viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
+      viewport.scrollTop = Math.min(
+        viewport.scrollHeight - viewport.clientHeight,
+        viewport.scrollTop + deltaY,
+      );
+      viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+      return viewport.scrollTop > before;
+    });
+    await waitForBrowserFrames(page, 2);
+    if (!moved) break;
+  }
+  await expect(locator).toBeVisible();
+}
+
 export async function scrollChatViewportBy(page: Page, deltaY: number) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, deltaY) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const before = viewport.scrollTop;
     viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
@@ -147,7 +232,7 @@ export async function scrollChatViewportBy(page: Page, deltaY: number) {
 
 export async function startChatTouchScrollUp(page: Page, distance: number) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, distance) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const touchEvent = (type: string, clientY: number) => {
       const event = new Event(type, { bubbles: true });
@@ -164,17 +249,43 @@ export async function startChatTouchScrollUp(page: Page, distance: number) {
   }, distance);
 }
 
+export async function continueChatTouchScrollUp(page: Page, distance: number, clientY: number) {
+  return await page.getByTestId(chatScrollAreaTestId).evaluate(
+    (root: HTMLElement, { distance, clientY }) => {
+      const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (!viewport) throw new Error("Missing chat viewport");
+      const event = new Event("touchmove", { bubbles: true });
+      Object.defineProperty(event, "touches", { value: [{ clientY }] });
+      const before = viewport.scrollTop;
+      viewport.dispatchEvent(event);
+      viewport.scrollTop = Math.max(0, viewport.scrollTop - distance);
+      viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+      return { before, after: viewport.scrollTop };
+    },
+    { distance, clientY },
+  );
+}
+
 export async function endChatTouchScroll(page: Page) {
   await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     viewport.dispatchEvent(new Event("touchend", { bubbles: true }));
   });
 }
 
+export async function waitForChatScrollToSettle(page: Page) {
+  // TanStack Virtual intentionally defers scrollTop compensation while iOS WebKit owns an
+  // active touch or momentum scroll. Writing scrollTop during that interval cancels native
+  // momentum. Its fallback scroll-end detector uses a 150 ms idle window, so tests must assert
+  // the visual anchor after that browser-owned phase rather than requiring mid-gesture writes.
+  await page.waitForTimeout(350);
+  await waitForBrowserFrames(page, 4);
+}
+
 export async function continueChatTouchMomentumUp(page: Page, distance: number) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, distance) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
     const before = viewport.scrollTop;
     // Native momentum continues with scroll events after touchend. Do not emit
@@ -192,7 +303,7 @@ export async function parkCommandOutputInMiddle(page: Page) {
     .getByText("command output line 001")
     .first()
     .evaluate((element: HTMLElement) => {
-      const viewport = element.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
       if (!viewport) throw new Error("Missing command output viewport");
       viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -120 }));
       viewport.scrollTop = Math.floor((viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -206,7 +317,7 @@ export async function commandOutputScrollTop(page: Page) {
     .getByText("command output line 001")
     .first()
     .evaluate((element: HTMLElement) => {
-      const viewport = element.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
       if (!viewport) throw new Error("Missing command output viewport");
       return viewport.scrollTop;
     });
@@ -217,7 +328,7 @@ export async function setDiffScrollLeft(page: Page, text: string, scrollLeft: nu
     .getByText(text)
     .first()
     .evaluate((element: HTMLElement, scrollLeft) => {
-      const viewport = element.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
       if (!viewport) throw new Error("Missing diff viewport");
       viewport.scrollLeft = scrollLeft;
       viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -230,7 +341,7 @@ export async function diffScrollLeft(page: Page, text: string) {
     .getByText(text)
     .first()
     .evaluate((element: HTMLElement) => {
-      const viewport = element.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
       if (!viewport) throw new Error("Missing diff viewport");
       return viewport.scrollLeft;
     });
@@ -238,7 +349,7 @@ export async function diffScrollLeft(page: Page, text: string) {
 
 async function chatViewportMaxScrollTop(page: Page) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
-    const viewport = root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) return 0;
     return viewport.scrollHeight - viewport.clientHeight;
   });
@@ -249,8 +360,25 @@ async function commandOutputMaxScrollTop(page: Page) {
     .getByText("command output line 001")
     .first()
     .evaluate((element: HTMLElement) => {
-      const viewport = element.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
+      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
       if (!viewport) throw new Error("Missing command output viewport");
       return viewport.scrollHeight - viewport.clientHeight;
     });
+}
+
+async function waitForBrowserFrames(page: Page, count: number) {
+  await page.evaluate(
+    (frameCount) =>
+      new Promise<void>((resolve) => {
+        const step = (remaining: number) => {
+          if (remaining <= 0) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(() => step(remaining - 1));
+        };
+        step(frameCount);
+      }),
+    count,
+  );
 }

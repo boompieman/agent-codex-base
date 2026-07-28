@@ -1,4 +1,5 @@
 import type { GatewayEvent, ProjectRecord } from "./records";
+import type { ThreadHistoryState, ThreadHistoryTurn } from "../thread-history/types";
 
 export type ThreadRuntimeStatus = "idle" | "running" | "completed" | "failed" | "interrupted";
 export type ThreadGoalStatus =
@@ -20,7 +21,7 @@ export interface ThreadGoal {
   updatedAt: number;
 }
 
-export interface ThreadGoalTimelineItem {
+export interface ThreadGoalTimelineItem extends Record<string, unknown> {
   type: "threadGoal";
   id: string;
   turnId?: string | null;
@@ -37,8 +38,9 @@ export interface ThreadGoalTimelineItem {
 export interface ThreadOpenResult {
   hostId: number;
   thread: AppServerThread;
-  history: unknown;
+  history: ThreadHistoryState;
   lastEventId: number;
+  eventEpoch: string;
   runtimeStatus?: ThreadRuntimeStatus | null;
   threadSettings?: ThreadSettingsState | null;
   tokenUsage?: ThreadTokenUsageState | null;
@@ -52,7 +54,7 @@ export interface ThreadOpenResult {
 }
 
 export interface ThreadTurnsPageResult {
-  history: unknown;
+  history: ThreadHistoryState;
   turnsPage: {
     nextCursor: string | null;
     backwardsCursor: string | null;
@@ -79,8 +81,33 @@ export interface TokenUsageBreakdown {
 
 export interface AppServerThread extends Record<string, unknown> {
   id: string;
+  title?: string | null;
+  name?: string | null;
+  preview?: string | null;
+  projectId?: number | null;
+  cwd?: string | null;
+  status?: import("../thread-history/types").ThreadHistoryStatus;
+  pinned?: boolean;
+  recencyAt?: number | null;
+  updatedAt?: number;
+  createdAt?: number;
+  parentThreadId?: string | null;
+  source?:
+    | "cli"
+    | "vscode"
+    | "exec"
+    | "appServer"
+    | "unknown"
+    | { custom: string }
+    | { subAgent: unknown };
+  /** Human-readable identity assigned by AgentControl for a spawned sub-agent. */
+  agentNickname?: string | null;
+  /** Functional role paired with agentNickname, for example `explorer`. */
+  agentRole?: string | null;
   /** False for parent-managed sub-agents that cannot accept direct turns. */
   canAcceptDirectInput?: boolean | null;
+  /** Populated by resume/read responses; list/start responses may omit persisted turns. */
+  turns?: ThreadHistoryTurn[];
 }
 
 export interface ThreadTokenUsageState {

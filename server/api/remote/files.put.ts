@@ -33,7 +33,10 @@ export default defineGatewayEventHandler(async (event): Promise<RemoteFileWriteR
     maxSize: Number.MAX_SAFE_INTEGER,
   });
   const currentEtag = remoteFileEtag(current.size, current.modifiedAt);
-  if (!force && (!expectedEtag || expectedEtag !== currentEtag)) {
+  if (
+    !force &&
+    (expectedEtag === undefined || expectedEtag === "" || expectedEtag !== currentEtag)
+  ) {
     throw createError({
       statusCode: 409,
       statusMessage: "Remote file changed since it was opened",

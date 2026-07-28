@@ -1,18 +1,24 @@
-export function isThreadPlanItem(item: any) {
+import type { ThreadHistoryItem, ThreadHistoryState } from "~~/shared/types";
+import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
+
+export function isThreadPlanItem(item: ThreadHistoryItem) {
   return item?.type === "plan" || item?.type === "turnPlan";
 }
 
-export function isThreadPlanItemCompleted(item: any) {
+export function isThreadPlanItemCompleted(item: ThreadHistoryItem) {
   return item?.type === "turnPlan" || statusValue(item?.status) === "completed";
 }
 
-export function latestThreadPlanItem(history: unknown) {
-  const turns = (history as any)?.thread?.turns ?? (history as any)?.turns ?? [];
+export function latestThreadPlanItem(history: ThreadHistoryState | null) {
+  const turns = threadTurnsFromHistory(history);
   for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
-    const items = Array.isArray(turns[turnIndex]?.items) ? turns[turnIndex].items : [];
+    const turn = turns[turnIndex];
+    const items = turn?.items ?? [];
     for (let itemIndex = items.length - 1; itemIndex >= 0; itemIndex -= 1) {
       const item = items[itemIndex];
-      if (isThreadPlanItem(item)) {
+      if (item !== undefined && isThreadPlanItem(item)) {
         return item;
       }
     }
@@ -20,24 +26,25 @@ export function latestThreadPlanItem(history: unknown) {
   return null;
 }
 
-export function planItemSummary(item: any) {
-  if (!item) {
+export function planItemSummary(item: ThreadHistoryItem | null | undefined) {
+  if (item === null || item === undefined) {
     return "";
   }
   if (item.type === "turnPlan") {
     return (
-      textValue(item.explanation) ||
-      (Array.isArray(item.plan) ? textValue(item.plan[0]?.step) : "") ||
-      ""
+      firstNonEmptyString([
+        textValue(item.explanation),
+        Array.isArray(item.plan) ? textValue(recordFromUnknown(item.plan[0])?.step) : null,
+      ]) ?? ""
     );
   }
-  return textValue(item.text || item.explanation);
+  return firstNonEmptyString([textValue(item.text), textValue(item.explanation)]) ?? "";
 }
 
-function statusValue(status: any) {
-  return typeof status === "string" ? status : status?.type;
+function statusValue(status: unknown) {
+  return typeof status === "string" ? status : recordFromUnknown(status)?.type;
 }
 
 function textValue(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? value.trim() : null;
 }

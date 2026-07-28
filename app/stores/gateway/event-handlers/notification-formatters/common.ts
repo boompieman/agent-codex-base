@@ -1,4 +1,5 @@
 import { jsonPreview } from "@/utils/thread-items";
+import { recordFromUnknown } from "~~/shared/utils/records";
 export type TranslationFunction = (key: string, values?: Record<string, unknown>) => string;
 
 export interface FormattedNotification {
@@ -15,7 +16,7 @@ export interface NotificationFormatContext {
 
 export type NotificationFormatter = (
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   context?: NotificationFormatContext,
 ) => FormattedNotification;
 
@@ -33,48 +34,60 @@ export function simpleNotification(
 }
 
 export function withDetails(notification: FormattedNotification, details: unknown) {
-  return details ? { ...notification, details: text(details) } : notification;
+  const detailsText = text(details);
+  return detailsText !== "" ? { ...notification, details: detailsText } : notification;
 }
 
 export function verificationSummary(value: unknown) {
-  if (!Array.isArray(value) || !value.length) {
+  if (!Array.isArray(value) || value.length === 0) {
     return "";
   }
   return value
     .slice(0, 3)
-    .map((item) => text(item?.status || item?.result || item?.model || item?.id || item))
-    .filter(Boolean)
+    .map((item) => {
+      const record = recordFromUnknown(item);
+      if (record === null) return text(item);
+      return (
+        [record.status, record.result, record.model, record.id]
+          .map(text)
+          .find((candidate) => candidate !== "") ?? text(item)
+      );
+    })
+    .filter((value) => value !== "")
     .join(", ");
 }
 
 export function itemSummary(item: unknown) {
-  if (!item || typeof item !== "object") {
-    return text(item);
-  }
-  const record = item as Record<string, any>;
-  return [record.type, record.id].filter(Boolean).join(" · ");
+  const record = recordFromUnknown(item);
+  if (record === null) return text(item);
+  return [text(record.type), text(record.id)].filter((value) => value !== "").join(" · ");
 }
 
 export function goalSummary(goal: unknown) {
-  if (!goal || typeof goal !== "object") {
-    return text(goal);
-  }
-  const record = goal as Record<string, any>;
-  return text(record.summary || record.text || record.title || record.name || goal);
+  const record = recordFromUnknown(goal);
+  if (record === null) return text(goal);
+  return (
+    [record.summary, record.text, record.title, record.name]
+      .map(text)
+      .find((value) => value !== "") ?? text(goal)
+  );
 }
 
 export function configRange(range: unknown) {
-  if (!range || typeof range !== "object") {
+  if (recordFromUnknown(range) === null) {
     return "";
   }
-  return jsonPreview(range as Record<string, any>);
+  return jsonPreview(range);
 }
 
 export function list(value: unknown, limit: number) {
   if (!Array.isArray(value)) {
     return text(value);
   }
-  const visible = value.slice(0, limit).map(text).filter(Boolean);
+  const visible = value
+    .slice(0, limit)
+    .map(text)
+    .filter((item) => item !== "");
   const extra = value.length - visible.length;
   return extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
 }

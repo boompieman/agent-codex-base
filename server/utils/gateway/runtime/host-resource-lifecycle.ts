@@ -1,6 +1,5 @@
 import { browserPreviewManager } from "../browser-preview/browser-preview-manager";
 import { gatewayEventStore } from "../state/gateway-events";
-import { projectStore } from "../state/projects";
 import { subAgentThreadStore } from "../state/sub-agent-threads";
 import { threadMetadataStore } from "../state/thread-metadata";
 import { threadSnapshotStore } from "../state/thread-snapshots";
@@ -10,26 +9,33 @@ import type { StoredHostRecord } from "../state/memory";
 import { threadBroker } from "./broker";
 import { hostRuntimeFingerprint } from "./host-runtime-fingerprint";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
+import { threadProjectDiscovery } from "./thread-project-discovery";
+import { pendingServerRequests } from "./pending-server-requests";
 
 export const hostResourceLifecycle = {
   changed(userId: number, previous: StoredHostRecord, next: StoredHostRecord) {
     if (hostRuntimeFingerprint(previous) === hostRuntimeFingerprint(next)) return;
     closeEphemeralResources(userId, previous.id);
     if (remoteIdentityFingerprint(previous) !== remoteIdentityFingerprint(next)) {
+      threadProjectDiscovery.invalidateHost(userId, previous.id);
       clearThreadRuntime(previous.id);
-      tmuxMonitorService.repository.deleteHost(userId, previous.id);
+      tmuxMonitorService.removeHost(userId, previous.id);
     }
   },
 
   deleted(userId: number, hostId: number) {
-    projectStore.deleteForHost(hostId);
+    // Config relations were removed inside UserConfigMutationService's draft transaction.
+    // This hook is deliberately limited to ephemeral resources so it cannot create a
+    // memory/SQLite split after the durable commit has already succeeded.
+    threadProjectDiscovery.invalidateHost(userId, hostId);
     clearThreadRuntime(hostId);
     closeEphemeralResources(userId, hostId);
-    tmuxMonitorService.repository.deleteHost(userId, hostId);
+    tmuxMonitorService.removeHost(userId, hostId);
   },
 };
 
 function closeEphemeralResources(userId: number, hostId: number) {
+  pendingServerRequests.deleteHost(userId, hostId);
   activeMainThreadMonitor.forgetHost(userId, hostId);
   threadBroker.closeHost(hostId);
   terminalManager.closeHost(userId, hostId);

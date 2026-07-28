@@ -1,16 +1,27 @@
 import type { ComputedRef, Ref } from "vue";
-
-import type { ThreadRuntimeStatus } from "~~/shared/types";
+import { z } from "zod";
 
 export type WorkspacePanelKind = "agent" | "files" | "terminal" | "subagent" | "browser" | "tmux";
 
-export type WorkspaceDockPanelParams =
-  | { kind: "agent" }
-  | { kind: "files" }
-  | { kind: "terminal"; sessionId: string }
-  | { kind: "subagent"; subAgentHostId: number; subAgentThreadId: string }
-  | { kind: "browser"; browserPanelId: string }
-  | { kind: "tmux" };
+export const workspaceDockPanelParamsSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("agent") }),
+  z.object({ kind: z.literal("files") }),
+  z.object({ kind: z.literal("terminal"), sessionId: z.string().min(1) }),
+  z.object({
+    kind: z.literal("subagent"),
+    subAgentHostId: z.number(),
+    subAgentThreadId: z.string().min(1),
+  }),
+  z.object({ kind: z.literal("browser"), browserPanelId: z.string().min(1) }),
+  z.object({ kind: z.literal("tmux") }),
+]);
+
+export type WorkspaceDockPanelParams = z.infer<typeof workspaceDockPanelParamsSchema>;
+
+export function workspaceDockPanelParamsFromUnknown(value: unknown) {
+  const result = workspaceDockPanelParamsSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
 
 export type WorkspaceDockPanelParamsFor<K extends WorkspacePanelKind> = Extract<
   WorkspaceDockPanelParams,
@@ -19,20 +30,6 @@ export type WorkspaceDockPanelParamsFor<K extends WorkspacePanelKind> = Extract<
 
 export interface WorkspaceDockProps {
   layout: "desktop" | "mobile";
-  initializing: boolean;
-  openingThread: boolean;
-  selectedThreadId: string | null;
-  selectedThreadStatus: ThreadRuntimeStatus;
-  selectedProjectId: number | null;
-  selectedHostId: number | null;
-  historyTurns: any[];
-  loading: boolean;
-  loadingOlderTurns: boolean;
-  olderTurnsCursor: string | null;
-  visibleError: string | null;
-  followKey: unknown[];
-  canOpenTerminal: boolean;
-  selectedThreadViewReady: boolean;
 }
 
 export interface WorkspacePanelSelection {

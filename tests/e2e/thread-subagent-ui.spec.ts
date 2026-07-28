@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openApp } from "./helpers/app";
 import {
+  capturedRealtimeInterrupt,
   installRealtimeInterruptMock,
   installRealtimeThreadSnapshotMock,
   seedGatewayThread,
@@ -11,29 +12,64 @@ import {
 test("sub-agent activity opens workspace tabs with sub-agent timelines", async ({ page }) => {
   await openApp(page);
   const threadId = "e2e-parent-thread";
-  const subThreadId = "e2e-subagent-thread";
-  const secondSubThreadId = "e2e-subagent-thread-2";
+  const subThreadId = "019fa64e-1000-7000-8000-000000000001";
+  const secondSubThreadId = "019fa64e-1000-7000-8000-000000000002";
+  await page.route("**/api/threads/metadata?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [
+          {
+            id: subThreadId,
+            parentThreadId: threadId,
+            agentNickname: "Atlas",
+            agentRole: "explorer",
+          },
+          {
+            id: secondSubThreadId,
+            parentThreadId: threadId,
+            agentNickname: "Nova",
+            agentRole: "reviewer",
+          },
+        ],
+      }),
+    });
+  });
   await installRealtimeThreadSnapshotMock(page, {
     snapshots: Object.fromEntries(
       [subThreadId, secondSubThreadId].map((openedThreadId) => {
-        const threadName = openedThreadId === secondSubThreadId ? "agent-e2e-second" : "agent-e2e";
+        const threadName = openedThreadId === secondSubThreadId ? "Nova" : "Atlas";
+        const agentRole = openedThreadId === secondSubThreadId ? "reviewer" : "explorer";
         return [
           openedThreadId,
           {
             // Forked app-server history includes parent turns before Thread.createdAt.
             // The panel must keep the subagent metadata title instead of inheriting this name.
-            thread: { id: openedThreadId, name: "Inherited Parent Thread", createdAt: 200 },
+            thread: {
+              id: openedThreadId,
+              name: "Inherited Parent Thread",
+              agentNickname: threadName,
+              agentRole,
+              createdAt: 200,
+            },
             history: {
               thread: {
                 id: openedThreadId,
                 turns: [
                   {
-                    id: "inherited-parent-turn",
+                    id:
+                      openedThreadId === secondSubThreadId
+                        ? "parent-turn"
+                        : "inherited-parent-turn",
                     status: "completed",
-                    startedAt: 100,
+                    startedAt: openedThreadId === secondSubThreadId ? null : 100,
                     items: [
                       {
-                        id: "inherited-parent-message",
+                        id:
+                          openedThreadId === secondSubThreadId
+                            ? "subagent-activity"
+                            : "inherited-parent-message",
                         type: "agentMessage",
                         phase: "final_answer",
                         text: "Inherited parent content must not render in the subagent panel.",
@@ -43,7 +79,7 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                   {
                     id: "sub-turn",
                     status: "completed",
-                    startedAt: 210,
+                    startedAt: openedThreadId === secondSubThreadId ? null : 210,
                     items: [
                       {
                         id: "sub-agent",
@@ -53,6 +89,23 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                       },
                     ],
                   },
+                  ...(openedThreadId === secondSubThreadId
+                    ? [
+                        {
+                          id: "sub-turn-2",
+                          status: "completed",
+                          startedAt: null,
+                          items: [
+                            {
+                              id: "sub-agent-2",
+                              type: "agentMessage",
+                              phase: "final_answer",
+                              text: "Second untimestamped finding from Nova.",
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
                 ],
               },
             },
@@ -64,6 +117,7 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                 threadId: openedThreadId,
                 method: "item/started",
                 payload: {
+                  method: "item/started",
                   params: {
                     threadId: openedThreadId,
                     turnId: "sub-turn",
@@ -100,14 +154,14 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                 type: "subAgentActivity",
                 kind: "started",
                 agentThreadId: subThreadId,
-                agentPath: "agent-e2e",
+                agentPath: subThreadId,
               },
               {
                 id: "subagent-activity-2",
                 type: "subAgentActivity",
                 kind: "started",
                 agentThreadId: secondSubThreadId,
-                agentPath: "agent-e2e-second",
+                agentPath: secondSubThreadId,
               },
               {
                 id: "subagent-send-input",
@@ -132,14 +186,18 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
 
   const mainPane = page.getByTestId("chat-main-pane");
   const activeAgents = page.getByTestId("active-subagents");
-  await expect(activeAgents).toContainText("agent-e2e");
-  await expect(activeAgents).toContainText("agent-e2e-second");
+  await expect(activeAgents.getByTestId("open-active-subagent")).toHaveCount(2);
+  await expect(activeAgents).toContainText("Atlas [explorer]");
+  await expect(activeAgents).toContainText("Nova [reviewer]");
+  await expect(activeAgents).not.toContainText(subThreadId);
+  await expect(activeAgents).not.toContainText(secondSubThreadId);
   await expect(page.getByText("Inspect the focused-store migration boundary.")).toBeVisible();
   await activeAgents.getByTestId("open-active-subagent").first().click();
   const panel = page.locator('[data-testid="workspace-subagent-panel"]:visible');
   await expect(panel).toBeVisible();
-  await expect(panel.getByTestId("workspace-panel-title")).toHaveText("agent-e2e");
-  await expect(panel.getByText("Sub-agent finding from agent-e2e.")).toBeVisible();
+  await expect(panel.getByTestId("workspace-panel-title")).toHaveText("Atlas [explorer]");
+  await expect(panel.getByTestId("subagent-thread-id")).toHaveText(subThreadId);
+  await expect(panel.getByText("Sub-agent finding from Atlas.")).toBeVisible();
   await expect(
     panel.getByText("Inherited parent content must not render in the subagent panel."),
   ).toHaveCount(0);
@@ -148,7 +206,10 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
   await agentWorkspaceTab(page).click();
   await expect(mainPane).toBeVisible();
   await expect(
-    page.getByTestId("chat-scroll-area").getByText("agent-e2e", { exact: true }),
+    page
+      .getByTestId("chat-scroll-area")
+      .getByTestId("open-collab-subagent-panel")
+      .filter({ hasText: "Atlas [explorer]" }),
   ).toBeVisible();
   await setThreadViewHistoryAndStatus(page, {
     hostId: 1,
@@ -176,14 +237,13 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
     },
   });
   await installRealtimeInterruptMock(page, {
-    windowKey: "__subagentInterruptRequest",
     passThroughNonInterrupt: true,
   });
-  await subAgentTab(page, "agent-e2e").click();
+  await subAgentTab(page, "Atlas [explorer]").click();
   await expect(panel.getByText("Sub-agent is still running")).toBeVisible();
   await page.getByRole("button", { name: "停止子代理" }).click();
   await expect
-    .poll(() => page.evaluate(() => (window as any).__subagentInterruptRequest))
+    .poll(() => capturedRealtimeInterrupt(page))
     .toMatchObject({
       type: "turn.interrupt",
       hostId: 1,
@@ -193,10 +253,14 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
 
   await agentWorkspaceTab(page).click();
   await page.getByTestId("open-subagent-panel").nth(1).click();
-  await expect(subAgentTab(page, "agent-e2e")).toHaveCount(1);
-  await expect(subAgentTab(page, "agent-e2e-second")).toHaveCount(1);
-  await expect(panel.getByTestId("workspace-panel-title")).toHaveText("agent-e2e-second");
-  await expect(panel.getByText("Sub-agent finding from agent-e2e-second.")).toBeVisible();
+  await expect(subAgentTab(page, "Atlas [explorer]")).toHaveCount(1);
+  await expect(subAgentTab(page, "Nova [reviewer]")).toHaveCount(1);
+  await expect(panel.getByTestId("workspace-panel-title")).toHaveText("Nova [reviewer]");
+  await expect(panel.getByText("Sub-agent finding from Nova.")).toBeVisible();
+  await expect(panel.getByText("Second untimestamped finding from Nova.")).toBeVisible();
+  await expect(
+    panel.getByText("Inherited parent content must not render in the subagent panel."),
+  ).toHaveCount(0);
   await seedGatewayThread(page, {
     threadId: "e2e-other-parent-thread",
     currentThread: { id: "e2e-other-parent-thread", name: "Other Parent Thread" },
@@ -222,8 +286,8 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
     },
   });
   await expect(panel).toBeVisible();
-  await expect(subAgentTab(page, "agent-e2e")).toHaveCount(1);
-  await expect(subAgentTab(page, "agent-e2e-second")).toHaveCount(1);
+  await expect(subAgentTab(page, "Atlas [explorer]")).toHaveCount(1);
+  await expect(subAgentTab(page, "Nova [reviewer]")).toHaveCount(1);
   await expect
     .poll(() =>
       subAgentRuntimeFlags(page, {
@@ -240,7 +304,7 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
     });
   await closeWorkspaceTab(page);
   await expect(panel).toBeVisible();
-  await expect(subAgentTab(page, "agent-e2e-second")).toHaveCount(0);
+  await expect(subAgentTab(page, "Nova [reviewer]")).toHaveCount(0);
   await closeWorkspaceTab(page);
   await expect(panel).toBeHidden();
   await expect(mainPane).toBeVisible();

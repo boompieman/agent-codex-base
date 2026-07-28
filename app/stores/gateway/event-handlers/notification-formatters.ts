@@ -100,8 +100,8 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
   "mcpServer/oauthLogin/completed": (ctx, params) =>
     simpleNotification(
       ctx,
-      params.success ? "mcpOauthLoginCompleted" : "mcpOauthLoginFailed",
-      params.success ? "info" : "warning",
+      params.success === true ? "mcpOauthLoginCompleted" : "mcpOauthLoginFailed",
+      params.success === true ? "info" : "warning",
       {
         server: text(params.name),
         error: text(params.error),
@@ -111,7 +111,7 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
     simpleNotification(
       ctx,
       "mcpServerStatusUpdated",
-      params.error || params.failureReason ? "warning" : "info",
+      text(params.error) !== "" || text(params.failureReason) !== "" ? "warning" : "info",
       {
         server: text(params.name),
         status: text(params.status),
@@ -170,7 +170,7 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
         summary: text(params.summary),
         path: text(params.path),
       }),
-      [params.details, configRange(params.range)].filter(Boolean).join("\n"),
+      [text(params.details), configRange(params.range)].filter((value) => value !== "").join("\n"),
     ),
   "fuzzyFileSearch/sessionUpdated": (ctx, params) =>
     simpleNotification(ctx, "fuzzyFileSearchUpdated", "info", {
@@ -192,8 +192,8 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
   "windowsSandbox/setupCompleted": (ctx, params) =>
     simpleNotification(
       ctx,
-      params.success ? "windowsSandboxSetupCompleted" : "windowsSandboxSetupFailed",
-      params.success ? "info" : "warning",
+      params.success === true ? "windowsSandboxSetupCompleted" : "windowsSandboxSetupFailed",
+      params.success === true ? "info" : "warning",
       {
         mode: text(params.mode),
         error: text(params.error),
@@ -202,8 +202,8 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
   "account/login/completed": (ctx, params) =>
     simpleNotification(
       ctx,
-      params.success ? "accountLoginCompleted" : "accountLoginFailed",
-      params.success ? "info" : "warning",
+      params.success === true ? "accountLoginCompleted" : "accountLoginFailed",
+      params.success === true ? "info" : "warning",
       {
         loginId: text(params.loginId),
         error: text(params.error),
@@ -214,7 +214,7 @@ const formatters: Record<VisibleNotificationMethod, NotificationFormatter> = {
 export function formatNotification(
   t: TranslationFunction,
   method: VisibleNotificationMethod,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   context?: NotificationFormatContext,
 ) {
   const formatted = formatters[method](t, params, context);
@@ -226,7 +226,7 @@ export function formatNotification(
 
 function accountAuthModeLabel(t: TranslationFunction, value: unknown) {
   const mode = text(value);
-  if (!mode) {
+  if (mode === "") {
     return "";
   }
   const keyByMode: Record<string, string> = {
@@ -239,5 +239,5 @@ function accountAuthModeLabel(t: TranslationFunction, value: unknown) {
     bedrockApiKey: "app.accountAuthModeBedrockApiKey",
   };
   const key = keyByMode[mode];
-  return key ? t(key) : mode;
+  return key !== undefined ? t(key) : mode;
 }

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, toRef, watch } from "vue";
-import type { ThreadRuntimeStatus } from "~~/shared/types";
+import type { ThreadRuntimeStatus, ThreadTimelineTurn } from "~~/shared/types";
 import { Button } from "@/components/ui/button";
 import ThreadTimelineRowView from "@/components/thread/ThreadTimelineRowView.vue";
 import VirtualTimelineViewport from "@/components/thread/VirtualTimelineViewport.vue";
 import {
   buildThreadTimelineRows,
   estimateThreadTimelineRow,
+  reuseUnchangedTimelineRows,
   type ThreadTimelineRow,
-  type ThreadTimelineTurn,
 } from "@/components/thread/timeline-rows";
 import { buildThreadTurnSections } from "@/components/thread/thread-turn-sections";
 import { useIntermediateStepsDisclosure } from "@/components/thread/useIntermediateStepsDisclosure";
@@ -65,16 +65,20 @@ const { isIntermediateOpen, setIntermediateOpen } = useIntermediateStepsDisclosu
   threadIsRunning,
   autoCollapseIntermediate,
 });
-const rows = computed(() =>
-  buildThreadTimelineRows({
+const rows = computed<ThreadTimelineRow[]>((previous) => {
+  const next = buildThreadTimelineRows({
     threadId: props.threadId,
     turns: turnStates.value.map(({ turn, sections }) => ({
       turn,
       sections,
       intermediateOpen: isIntermediateOpen(turn.id),
     })),
-  }),
-);
+  });
+  // A streaming delta invalidates the row list but normally changes only one item. Preserve all
+  // other row identities so Vue and Markdown renderers do not repeat work inside the virtual
+  // viewport; TanStack can then measure only the row whose content actually changed.
+  return reuseUnchangedTimelineRows(previous, next);
+});
 
 function selectedThreadMode() {
   if (!props.hostId || !props.threadId) return "default";

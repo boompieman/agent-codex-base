@@ -2,14 +2,15 @@ import { ref, type Ref } from "vue";
 import { gatewayApi } from "@/utils/gateway-api";
 import type { UploadedFileRecord } from "~~/shared/types";
 import type { ComposerAttachment } from "./useComposerDraft";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
+import { captureSessionEpoch } from "@/utils/session-epoch";
 
 export function useAttachmentUpload(
   selectedHostId: Ref<number | null>,
   attachedFiles: Ref<ComposerAttachment[]>,
 ) {
-  const store = useGatewayStore();
+  const store = useGatewayBootstrapStore();
   const { t } = useI18n();
   const uploadInputRef = ref<HTMLInputElement | null>(null);
   const uploadingAttachments = ref(false);
@@ -32,10 +33,13 @@ export function useAttachmentUpload(
   }
 
   async function addFiles(files: File[]) {
+    const sessionIsCurrent = captureSessionEpoch();
     const images = files.filter((file) => file.type.startsWith("image/"));
     const otherFiles = files.filter((file) => !file.type.startsWith("image/"));
 
     for (const file of images) {
+      const dataUrl = await dataUrlFromFile(file);
+      if (!sessionIsCurrent()) return;
       attachedFiles.value.push({
         id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`,
         name: file.name || "pasted-image.png",
@@ -43,11 +47,11 @@ export function useAttachmentUpload(
         mimeType: file.type || null,
         size: file.size,
         isImage: true,
-        dataUrl: await dataUrlFromFile(file),
+        dataUrl,
       });
     }
 
-    if (!otherFiles.length || !selectedHostId.value) {
+    if (otherFiles.length === 0 || selectedHostId.value === null) {
       return;
     }
 
@@ -63,31 +67,34 @@ export function useAttachmentUpload(
         query: { hostId },
         body: form,
       });
+      if (!sessionIsCurrent() || selectedHostId.value !== hostId) return;
       attachedFiles.value.push(
         ...result.files.map((file) => ({
           ...file,
           id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`,
         })),
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (!sessionIsCurrent()) return;
       store.setError(
         messageFromError(error, t("app.uploadAttachmentFailed"), errorMessageLabels(t)),
         { hostId },
       );
     } finally {
-      uploadingAttachments.value = false;
+      if (sessionIsCurrent()) uploadingAttachments.value = false;
     }
   }
 
   function handleAttachmentChange(event: Event) {
-    const input = event.target as HTMLInputElement;
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
     void addFiles(Array.from(input.files ?? []));
     input.value = "";
   }
 
   function handlePaste(event: ClipboardEvent) {
     const files = Array.from(event.clipboardData?.files ?? []);
-    if (!files.length) {
+    if (files.length === 0) {
       return;
     }
     event.preventDefault();

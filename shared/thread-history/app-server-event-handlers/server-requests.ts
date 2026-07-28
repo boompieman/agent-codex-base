@@ -11,7 +11,7 @@ import type {
 export const serverRequestReducers = {
   "serverRequest/resolved": (input, params) => {
     const requestId = idParam(params.requestId);
-    return requestId
+    return requestId !== null
       ? resolveServerRequestInHistory(input.history, input.currentThread, input.threadId, requestId)
       : input.history;
   },
@@ -31,10 +31,11 @@ function upsertPendingServerRequest(
   }
 
   const params = input.payload?.params ?? {};
+  const stableItemId = idParam(params.itemId) ?? requestId;
   return mergeItemIntoLatestTurn(input.history, input.currentThread, input.threadId, {
     type: itemTypeForServerRequest(input.method),
-    id: `server-request-${String(requestId)}`,
-    turnId: idParam(params.turnId) || `server-request-turn-${String(requestId)}`,
+    id: `server-request-${String(stableItemId)}`,
+    turnId: idParam(params.turnId) ?? `server-request-turn-${String(stableItemId)}`,
     status: "waitingForClient",
     requestId,
     method: input.method,

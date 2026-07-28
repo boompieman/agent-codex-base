@@ -24,7 +24,7 @@ export function useCodeHighlighter(
   });
 
   return {
-    html: computed(() => scheduler.output.value || ""),
+    html: computed(() => scheduler.output.value ?? ""),
     loading: scheduler.enhancing,
   };
 }

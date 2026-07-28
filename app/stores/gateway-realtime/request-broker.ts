@@ -1,5 +1,4 @@
 import type { RealtimeClientMessage, RealtimeServerMessage } from "~~/shared/types";
-import { useGatewayStore } from "@/stores/gateway";
 import { createUuid } from "@/lib/uuid";
 import { RealtimeRequestError } from "./request-errors";
 
@@ -7,7 +6,7 @@ type RealtimeRequestMessage = Extract<RealtimeClientMessage, { requestId: string
 type RealtimeResponseMessage = Extract<RealtimeServerMessage, { requestId: string }>;
 
 interface PendingRealtimeRequest {
-  resolve: (value: unknown) => void;
+  resolve: (value: RealtimeResponseMessage) => void;
   reject: (error: Error) => void;
   timer: number;
   request: RealtimeRequestMessage;
@@ -18,6 +17,7 @@ interface RealtimeRequestBrokerOptions {
   send: (message: RealtimeClientMessage) => boolean;
   unavailableMessage: () => string;
   timeoutMessage: () => string;
+  requestContext: (request: RealtimeRequestMessage) => Record<string, unknown>;
 }
 
 const REALTIME_READY_TIMEOUT_MS = 15_000;
@@ -28,28 +28,43 @@ const REALTIME_REQUEST_TIMEOUT_MS = 31 * 60_000;
 export function createRealtimeRequestBroker(options: RealtimeRequestBrokerOptions) {
   const pendingRequests = new Map<string, PendingRealtimeRequest>();
 
+  function request(
+    buildMessage: (requestId: string) => RealtimeRequestMessage,
+    timeoutMs?: number,
+  ): Promise<RealtimeResponseMessage>;
+  function request<T>(
+    buildMessage: (requestId: string) => RealtimeRequestMessage,
+    parse: (message: RealtimeResponseMessage) => T,
+    timeoutMs?: number,
+  ): Promise<T>;
   async function request<T>(
     buildMessage: (requestId: string) => RealtimeRequestMessage,
-    timeoutMs = REALTIME_REQUEST_TIMEOUT_MS,
-  ) {
+    parseOrTimeout?: ((message: RealtimeResponseMessage) => T) | number,
+    configuredTimeoutMs?: number,
+  ): Promise<RealtimeResponseMessage | T> {
     await options.waitForReady(REALTIME_READY_TIMEOUT_MS);
     const requestId = `gateway-ws-${createUuid()}`;
     const requestMessage = buildMessage(requestId);
+    const parse = typeof parseOrTimeout === "function" ? parseOrTimeout : undefined;
+    const timeoutMs =
+      typeof parseOrTimeout === "number"
+        ? parseOrTimeout
+        : (configuredTimeoutMs ?? REALTIME_REQUEST_TIMEOUT_MS);
 
-    return new Promise<T>((resolve, reject) => {
+    const response = await new Promise<RealtimeResponseMessage>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         pendingRequests.delete(requestId);
         reject(
           new RealtimeRequestError(options.timeoutMessage(), requestMessage, "timeout", {
             requestId,
             timeoutMs,
-            ...requestHostDetails(requestMessage),
+            ...options.requestContext(requestMessage),
           }),
         );
       }, timeoutMs);
 
       pendingRequests.set(requestId, {
-        resolve: resolve as (value: unknown) => void,
+        resolve,
         reject,
         timer,
         request: requestMessage,
@@ -59,11 +74,12 @@ export function createRealtimeRequestBroker(options: RealtimeRequestBrokerOption
           requestId,
           new RealtimeRequestError(options.unavailableMessage(), requestMessage, "unavailable", {
             requestId,
-            ...requestHostDetails(requestMessage),
+            ...options.requestContext(requestMessage),
           }),
         );
       }
     });
+    return parse === undefined ? response : parse(response);
   }
 
   function resolveRequest(message: RealtimeResponseMessage) {
@@ -88,16 +104,10 @@ export function createRealtimeRequestBroker(options: RealtimeRequestBrokerOption
         requestId,
         new RealtimeRequestError(error.message, pending.request, "disconnected", {
           requestId,
-          ...requestHostDetails(pending.request),
+          ...options.requestContext(pending.request),
         }),
       );
     }
-  }
-
-  function requestHostDetails(request: RealtimeRequestMessage) {
-    if (!("hostId" in request)) return {};
-    const hostName = useGatewayStore().hosts.find((host) => host.id === request.hostId)?.name;
-    return hostName ? { hostName } : {};
   }
 
   return { request, resolveRequest, rejectRequest, rejectAllRequests };

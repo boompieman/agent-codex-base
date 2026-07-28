@@ -1,4 +1,4 @@
-import { reactive, ref } from "vue";
+import { reactive, ref, type Ref } from "vue";
 import { fileWorkspaceScopeKey } from "./paths";
 import type { FileWorkspaceScope } from "./types";
 
@@ -6,8 +6,9 @@ import type { FileWorkspaceScope } from "./types";
  * entries. Only this small routing/open-tab shape belongs in localStorage. */
 export function createFileWorkspaceScopeState(options: {
   clearDirectories: (scopeKey: string) => void;
+  scopes: Ref<Record<string, FileWorkspaceScope>>;
 }) {
-  const scopes = ref<Record<string, FileWorkspaceScope>>({});
+  const { scopes } = options;
   const workspaceOpenRequest = ref<{ scopeKey: string; sequence: number } | null>(null);
 
   function scopeFor(hostId: number, threadId: string) {

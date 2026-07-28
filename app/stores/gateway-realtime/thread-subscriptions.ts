@@ -1,13 +1,17 @@
 import type { GatewayEvent, RealtimeClientMessage } from "~~/shared/types";
-import { CLIENT_THREAD_CACHE_LIMIT } from "~~/shared/config";
-import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
-import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "../gateway/thread-utils/identity";
+import { threadViewSubscriptionLeases } from "../gateway/thread-open/thread-view-subscription-leases";
 
-interface RealtimeThreadSubscription {
+export interface RealtimeThreadSubscription {
   hostId: number;
   threadId: string;
   afterId: number;
+  afterEpoch?: string;
+}
+
+export interface RealtimeThreadSubscriptionState {
+  hostLifecycleSubscribed: boolean;
+  threadSubscriptions: Record<string, RealtimeThreadSubscription>;
 }
 
 interface RealtimeThreadSubscriptionOptions {
@@ -16,11 +20,10 @@ interface RealtimeThreadSubscriptionOptions {
 }
 
 export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscriptionOptions) {
-  const state = reactive({
+  const state = reactive<RealtimeThreadSubscriptionState>({
     hostLifecycleSubscribed: false,
-    threadSubscriptions: {} as Record<string, RealtimeThreadSubscription>,
+    threadSubscriptions: {},
   });
-
   function connectHostLifecycleEvents() {
     if (!import.meta.client) return;
     state.hostLifecycleSubscribed = true;
@@ -28,80 +31,65 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
     options.send({ type: "host.lifecycle.subscribe" });
   }
 
-  function connectThreadEvents(hostId?: number | null, threadId?: string | null) {
-    const navigation = useGatewayNavigationStore();
-    const views = useGatewayThreadViewStore();
-    const resolvedHostId = hostId ?? navigation.selectedHostId;
-    const resolvedThreadId = threadId ?? navigation.selectedThreadId;
-    if (!resolvedHostId || !resolvedThreadId) return;
-
-    const key = pinnedKey(resolvedHostId, resolvedThreadId);
-    const afterId =
-      resolvedHostId === navigation.selectedHostId &&
-      resolvedThreadId === navigation.selectedThreadId
-        ? views.lastEventId
-        : (views.threadViews[key]?.lastEventId ?? 0);
-    const subscription = { hostId: resolvedHostId, threadId: resolvedThreadId, afterId };
+  function connectThreadEvents(
+    hostId: number,
+    threadId: string,
+    afterId: number,
+    afterEpoch: string | undefined,
+  ) {
+    const key = pinnedKey(hostId, threadId);
+    const subscription = { hostId, threadId, afterId, afterEpoch };
     rememberSubscription(key, subscription);
     options.connect();
     sendThreadSubscribe(subscription);
   }
 
-  function rememberThreadSubscription(hostId: number, threadId: string, afterId: number) {
-    rememberSubscription(pinnedKey(hostId, threadId), { hostId, threadId, afterId });
+  function rememberThreadSubscription(
+    hostId: number,
+    threadId: string,
+    afterId: number,
+    afterEpoch: string | undefined,
+  ) {
+    rememberSubscription(pinnedKey(hostId, threadId), { hostId, threadId, afterId, afterEpoch });
   }
 
   function rememberSubscription(key: string, subscription: RealtimeThreadSubscription) {
-    const { [key]: _existing, ...subscriptions } = state.threadSubscriptions;
-    const entries = Object.entries({ ...subscriptions, [key]: subscription });
-    const protectedKeys = protectedThreadSubscriptionKeys();
-    while (entries.length > CLIENT_THREAD_CACHE_LIMIT) {
-      const index = entries.findIndex(([candidate]) => !protectedKeys.has(candidate));
-      if (index < 0) break;
-      const [, evicted] = entries.splice(index, 1)[0]!;
-      options.send({
-        type: "thread.unsubscribe",
-        hostId: evicted.hostId,
-        threadId: evicted.threadId,
-      });
-    }
-    state.threadSubscriptions = Object.fromEntries(entries);
-  }
-
-  function protectedThreadSubscriptionKeys() {
-    const navigation = useGatewayNavigationStore();
-    const views = useGatewayThreadViewStore();
-    const keys = new Set<string>();
-    if (navigation.selectedHostId && navigation.selectedThreadId) {
-      keys.add(pinnedKey(navigation.selectedHostId, navigation.selectedThreadId));
-    }
-    for (const panel of views.visibleSubAgentPanels) {
-      keys.add(pinnedKey(panel.hostId, panel.threadId));
-    }
-    return keys;
+    state.threadSubscriptions = {
+      ...state.threadSubscriptions,
+      [key]: subscription,
+    };
+    threadViewSubscriptionLeases.retain(subscription.hostId, subscription.threadId, () => {
+      dropThreadSubscription(subscription.hostId, subscription.threadId, true);
+    });
   }
 
   function closeThreadEvents(hostId: number, threadId: string) {
-    const key = pinnedKey(hostId, threadId);
-    const { [key]: _closed, ...subscriptions } = state.threadSubscriptions;
-    state.threadSubscriptions = subscriptions;
+    if (threadViewSubscriptionLeases.release(hostId, threadId)) return;
+    dropThreadSubscription(hostId, threadId, true);
+  }
+
+  function cancelThreadEvents(hostId: number, threadId: string) {
+    // A thread.activate response can arrive after its preview panel was closed. There may be no
+    // local lease to release yet, but app-server has already subscribed this WebSocket peer, so
+    // cancellation must always send the protocol-level unsubscribe.
+    dropThreadSubscription(hostId, threadId, false);
     options.send({ type: "thread.unsubscribe", hostId, threadId });
   }
 
+  function dropThreadSubscription(hostId: number, threadId: string, notifyServer: boolean) {
+    const key = pinnedKey(hostId, threadId);
+    const { [key]: closed, ...subscriptions } = state.threadSubscriptions;
+    if (!closed) return;
+    state.threadSubscriptions = subscriptions;
+    if (notifyServer) options.send({ type: "thread.unsubscribe", hostId, threadId });
+  }
+
   function closeHostThreadEvents(hostId: number) {
-    const remaining: Record<string, RealtimeThreadSubscription> = {};
-    for (const [key, subscription] of Object.entries(state.threadSubscriptions)) {
+    for (const subscription of Object.values(state.threadSubscriptions)) {
       if (subscription.hostId === hostId) {
-        options.send({
-          type: "thread.unsubscribe",
-          hostId: subscription.hostId,
-          threadId: subscription.threadId,
-        });
-      } else {
-        remaining[key] = subscription;
+        closeThreadEvents(subscription.hostId, subscription.threadId);
       }
     }
-    state.threadSubscriptions = remaining;
   }
 
   function resubscribe() {
@@ -122,6 +110,7 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
   }
 
   function reset() {
+    threadViewSubscriptionLeases.clearWithoutRelease();
     state.hostLifecycleSubscribed = false;
     state.threadSubscriptions = {};
   }
@@ -132,6 +121,9 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
       hostId: subscription.hostId,
       threadId: subscription.threadId,
       afterId: subscription.afterId,
+      ...(subscription.afterEpoch !== undefined && subscription.afterEpoch !== ""
+        ? { afterEpoch: subscription.afterEpoch }
+        : {}),
     });
   }
 
@@ -141,6 +133,7 @@ export function createRealtimeThreadSubscriptions(options: RealtimeThreadSubscri
     connectThreadEvents,
     rememberThreadSubscription,
     closeThreadEvents,
+    cancelThreadEvents,
     closeHostThreadEvents,
     resubscribe,
     advanceThreadSubscriptionCursor,

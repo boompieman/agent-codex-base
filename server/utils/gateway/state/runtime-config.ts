@@ -25,6 +25,17 @@ export const runtimeConfigStore = {
     gatewayMemoryState.notifications = normalizeNotificationSettings(config.notifications);
   },
 
+  replacePinnedThreads(pinnedThreads: GatewayConfig["pinnedThreads"]) {
+    const hostIds = hostStore.hostIds();
+    gatewayMemoryState.pinnedThreads = normalizePinnedThreads(pinnedThreads).filter((thread) =>
+      hostIds.has(thread.hostId),
+    );
+  },
+
+  replaceNotifications(notifications: GatewayConfig["notifications"]) {
+    gatewayMemoryState.notifications = normalizeNotificationSettings(notifications);
+  },
+
   export(): GatewayConfig {
     return {
       version: 1,

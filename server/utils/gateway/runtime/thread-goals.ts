@@ -1,5 +1,10 @@
 import type { HostRecord, ThreadGoalStatus } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
+import {
+  parseThreadGoalClearResponse,
+  parseThreadGoalGetResponse,
+  parseThreadGoalSetResponse,
+} from "~~/shared/runtime/app-server";
 
 export class ThreadGoalService {
   constructor(private readonly registry: ControllerRegistry) {}
@@ -19,18 +24,34 @@ export class ThreadGoalService {
     if ("objective" in input) params.objective = input.objective;
     if ("status" in input) params.status = input.status;
     if ("tokenBudget" in input) params.tokenBudget = input.tokenBudget;
-    return controller.enqueue(() => controller.client.request("thread/goal/set", params));
+    return controller.enqueue(() =>
+      controller.client.request("thread/goal/set", params, 120_000, parseThreadGoalSetResponse),
+    );
   }
 
   async getThreadGoal(host: HostRecord, threadId: string) {
     const controller = await this.registry.getController(host, threadId);
     await controller.ensureSubscribed();
-    return controller.enqueue(() => controller.client.request("thread/goal/get", { threadId }));
+    return controller.enqueue(() =>
+      controller.client.request(
+        "thread/goal/get",
+        { threadId },
+        120_000,
+        parseThreadGoalGetResponse,
+      ),
+    );
   }
 
   async clearThreadGoal(host: HostRecord, threadId: string) {
     const controller = await this.registry.getController(host, threadId);
     await controller.ensureSubscribed();
-    return controller.enqueue(() => controller.client.request("thread/goal/clear", { threadId }));
+    return controller.enqueue(() =>
+      controller.client.request(
+        "thread/goal/clear",
+        { threadId },
+        120_000,
+        parseThreadGoalClearResponse,
+      ),
+    );
   }
 }

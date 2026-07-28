@@ -1,31 +1,20 @@
+import type { AppServerThread } from "../types/thread";
 import type { ThreadHistoryState, ThreadHistoryTurn } from "./types";
 
-export function threadTurnsFromHistory(history: unknown): ThreadHistoryTurn[] {
-  if (!history || typeof history !== "object") return [];
-  const record = history as Record<string, unknown>;
-  const thread =
-    record.thread && typeof record.thread === "object"
-      ? (record.thread as Record<string, unknown>)
-      : record;
-  return Array.isArray(thread.turns) ? (thread.turns as ThreadHistoryTurn[]) : [];
+export function threadTurnsFromHistory(history: ThreadHistoryState | null): ThreadHistoryTurn[] {
+  return history?.thread.turns ?? [];
 }
 
-export function ensureHistoryThread(history: unknown, currentThread: unknown, threadId: string) {
-  const historyRecord =
-    history && typeof history === "object" ? (history as Record<string, unknown>) : null;
-  const existingThread =
-    (historyRecord?.thread && typeof historyRecord.thread === "object"
-      ? (historyRecord.thread as Record<string, unknown>)
-      : null) ||
-    (currentThread && typeof currentThread === "object"
-      ? (currentThread as Record<string, unknown>)
-      : {});
+export function ensureHistoryThread(
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
+  threadId: string,
+): ThreadHistoryState {
+  const existingThread = history?.thread ?? currentThread ?? { id: threadId };
   const thread = {
     ...existingThread,
     id: existingThread.id || threadId,
-    turns: Array.isArray(existingThread.turns)
-      ? ([...existingThread.turns] as ThreadHistoryTurn[])
-      : [],
+    turns: [...(existingThread.turns ?? [])],
   };
-  return { thread } as ThreadHistoryState;
+  return { thread };
 }

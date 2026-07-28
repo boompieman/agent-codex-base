@@ -17,7 +17,7 @@ function resolveThreshold(source: ThresholdSource | undefined) {
   if (typeof source === "function") {
     return source();
   }
-  if (source && typeof source === "object" && "value" in source) {
+  if (source !== undefined && typeof source === "object" && "value" in source) {
     return source.value;
   }
   return source ?? 120;
@@ -33,14 +33,14 @@ export function createStickToBottomState(options: StickToBottomStateOptions) {
   let userDirection: "backward" | "forward" | null = null;
 
   function bottomDistance(viewport = options.getViewport()) {
-    if (!viewport) {
+    if (viewport === null) {
       return 0;
     }
     return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
   }
 
   function isNearBottom(viewport = options.getViewport()) {
-    if (!viewport) {
+    if (viewport === null) {
       return false;
     }
     return bottomDistance(viewport) <= resolveThreshold(options.threshold);
@@ -48,7 +48,7 @@ export function createStickToBottomState(options: StickToBottomStateOptions) {
 
   function disableNativeScrollAnchor() {
     const viewport = options.getViewport();
-    if (!viewport) {
+    if (viewport === null) {
       return;
     }
     viewport.style.setProperty("overflow-anchor", "none");
@@ -83,7 +83,8 @@ export function createStickToBottomState(options: StickToBottomStateOptions) {
   }
 
   function handleScroll(event: Event) {
-    const viewport = event.target as HTMLElement;
+    const viewport = event.target;
+    if (!(viewport instanceof HTMLElement)) return false;
     if (viewport !== options.getViewport()) {
       return false;
     }
@@ -131,6 +132,20 @@ export function createStickToBottomState(options: StickToBottomStateOptions) {
     }
   }
 
+  function handlePointerDown(event: PointerEvent) {
+    const viewport = options.getViewport();
+    if (viewport === null || event.button !== 0 || event.target !== viewport) return;
+    const scrollbarWidth = viewport.offsetWidth - viewport.clientWidth;
+    if (scrollbarWidth <= 0) return;
+    const right = viewport.getBoundingClientRect().right;
+    if (event.clientX < right - scrollbarWidth) return;
+
+    // Native scrollbar drags emit scroll events but no wheel/touch/key intent. Detach on the
+    // scrollbar gutter pointer-down instead of inferring intent from scrollTop deltas: TanStack
+    // also changes scrollTop programmatically while preserving prepend and measurement anchors.
+    detachFromBottom();
+  }
+
   function prepareViewport() {
     disableNativeScrollAnchor();
   }
@@ -139,6 +154,7 @@ export function createStickToBottomState(options: StickToBottomStateOptions) {
     currentVersion,
     followLatest,
     handleKeydown,
+    handlePointerDown,
     handleScroll,
     handleTouchMove,
     handleTouchStart,

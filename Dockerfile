@@ -12,7 +12,10 @@ FROM base AS deps
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Keep the browser-runtime task graph in the dependency layer. Its heavy Office/Markdown graph
+# changes far less often than the Nuxt app, so normal application edits should reuse this layer.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages ./packages
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -24,7 +27,8 @@ COPY scripts ./scripts
 COPY shared ./shared
 COPY server ./server
 COPY app ./app
-RUN pnpm build
+RUN --mount=type=cache,id=codex-gateway-nuxt-build,target=/app/node_modules/.cache/nuxt,sharing=locked \
+    pnpm exec nuxt build
 
 FROM node:${NODE_VERSION} AS runner
 ENV NODE_ENV=production

@@ -5,7 +5,8 @@ import { computed } from "vue";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
-import { pinnedKey, titleForThread } from "@/stores/gateway/thread-utils/identity";
+import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
+import { subAgentDisplayName } from "@/components/thread/subagent/display-name";
 import WorkspaceSubAgentPanel from "../WorkspaceSubAgentPanel.vue";
 import type { WorkspaceDockPanelParamsFor } from "./types";
 import { subAgentOwnedTurns } from "@/components/thread/subagent/subagent-turns";
@@ -15,6 +16,7 @@ const props = defineProps<{
 }>();
 const threadView = useGatewayThreadViewStore();
 const threadTurns = useGatewayThreadTurnsStore();
+const { t } = useI18n();
 const { threadViews, visibleSubAgentPanels } = storeToRefs(threadView);
 const { threadStatuses } = storeToRefs(useGatewayThreadRuntimeStore());
 const panel = computed(() =>
@@ -30,15 +32,19 @@ const panelKey = computed(() =>
 const preview = computed(() => threadViews.value[panelKey.value] ?? null);
 const turns = computed(() =>
   subAgentOwnedTurns(
-    (preview.value?.currentThread as Record<string, unknown> | null) ?? null,
-    preview.value?.history,
+    preview.value?.currentThread ?? null,
+    preview.value?.history ?? null,
+    threadView.history,
   ),
 );
 const title = computed(() => {
-  const thread = preview.value?.currentThread as Record<string, any> | null;
-  const metadataTitle =
-    panel.value?.title && panel.value.title !== panel.value.threadId ? panel.value.title : null;
-  return metadataTitle || (thread ? titleForThread(thread) : null) || panel.value?.threadId || "";
+  const thread = preview.value?.currentThread ?? null;
+  return subAgentDisplayName({
+    thread,
+    titleCandidate: panel.value?.title,
+    threadId: panel.value?.threadId,
+    fallback: t("app.subAgentPanel"),
+  });
 });
 
 function interrupt() {

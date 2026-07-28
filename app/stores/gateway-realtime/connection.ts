@@ -2,6 +2,7 @@ import { useEventListener } from "@vueuse/core";
 import type { RealtimeClientMessage, RealtimeServerMessage } from "~~/shared/types";
 import { useAuthStore } from "@/stores/auth";
 import { createUuid } from "@/lib/uuid";
+import { parseRealtimeServerMessage } from "~~/shared/runtime/realtime";
 
 const RESUME_PING_TIMEOUT_MS = 4_000;
 
@@ -17,10 +18,22 @@ interface ReadyWaiter {
   timer: number;
 }
 
+export interface RealtimeConnectionState {
+  socket: WebSocket | null;
+  connected: boolean;
+  reconnectTimer: number | null;
+  reconnectAttempt: number;
+  generation: number;
+  readyCount: number;
+  healthTimer: number | null;
+  healthNonce: string | null;
+  healthListenersInstalled: boolean;
+}
+
 export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   const readyWaiters = new Set<ReadyWaiter>();
-  const state = reactive({
-    socket: null as WebSocket | null,
+  const state = reactive<RealtimeConnectionState>({
+    socket: null,
     connected: false,
     reconnectTimer: null as number | null,
     reconnectAttempt: 0,
@@ -34,9 +47,13 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   function connect() {
     if (!import.meta.client) return;
 
+    const auth = useAuthStore();
+    auth.hydrate();
+    if (!auth.isAuthenticated) return;
+
     const existing = state.socket;
     if (
-      existing &&
+      existing !== null &&
       (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
     ) {
       return;
@@ -46,8 +63,6 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
     const generation = state.generation + 1;
     state.generation = generation;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const auth = useAuthStore();
-    auth.hydrate();
     const socket = new WebSocket(`${protocol}//${window.location.host}/api/realtime`);
     state.socket = socket;
 
@@ -61,7 +76,14 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
 
     socket.addEventListener("message", (event) => {
       if (state.generation !== generation) return;
-      options.onMessage(JSON.parse(String(event.data)) as RealtimeServerMessage);
+      try {
+        options.onMessage(parseRealtimeServerMessage(JSON.parse(String(event.data))));
+      } catch (error: unknown) {
+        // A malformed or protocol-incompatible frame cannot be ignored while the socket remains
+        // healthy: the request broker would wait until its deadline for a response already lost.
+        console.error("[gateway] invalid realtime server frame", error);
+        socket.close(1002, "Invalid realtime server frame");
+      }
     });
 
     socket.addEventListener("close", () => {
@@ -104,7 +126,7 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
     state.socket = null;
     state.connected = false;
     if (
-      socket &&
+      socket !== null &&
       socket.readyState !== WebSocket.CLOSED &&
       socket.readyState !== WebSocket.CLOSING
     ) {
@@ -113,7 +135,8 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function scheduleReconnect() {
-    if (!import.meta.client || state.reconnectTimer) return;
+    if (!import.meta.client || state.reconnectTimer !== null || !useAuthStore().isAuthenticated)
+      return;
 
     const attempt = state.reconnectAttempt + 1;
     state.reconnectAttempt = attempt;
@@ -127,7 +150,7 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   function send(message: RealtimeClientMessage) {
     connect();
     const socket = state.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    if (socket === null || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify(message));
     return true;
   }
@@ -143,10 +166,10 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function checkConnection() {
-    if (!import.meta.client) return;
+    if (!import.meta.client || !useAuthStore().isAuthenticated) return;
 
     const socket = state.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN || !state.connected) {
+    if (socket === null || socket.readyState !== WebSocket.OPEN || !state.connected) {
       reconnectNow();
       return;
     }
@@ -161,7 +184,7 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function acknowledgePong(nonce?: string) {
-    if (nonce && nonce !== state.healthNonce) return;
+    if (nonce !== undefined && nonce !== state.healthNonce) return;
     clearHealthTimer();
   }
 
@@ -205,13 +228,13 @@ export function createRealtimeConnection(options: RealtimeConnectionOptions) {
   }
 
   function clearReconnectTimer() {
-    if (!state.reconnectTimer) return;
+    if (state.reconnectTimer === null) return;
     window.clearTimeout(state.reconnectTimer);
     state.reconnectTimer = null;
   }
 
   function clearHealthTimer() {
-    if (state.healthTimer) {
+    if (state.healthTimer !== null) {
       window.clearTimeout(state.healthTimer);
       state.healthTimer = null;
     }

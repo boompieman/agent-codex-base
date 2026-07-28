@@ -2,7 +2,8 @@ import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useGatewayTerminalTransport } from "@/composables/terminal/useGatewayTerminalTransport";
 import { createUuid } from "@/lib/uuid";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { hostById, projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
@@ -11,33 +12,32 @@ import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import { browserWorkspacePanelId } from "@/stores/gateway/workspace-panels";
 
 export function useWorkspaceLaunchActions() {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const threadView = useGatewayThreadViewStore();
   const browser = useGatewayBrowserStore();
   const layout = useGatewayWorkspaceLayoutStore();
   const terminal = useGatewayTerminalTransport();
-  const { selectedHost, selectedProject } = storeToRefs(gateway);
+  const { hosts, projects } = storeToRefs(gateway);
   const { selectedHostId, selectedProjectId, selectedThreadId } = storeToRefs(navigation);
+  const selectedHost = computed(() => hostById(hosts.value, selectedHostId.value));
+  const selectedProject = computed(() => projectById(projects.value, selectedProjectId.value));
 
   function openTerminal() {
-    if (!selectedHostId.value || !selectedHost.value) return;
-    if (selectedThreadId.value) {
-      const thread = currentThreadRecord(threadView.currentThread);
+    if (selectedHostId.value === null || selectedHost.value === null) return;
+    if (selectedThreadId.value !== null) {
+      const thread = threadView.currentThread;
       void terminal.openTerminal({
         scope: "thread",
         hostId: selectedHostId.value,
         projectId: selectedProjectId.value,
         threadId: selectedThreadId.value,
-        cwd:
-          (typeof thread.cwd === "string" ? thread.cwd : null) ??
-          selectedProject.value?.remotePath ??
-          null,
-        title: titleForThread({ id: selectedThreadId.value, ...thread }),
+        cwd: thread?.cwd ?? selectedProject.value?.remotePath ?? null,
+        title: titleForThread(thread ?? { id: selectedThreadId.value }),
       });
       return;
     }
-    if (selectedProject.value) {
+    if (selectedProject.value !== null) {
       void terminal.openTerminal({
         scope: "project",
         hostId: selectedProject.value.hostId,
@@ -55,7 +55,7 @@ export function useWorkspaceLaunchActions() {
   }
 
   function openBrowser(targetUrl: string) {
-    if (!selectedHostId.value) return;
+    if (selectedHostId.value === null) return;
     const panelId = createUuid();
     browser.addPanel({
       panelId,
@@ -69,17 +69,11 @@ export function useWorkspaceLaunchActions() {
   }
 
   return {
-    canLaunch: computed(() => Boolean(selectedHostId.value)),
+    canLaunch: computed(() => selectedHostId.value !== null),
     selectedHostTitle: computed(() => selectedHost.value?.name ?? "Codex Gateway"),
     openTerminal,
     openBrowser,
   };
-}
-
-function currentThreadRecord(thread: unknown): Record<string, unknown> {
-  return thread !== null && typeof thread === "object"
-    ? Object.fromEntries(Object.entries(thread))
-    : {};
 }
 
 function browserTitle(targetUrl: string) {

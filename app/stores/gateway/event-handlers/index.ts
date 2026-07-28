@@ -1,14 +1,15 @@
 import type { GatewayEvent } from "~~/shared/types";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { threadIdFromParams } from "../thread-utils/identity";
 import { appServerEventDispatcher } from "./registry";
+import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
 
 const transientErrorRecoveryBlockedMethods = new Set(["error"]);
 
 export function applyAppServerEvent(event: GatewayEvent) {
-  const params = (event.payload as any)?.params || {};
+  const params = recordFromUnknown(event.payload.params) ?? {};
   const targetThreadId = threadIdFromParams(params) ?? event.threadId;
-  if (!targetThreadId) return;
+  if (targetThreadId === null || targetThreadId === "") return;
   const threadId = String(targetThreadId);
   clearRecoveredTransientError(event, params, threadId);
   appServerEventDispatcher.dispatch(event.method, { event, params, threadId });
@@ -16,16 +17,17 @@ export function applyAppServerEvent(event: GatewayEvent) {
 
 function clearRecoveredTransientError(
   event: GatewayEvent,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   threadId: string,
 ) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   const current = gateway.error;
-  if (!current?.transient || transientErrorRecoveryBlockedMethods.has(event.method)) return;
-  const value = params.turnId ?? params.turn?.id;
-  const eventTurnId = typeof value === "string" ? value : value == null ? null : String(value);
+  if (current?.transient !== true || transientErrorRecoveryBlockedMethods.has(event.method)) return;
+  const value = params.turnId ?? recordFromUnknown(params.turn)?.id;
+  const eventTurnIdValue = idFromUnknown(value);
+  const eventTurnId = eventTurnIdValue === null ? null : String(eventTurnIdValue);
   if (
-    eventTurnId &&
+    eventTurnId !== null &&
     current.turnId === eventTurnId &&
     current.hostId === event.hostId &&
     current.threadId === threadId

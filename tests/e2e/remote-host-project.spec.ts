@@ -1,45 +1,69 @@
-import { expect, test, type Page, type WebSocket } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
+import { projectRecordSchema } from "./helpers/http-schemas";
 import { STALE_THREAD_CURSOR_ERROR_CODE } from "../../shared/gateway-errors";
 import { sendRealtimeRawRequest } from "./helpers/realtime";
 import {
-  addRemoteHost,
-  addRemoteProject,
+  activeRealtimeSocketCount,
+  installRealtimeSocketProbe,
+} from "./helpers/realtime-socket-probe";
+import {
   execRemoteSsh,
-  readRemoteEnv,
+  type RemoteCodexEnv,
+  selectSidebarThread,
   sendTextTurn,
-  startRemoteThreadFromProjectMenu,
   waitForSelectedThreadId,
 } from "./helpers/remote-codex";
 
 test("connects to a real SSH Codex host and lists a project thread created by app-server", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
-  const realtimeSockets = trackActiveRealtimeSockets(page);
+  const { remote } = remoteWorkspace;
+  await installRealtimeSocketProbe(page);
 
   await openApp(page);
   await expect(page.getByPlaceholder("输入后续修改要求")).toBeHidden();
-  await expect.poll(() => realtimeSockets.size, { timeout: 10_000 }).toBe(1);
+  await expect.poll(() => activeRealtimeSocketCount(page), { timeout: 10_000 }).toBe(1);
 
   const hostName = `docker-codex-${Date.now()}`;
-  const host = await addRemoteHost(page, remote, hostName);
+  const host = await remoteWorkspace.addHost(hostName);
   await verifyRemoteDirectoryBrowser(page, remote, host.id, hostName);
   const discovered = await createRemoteHistoricalRollout(remote);
-  const discoveryResponse = await authenticatedFetch<any>(page, {
-    url: `/api/threads?hostId=${host.id}&limit=50`,
-  });
+  const discoveryResponse = await authenticatedFetch(
+    page,
+    { url: `/api/threads?hostId=${host.id}&limit=50` },
+    (value) =>
+      z
+        .object({
+          projects: z.array(z.object({ hostId: z.number(), remotePath: z.string() }).loose()),
+          data: z.array(
+            z
+              .object({
+                id: z.string(),
+                cwd: z.string().nullable().optional(),
+                source: z.string().nullable().optional(),
+                modelProvider: z.string().nullable().optional(),
+              })
+              .loose(),
+          ),
+        })
+        .loose()
+        .parse(value),
+  );
   expect(
     discoveryResponse.projects.some(
-      (candidate: any) =>
+      (candidate) =>
         candidate.hostId === host.id && candidate.remotePath === discovered.projectPath,
     ),
     JSON.stringify(discoveryResponse.projects),
   ).toBe(true);
   expect(
     discoveryResponse.data.some(
-      (candidate: any) =>
+      (candidate) =>
         String(candidate.id) === discovered.threadId &&
         candidate.cwd === discovered.projectPath &&
         candidate.source === "exec" &&
@@ -52,7 +76,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
     }),
   ).toBe(true);
 
-  const project = await addRemoteProject(page, remote, host.id);
+  const project = await remoteWorkspace.addProject(host.id);
 
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
   await expect(
@@ -95,40 +119,28 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect(page.getByTestId("composer-mode-strip").getByText("计划模式").first()).toBeVisible();
   await page.getByPlaceholder("输入后续修改要求").fill("");
 
-  const threadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const threadId = await remoteWorkspace.startThread(project.id);
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
-  const secondThreadId = await startRemoteThreadFromProjectMenu(page, project.id);
+  const secondThreadId = await remoteWorkspace.startThread(project.id);
   await expect(page.getByTestId(`thread-button-${secondThreadId}`)).toBeVisible();
 
   const firstDraft = `E2E 草稿一 ${Date.now()}`;
   const secondDraft = `E2E 草稿二 ${Date.now()}`;
-  await page.getByTestId(`thread-button-${threadId}`).click();
+  await selectSidebarThread(page, threadId);
   await page.getByPlaceholder("输入后续修改要求").fill(firstDraft);
-  await page.getByTestId(`thread-button-${secondThreadId}`).click();
+  await selectSidebarThread(page, secondThreadId);
   await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue("");
   await page.getByPlaceholder("输入后续修改要求").fill(secondDraft);
-  await page.getByTestId(`thread-button-${threadId}`).click();
+  await selectSidebarThread(page, threadId);
   await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue(firstDraft);
-  await page.getByTestId(`thread-button-${secondThreadId}`).click();
+  await selectSidebarThread(page, secondThreadId);
   await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue(secondDraft);
   await page.getByPlaceholder("输入后续修改要求").fill("");
 
-  await page.getByTestId(`thread-button-${threadId}`).click();
-  await expect(page.getByTestId(`thread-button-${threadId}`)).toHaveAttribute(
-    "data-selected",
-    "true",
-  );
-  await page.getByTestId(`thread-button-${secondThreadId}`).click();
-  await expect(page.getByTestId(`thread-button-${secondThreadId}`)).toHaveAttribute(
-    "data-selected",
-    "true",
-  );
-  await page.getByTestId(`thread-button-${threadId}`).click();
-  await expect(page.getByTestId(`thread-button-${threadId}`)).toHaveAttribute(
-    "data-selected",
-    "true",
-  );
-  expect(realtimeSockets.size).toBe(1);
+  await selectSidebarThread(page, threadId);
+  await selectSidebarThread(page, secondThreadId);
+  await selectSidebarThread(page, threadId);
+  expect(await activeRealtimeSocketCount(page)).toBe(1);
 
   const marker = `E2E 置顶恢复 ${Date.now()}`;
   await sendTextTurn(page, marker);
@@ -157,7 +169,9 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   if (staleTurnsResponse.type !== "error") {
     throw new Error(`Expected realtime error response: ${JSON.stringify(staleTurnsResponse)}`);
   }
-  expect(staleTurnsResponse.code).toBe(STALE_THREAD_CURSOR_ERROR_CODE);
+  expect(staleTurnsResponse.code, JSON.stringify(staleTurnsResponse)).toBe(
+    STALE_THREAD_CURSOR_ERROR_CODE,
+  );
 
   await reloadApp(page);
   await expect(page.getByTestId(`recent-thread-button-${threadId}`)).toBeHidden();
@@ -185,9 +199,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect
     .poll(async () =>
       page.getByTestId("chat-scroll-area").evaluate((root) => {
-        const viewport = root.querySelector(
-          '[data-slot="scroll-area-viewport"]',
-        ) as HTMLElement | null;
+        const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!viewport) return false;
         return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 120;
       }),
@@ -204,9 +216,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect
     .poll(async () =>
       page.getByTestId("chat-scroll-area").evaluate((root) => {
-        const viewport = root.querySelector(
-          '[data-slot="scroll-area-viewport"]',
-        ) as HTMLElement | null;
+        const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
         if (!viewport) return false;
         return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 120;
       }),
@@ -228,7 +238,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await page.getByTestId("add-project-button").click();
   const editProjectResponse = await editProjectResponsePromise;
   expect(editProjectResponse.ok(), await editProjectResponse.text()).toBe(true);
-  const editedProject = await editProjectResponse.json();
+  const editedProject = projectRecordSchema.parse(await editProjectResponse.json());
   expect(editedProject.remotePath).toBe(updatedProjectPath);
 
   const deleteProjectResponsePromise = page.waitForResponse(
@@ -243,11 +253,11 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await expect(page.getByTestId(`project-button-${project.id}`)).toBeHidden();
 });
 
-test("groups projects whose remote directories were deleted", async ({ page }) => {
-  const remote = await readRemoteEnv();
+test("groups projects whose remote directories were deleted", async ({ page, remoteWorkspace }) => {
+  const { remote } = remoteWorkspace;
   await openApp(page);
 
-  const host = await addRemoteHost(page, remote, `missing-project-host-${Date.now()}`);
+  const host = await remoteWorkspace.addHost(`missing-project-host-${Date.now()}`);
   const suffix = Date.now();
   const availablePath = `/home/${remote.username}/available-project-${suffix}`;
   const missingPath = `/home/${remote.username}/missing-project-${suffix}`;
@@ -257,16 +267,24 @@ test("groups projects whose remote directories were deleted", async ({ page }) =
     `mkdir -p '${availablePath}' '${recoveredPath}'; rm -rf '${missingPath}'`,
   );
 
-  const availableProject = await authenticatedFetch<any>(page, {
-    url: "/api/projects",
-    method: "POST",
-    body: { hostId: host.id, name: "Available Project", remotePath: availablePath },
-  });
-  const missingProject = await authenticatedFetch<any>(page, {
-    url: "/api/projects",
-    method: "POST",
-    body: { hostId: host.id, name: "Missing Project", remotePath: missingPath },
-  });
+  const availableProject = await authenticatedFetch(
+    page,
+    {
+      url: "/api/projects",
+      method: "POST",
+      body: { hostId: host.id, name: "Available Project", remotePath: availablePath },
+    },
+    (value) => projectRecordSchema.parse(value),
+  );
+  const missingProject = await authenticatedFetch(
+    page,
+    {
+      url: "/api/projects",
+      method: "POST",
+      body: { hostId: host.id, name: "Missing Project", remotePath: missingPath },
+    },
+    (value) => projectRecordSchema.parse(value),
+  );
 
   await reloadApp(page);
   const missingToggle = page.getByTestId(`missing-projects-toggle-${host.id}`);
@@ -303,7 +321,7 @@ test("groups projects whose remote directories were deleted", async ({ page }) =
 
 async function verifyRemoteDirectoryBrowser(
   page: Page,
-  remote: Awaited<ReturnType<typeof readRemoteEnv>>,
+  remote: RemoteCodexEnv,
   hostId: number,
   hostName: string,
 ) {
@@ -328,7 +346,10 @@ async function verifyRemoteDirectoryBrowser(
   await page.getByRole("button", { name: /浏览|Browse/ }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(404);
-  const payload = await response.json();
+  const payload = z
+    .object({ code: z.string(), message: z.string() })
+    .loose()
+    .parse(await response.json());
   expect(payload.code).toBe("remoteDirectoryNotFound");
   expect(payload.message).toContain(missingPath);
   await expect(page.getByText(new RegExp(`Remote directory.*${missingPath}`))).toBeVisible();
@@ -342,27 +363,16 @@ async function verifyRemoteDirectoryBrowser(
   await page.getByRole("button", { name: /浏览|Browse/ }).click();
   const deniedResponse = await deniedResponsePromise;
   expect(deniedResponse.status()).toBe(403);
-  const deniedPayload = await deniedResponse.json();
+  const deniedPayload = z
+    .object({ code: z.string(), message: z.string() })
+    .loose()
+    .parse(await deniedResponse.json());
   expect(deniedPayload.code).toBe("remoteDirectoryAccessDenied");
   expect(deniedPayload.message).toContain("/root");
   await page.keyboard.press("Escape");
 }
 
-function trackActiveRealtimeSockets(page: Page) {
-  const sockets = new Set<WebSocket>();
-  page.on("websocket", (webSocket) => {
-    if (!webSocket.url().endsWith("/api/realtime")) {
-      return;
-    }
-    sockets.add(webSocket);
-    webSocket.on("close", () => {
-      sockets.delete(webSocket);
-    });
-  });
-  return sockets;
-}
-
-async function createRemoteHistoricalRollout(remote: Awaited<ReturnType<typeof readRemoteEnv>>) {
+async function createRemoteHistoricalRollout(remote: RemoteCodexEnv) {
   const suffix = Date.now();
   const threadId = randomUUID();
   const cwd = "/home/codex";

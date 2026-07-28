@@ -1,13 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/remote-workspace";
 import { openApp, reloadApp } from "./helpers/app";
-import { addRemoteHost, readRemoteEnv, startRemotePreviewServer } from "./helpers/remote-codex";
+import { startRemotePreviewServer } from "./helpers/remote-codex";
 
 test("opens a real remote HTTP and WebSocket service through the SSH preview proxy", async ({
   page,
+  remoteWorkspace,
 }) => {
-  const remote = await readRemoteEnv();
+  const { remote } = remoteWorkspace;
   await openApp(page);
-  await addRemoteHost(page, remote, `preview-host-${Date.now()}`);
+  await remoteWorkspace.addHost(`preview-host-${Date.now()}`);
   await startRemotePreviewServer(remote);
 
   await page.getByTestId("open-browser-button").click();

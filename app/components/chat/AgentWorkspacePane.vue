@@ -1,39 +1,37 @@
 <script setup lang="ts">
 import { FolderIcon, Loader2Icon } from "@lucide/vue";
 import { computed } from "vue";
-import type { ThreadRuntimeStatus } from "~~/shared/types";
 import ChatComposer from "@/components/chat/ChatComposer.vue";
 import ChatPanelScrollArea from "@/components/chat/ChatPanelScrollArea.vue";
 import ProjectThreadList from "@/components/chat/ProjectThreadList.vue";
 import ThreadVirtualTimeline from "@/components/thread/ThreadVirtualTimeline.vue";
 import ActiveSubAgentsBar from "@/components/thread/subagent/ActiveSubAgentsBar.vue";
+import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
+import { useChatWorkspaceState } from "./chat-workspace-state";
 
-const props = defineProps<{
-  initializing: boolean;
-  openingThread: boolean;
-  selectedThreadId: string | null;
-  selectedThreadStatus: ThreadRuntimeStatus;
-  selectedProjectId: number | null;
-  selectedHostId: number | null;
-  historyTurns: any[];
-  loading: boolean;
-  loadingOlderTurns: boolean;
-  olderTurnsCursor: string | null;
-  visibleError: string | null;
-  followKey: unknown[];
-  selectedThreadViewReady: boolean;
-}>();
-
-const emit = defineEmits<{
-  loadOlder: [];
-}>();
+const {
+  initializing,
+  openingThread,
+  selectedThreadId,
+  selectedThreadStatus,
+  selectedProjectId,
+  selectedHostId,
+  historyTurns,
+  loading,
+  loadingOlderTurns,
+  olderTurnsCursor,
+  visibleError,
+  followKey,
+  selectedThreadViewReady,
+} = useChatWorkspaceState();
+const threadTurns = useGatewayThreadTurnsStore();
 
 const { t } = useI18n();
 const showThreadLoading = computed(
   () =>
-    props.initializing ||
-    props.openingThread ||
-    (Boolean(props.selectedThreadId) && !props.selectedThreadViewReady && !props.visibleError),
+    initializing.value ||
+    openingThread.value ||
+    (Boolean(selectedThreadId.value) && !selectedThreadViewReady.value && !visibleError.value),
 );
 </script>
 
@@ -67,7 +65,7 @@ const showThreadLoading = computed(
         :loading-older="loadingOlderTurns"
         :older-turns-cursor="olderTurnsCursor"
         :follow-key="followKey"
-        @load-older="emit('loadOlder')"
+        @load-older="threadTurns.loadOlderTurns"
       />
 
       <ChatPanelScrollArea v-else-if="selectedProjectId">

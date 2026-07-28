@@ -6,13 +6,15 @@ import { gatewayMemoryState } from "../state/memory";
 const MAX_PUBLISHED_NOTIFICATION_KEYS = 1_000;
 
 export const notificationCenter = {
-  publish(notification: ServerNotification) {
-    if (alreadyPublished(notification.key)) {
-      return;
+  async publish(notification: ServerNotification) {
+    if (!alreadyPublished(notification.key)) {
+      markPublished(notification.key);
+      notificationRealtimeEvents.publish(notification);
     }
-    markPublished(notification.key);
-    notificationRealtimeEvents.publish(notification);
-    deliverBarkNotification(notification);
+    // Browser fan-out and Bark delivery have separate idempotency state. A duplicate app-server
+    // completion must not toast twice, but it may legitimately retry a Bark attempt that exhausted
+    // its transient network retries and therefore was never marked delivered.
+    await deliverBarkNotification(notification);
   },
 };
 

@@ -56,7 +56,7 @@ export function applyThreadRuntimeStatus(
 
   if (input.status === "running") {
     runningKeys.add(key);
-    if (input.turnId) {
+    if (input.turnId !== null && input.turnId !== undefined && input.turnId !== "") {
       runtime.activeTurnIdsByThreadKey = {
         ...runtime.activeTurnIdsByThreadKey,
         [key]: input.turnId,

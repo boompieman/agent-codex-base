@@ -24,4 +24,9 @@ export const settingsPanelRegistry = {
   },
 } satisfies Record<SettingsPanelKind, SettingsPanelPolicy>;
 
-export const settingsPanelKinds = Object.keys(settingsPanelRegistry) as SettingsPanelKind[];
+export const settingsPanelKinds = [
+  "appearance",
+  "config",
+  "hosts",
+  "notifications",
+] as const satisfies readonly SettingsPanelKind[];

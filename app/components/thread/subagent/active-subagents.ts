@@ -1,12 +1,16 @@
+import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString, trimmedOrNull } from "~~/shared/utils/strings";
+
 const ACTIVE_AGENT_STATUSES = new Set(["pendingInit", "running"]);
 
 export interface ActiveSubAgent {
   threadId: string;
-  title: string;
+  agentPath: string | null;
   status: string;
 }
 
-export function activeSubAgentsFromTurns(turns: Array<Record<string, any>>): ActiveSubAgent[] {
+export function activeSubAgentsFromTurns(turns: ThreadTimelineTurn[]): ActiveSubAgent[] {
   const agents = new Map<string, ActiveSubAgent>();
   // Activity items provide the stable thread/path identity, while collab tool
   // state is app-server's latest lifecycle snapshot. Fold both chronologically;
@@ -20,9 +24,9 @@ export function activeSubAgentsFromTurns(turns: Array<Record<string, any>>): Act
   return [...agents.values()];
 }
 
-function applyActivity(agents: Map<string, ActiveSubAgent>, item: Record<string, any>) {
+function applyActivity(agents: Map<string, ActiveSubAgent>, item: ThreadTimelineItem) {
   const threadId = text(item.agentThreadId);
-  if (!threadId) return;
+  if (threadId === "") return;
   if (item.kind === "interrupted") {
     agents.delete(threadId);
     return;
@@ -30,33 +34,33 @@ function applyActivity(agents: Map<string, ActiveSubAgent>, item: Record<string,
   const existing = agents.get(threadId);
   agents.set(threadId, {
     threadId,
-    title: text(item.agentPath) || existing?.title || `agent-${threadId.slice(0, 8)}`,
-    status: existing?.status || "running",
+    agentPath: firstNonEmptyString([text(item.agentPath), existing?.agentPath]),
+    status: existing?.status ?? "running",
   });
 }
 
-function applyCollabState(agents: Map<string, ActiveSubAgent>, item: Record<string, any>) {
+function applyCollabState(agents: Map<string, ActiveSubAgent>, item: ThreadTimelineItem) {
   const receiverIds = Array.isArray(item.receiverThreadIds)
     ? item.receiverThreadIds.map(String)
     : [];
-  const states =
-    item.agentsStates && typeof item.agentsStates === "object" ? item.agentsStates : {};
+  const states = recordFromUnknown(item.agentsStates) ?? {};
   for (const threadId of new Set([...receiverIds, ...Object.keys(states)])) {
-    const status = text(states[threadId]?.status);
-    if (status && !ACTIVE_AGENT_STATUSES.has(status)) {
+    const state = recordFromUnknown(states[threadId]);
+    const status = text(state?.status);
+    if (status !== "" && !ACTIVE_AGENT_STATUSES.has(status)) {
       agents.delete(threadId);
       continue;
     }
-    if (!status && item.tool !== "spawnAgent") continue;
+    if (status === "" && item.tool !== "spawnAgent") continue;
     const existing = agents.get(threadId);
     agents.set(threadId, {
       threadId,
-      title: existing?.title || `agent-${threadId.slice(0, 8)}`,
-      status: status || "pendingInit",
+      agentPath: existing?.agentPath ?? null,
+      status: status === "" ? "pendingInit" : status,
     });
   }
 }
 
 function text(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : "";
+  return typeof value === "string" ? (trimmedOrNull(value) ?? "") : "";
 }

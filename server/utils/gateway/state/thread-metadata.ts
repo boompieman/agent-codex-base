@@ -1,5 +1,6 @@
 import { gatewayMemoryState, toTimestamp } from "./memory";
 import { parentThreadIdFromMetadata, subAgentThreadStore } from "./sub-agent-threads";
+import type { AppServerThread } from "~~/shared/types";
 
 export const threadMetadataStore = {
   pruneToHosts(hostIds: Set<number>) {
@@ -22,7 +23,7 @@ export const threadMetadataStore = {
     );
   },
 
-  record(hostId: number, projectId: number | null, thread: any) {
+  record(hostId: number, projectId: number | null, thread: AppServerThread) {
     const threadId = String(thread.id);
     subAgentThreadStore.recordThreadMetadata(hostId, thread);
     const timestamp = Math.floor(Date.now() / 1000);
@@ -31,6 +32,8 @@ export const threadMetadataStore = {
       projectId,
       threadId,
       parentThreadId: parentThreadIdFromMetadata(thread),
+      agentNickname: thread.agentNickname ?? null,
+      agentRole: thread.agentRole ?? null,
       title: thread.title ?? thread.name ?? null,
       name: thread.name ?? null,
       preview: thread.preview ?? thread.name ?? null,
@@ -44,7 +47,7 @@ export const threadMetadataStore = {
     );
     if (index >= 0) {
       const existing = gatewayMemoryState.threadMetadata[index];
-      if (!existing) {
+      if (existing === undefined) {
         return;
       }
       gatewayMemoryState.threadMetadata[index] = {
@@ -52,6 +55,8 @@ export const threadMetadataStore = {
         ...metadata,
         projectId: projectId ?? existing.projectId,
         parentThreadId: metadata.parentThreadId ?? existing.parentThreadId,
+        agentNickname: metadata.agentNickname ?? existing.agentNickname,
+        agentRole: metadata.agentRole ?? existing.agentRole,
         cwd: metadata.cwd ?? existing.cwd,
         preview: metadata.preview ?? existing.preview,
         title: metadata.title ?? existing.title,
@@ -72,7 +77,12 @@ export const threadMetadataStore = {
         if (options.projectId != null && thread.projectId !== options.projectId) {
           return false;
         }
-        if (options.cwd && thread.cwd && thread.cwd !== options.cwd) {
+        if (
+          options.cwd !== null &&
+          options.cwd !== undefined &&
+          thread.cwd !== null &&
+          thread.cwd !== options.cwd
+        ) {
           return false;
         }
         return true;
@@ -81,6 +91,8 @@ export const threadMetadataStore = {
         id: thread.threadId,
         projectId: thread.projectId,
         parentThreadId: thread.parentThreadId,
+        agentNickname: thread.agentNickname,
+        agentRole: thread.agentRole,
         title: thread.title,
         name: thread.name,
         preview: thread.preview,
@@ -91,8 +103,8 @@ export const threadMetadataStore = {
       }))
       .sort(
         (left, right) =>
-          Number(right.recencyAt || right.updatedAt || 0) -
-          Number(left.recencyAt || left.updatedAt || 0),
+          Number(right.recencyAt ?? right.updatedAt ?? 0) -
+          Number(left.recencyAt ?? left.updatedAt ?? 0),
       );
   },
 };

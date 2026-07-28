@@ -5,11 +5,12 @@ import {
   type ComponentPublicInstance,
   type MaybeRefOrGetter,
 } from "vue";
-import { createChatVirtualizerBehavior, shouldAdjustChatScrollForSizeChange } from "./anchoring";
+import { createChatVirtualizerBehavior } from "./anchoring";
 import { useDirectDomVirtualizer } from "./direct-dom-virtualizer";
 import { useStickToBottom } from "./stick-to-bottom";
 import type { ThresholdSource } from "./stick-to-bottom-state";
 import { captureViewportRowAnchor, findViewportRowByKey } from "./viewport-anchor";
+import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 interface ChatVirtualizerOptions {
   count: MaybeRefOrGetter<number>;
@@ -46,8 +47,11 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
     })),
   );
   const virtualizer = directVirtualizer.virtualizer;
-  virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
-    shouldAdjustChatScrollForSizeChange(item, instance, sticky.followLatest.value);
+  // Keep Virtual Core's built-in dynamic-size anchoring. Since 3.17 it distinguishes first
+  // estimate measurements from later reflows and defers iOS momentum corrections itself. A local
+  // predicate loses that context and has historically broken either active scrolling or concurrent
+  // history prepends. Diff and command output remain separate bounded scrollports, so they never
+  // participate in this outer timeline policy.
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());
 
   function bottomOffset(viewport: HTMLElement) {
@@ -69,10 +73,10 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
 
   function measureElement(refValue: Element | ComponentPublicInstance | null) {
     const element = elementFromRef(refValue);
-    if (!element) {
+    if (element === null) {
       return null;
     }
-    const index = Number((element as HTMLElement).dataset.index);
+    const index = element instanceof HTMLElement ? Number(element.dataset.index) : Number.NaN;
     if (Number.isFinite(index)) {
       directVirtualizer.measureElement(element);
     } else {
@@ -86,7 +90,7 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
   function measureVisibleItems() {
     for (const virtualItem of virtualItems.value) {
       const element = virtualizer.value.elementsCache.get(virtualItem.key);
-      if (element?.isConnected) {
+      if (element?.isConnected === true) {
         virtualizer.value.measureElement(element);
       }
     }
@@ -106,7 +110,7 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
 
     await nextTick();
     for (let frame = 0; frame < 2; frame += 1) {
-      await nextFrame();
+      await nextAnimationFrame();
       if (generation !== reflowGeneration) return;
       // Visibility restoration only invalidates DOM placement. Preserve the
       // size cache and explicitly remeasure mounted rows below; clearing every
@@ -150,8 +154,4 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
     virtualItems,
     virtualizer,
   };
-}
-
-function nextFrame() {
-  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
