@@ -1,25 +1,26 @@
 import { mergeTurnItems } from "./item-merge";
 import { ensureHistoryThread } from "./shape";
 import { terminalTurnStatus } from "../thread-runtime-status";
-import type { ThreadHistoryItem, ThreadHistoryTurn } from "./types";
+import type { AppServerThread } from "../types/thread";
+import type { ThreadHistoryState, ThreadHistoryTurn } from "./types";
 
 export function mergeThreadTurns(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   turns: ThreadHistoryTurn[],
   direction: "prepend" | "append",
-) {
+): ThreadHistoryState {
   const nextHistory = ensureHistoryThread(history, currentThread, threadId);
   const existingTurns = nextHistory.thread.turns;
   const seen = new Set(
     existingTurns
-      .map((turn) => turn?.id)
-      .filter(Boolean)
-      .map(String),
+      .map((turn) => turn.id)
+      .filter((id): id is string | number => typeof id === "string" || typeof id === "number")
+      .map((id) => String(id)),
   );
   const incoming = turns.filter((turn) => {
-    if (!turn?.id) {
+    if (typeof turn.id !== "string" && typeof turn.id !== "number") {
       return true;
     }
     const id = String(turn.id);
@@ -35,30 +36,25 @@ export function mergeThreadTurns(
 }
 
 export function syncCompletedTurn(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   turn: ThreadHistoryTurn,
-) {
-  if (!turn?.id) {
-    return history;
-  }
-
+): ThreadHistoryState {
   const nextHistory = ensureHistoryThread(history, currentThread, threadId);
+  if (typeof turn.id !== "string" && typeof turn.id !== "number") {
+    return nextHistory;
+  }
   const turns = nextHistory.thread.turns;
   const syncedTurn = { ...turn, status: terminalTurnStatus(turn.status) };
   const index = turns.findIndex((candidate) => candidate?.id === turn.id);
   if (index >= 0) {
     const existingTurn = turns[index];
     if (!existingTurn) {
-      return history;
+      return nextHistory;
     }
-    const existingItems = Array.isArray(existingTurn.items)
-      ? (existingTurn.items as ThreadHistoryItem[])
-      : [];
-    const incomingItems = Array.isArray(syncedTurn.items)
-      ? (syncedTurn.items as ThreadHistoryItem[])
-      : [];
+    const existingItems = existingTurn.items ?? [];
+    const incomingItems = syncedTurn.items ?? [];
     turns[index] = {
       ...existingTurn,
       ...syncedTurn,

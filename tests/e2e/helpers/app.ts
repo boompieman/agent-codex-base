@@ -1,10 +1,15 @@
 import { expect, type Page } from "@playwright/test";
+import { installRealtimeRoute } from "./realtime-route";
 
-export const E2E_USERNAME = process.env.E2E_GATEWAY_USERNAME || "e2e";
-export const E2E_PASSWORD = process.env.E2E_GATEWAY_PASSWORD || "codex-gateway-e2e-password";
+export const E2E_USERNAME = process.env.E2E_GATEWAY_USERNAME ?? "e2e";
+export const E2E_PASSWORD = process.env.E2E_GATEWAY_PASSWORD ?? "codex-gateway-e2e-password";
 const resetPages = new WeakSet<Page>();
 
 export async function openApp(page: Page, options: { resetConfig?: boolean } = {}) {
+  // Playwright only routes WebSockets created after registration. Install a transparent pass-
+  // through before the first navigation; focused tests can later intercept individual protocol
+  // messages without replacing Pinia state or weakening real realtime coverage elsewhere.
+  await installRealtimeRoute(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForHydratedApp(page, options);
 }
@@ -21,10 +26,11 @@ export async function authenticatedFetch<T>(
     method?: string;
     body?: unknown;
   },
-) {
-  return await page.evaluate(async (request) => {
+  parseResponse: (value: unknown) => T,
+): Promise<T> {
+  const responseText = await page.evaluate(async (request) => {
     const token = localStorage.getItem("codex-gateway-auth-token");
-    if (!token) {
+    if (token === null || token === "") {
       throw new Error("Missing E2E auth token");
     }
     const response = await fetch(request.url, {
@@ -39,8 +45,9 @@ export async function authenticatedFetch<T>(
     if (!response.ok) {
       throw new Error(text);
     }
-    return text ? (JSON.parse(text) as T) : ({} as T);
+    return text;
   }, request);
+  return parseResponse(responseText === "" ? {} : JSON.parse(responseText));
 }
 
 async function waitForHydratedApp(page: Page, options: { resetConfig?: boolean } = {}) {
@@ -67,16 +74,20 @@ async function waitForHydratedApp(page: Page, options: { resetConfig?: boolean }
 }
 
 export async function resetGatewayConfig(page: Page) {
-  await authenticatedFetch(page, {
-    url: "/api/config/sync",
-    method: "POST",
-    body: {
-      version: 1,
-      hosts: [],
-      projects: [],
-      pinnedThreads: [],
+  await authenticatedFetch(
+    page,
+    {
+      url: "/api/config/sync",
+      method: "POST",
+      body: {
+        version: 1,
+        hosts: [],
+        projects: [],
+        pinnedThreads: [],
+      },
     },
-  });
+    () => undefined,
+  );
 }
 
 async function loginIfNeeded(page: Page) {
@@ -107,7 +118,7 @@ function collectPageDiagnostics(page: Page) {
   });
   page.on("requestfailed", (request) => {
     lines.push(
-      `requestfailed ${request.method()} ${request.url()}: ${request.failure()?.errorText || "unknown"}`,
+      `requestfailed ${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "unknown"}`,
     );
   });
   return async () => {

@@ -1,5 +1,6 @@
 import type { ErrorMessageLabels } from "./thread-utils/identity";
 import { gatewayErrorMessage, gatewayErrorPayload } from "@/utils/gateway-error";
+import { recordFromUnknown } from "~~/shared/utils/records";
 
 export type GatewayErrorKind = "appServerTurn" | "http" | "rpc" | "realtime" | "unknown";
 
@@ -53,21 +54,21 @@ export const APP_SERVER_SERVER_OVERLOADED_MESSAGE =
 export const APP_SERVER_RPC_OVERLOADED_MESSAGE = "Server overloaded; retry later.";
 
 export function appServerTurnErrorFromNotification(
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   t: (key: string, values?: Record<string, unknown>) => string,
 ) {
-  const turnError = params.error || {};
-  const message = stringValue(turnError.message) || t("app.appServerError");
+  const turnError = recordFromUnknown(params.error) ?? {};
+  const message = stringValue(turnError.message) ?? t("app.appServerError");
   const additionalDetails = stringValue(turnError.additionalDetails);
   const code = codexErrorCode(turnError.codexErrorInfo);
   const willRetry = params.willRetry === true;
   const display = [
     message,
-    code ? t("app.appServerErrorCode", { code }) : null,
+    code !== null ? t("app.appServerErrorCode", { code }) : null,
     additionalDetails,
     willRetry ? t("app.appServerWillRetry") : t("app.appServerWillNotRetry"),
   ]
-    .filter(Boolean)
+    .filter((value): value is string => value !== null)
     .join("\n");
 
   return new AppServerTurnDisplayError(
@@ -83,14 +84,14 @@ export function appServerTurnErrorFromNotification(
 }
 
 export function unknownGatewayErrorFromError(
-  error: any,
+  error: unknown,
   fallback: string,
   labels: ErrorMessageLabels,
 ) {
   const payload = gatewayErrorPayload(error);
   const message = gatewayErrorMessage(error, fallback);
   const details = payload?.details;
-  if (!details || typeof details !== "object") {
+  if (details === null || typeof details !== "object") {
     return new UnknownGatewayDisplayError(message);
   }
 
@@ -115,9 +116,9 @@ export function unknownGatewayErrorFromError(
           ? labels.proxyNone
           : null,
     ),
-  ].filter(Boolean);
+  ].filter((value): value is string => value !== null);
   return new UnknownGatewayDisplayError(
-    context.length ? `${message}\n${context.join(" · ")}` : message,
+    context.length > 0 ? `${message}\n${context.join(" · ")}` : message,
   );
 }
 
@@ -125,26 +126,26 @@ function codexErrorCode(value: unknown): string | null {
   if (typeof value === "string") {
     return value;
   }
-  if (!value || typeof value !== "object") {
+  if (value === null || value === undefined || typeof value !== "object") {
     return null;
   }
   const [key] = Object.keys(value);
-  return key || null;
+  return key === undefined || key === "" ? null : key;
 }
 
 function labelValue(label: string, value: unknown) {
   const text = stringValue(value);
-  return text ? `${label}: ${text}` : null;
+  return text === null ? null : `${label}: ${text}`;
 }
 
 function sshTarget(details: Record<string, unknown>) {
   const host = stringValue(details.sshHost);
-  if (!host) {
+  if (host === null) {
     return null;
   }
   const user = stringValue(details.sshUser);
   const port = stringValue(details.sshPort);
-  return `${user ? `${user}@` : ""}${host}${port ? `:${port}` : ""}`;
+  return `${user === null ? "" : `${user}@`}${host}${port === null ? "" : `:${port}`}`;
 }
 
 function stringValue(value: unknown) {
@@ -163,7 +164,7 @@ export function isServerOverloadedAppError(error: unknown) {
   );
 }
 
-export function isServerOverloadedRequestError(error: any) {
+export function isServerOverloadedRequestError(error: unknown) {
   const message = gatewayErrorMessage(error, "");
   return (
     message === APP_SERVER_SERVER_OVERLOADED_MESSAGE ||

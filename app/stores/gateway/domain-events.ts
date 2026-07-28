@@ -1,11 +1,59 @@
-import type { ThreadSettingsState, ThreadTokenUsageState } from "~~/shared/types";
+import type {
+  AppServerThread,
+  BrowserPreviewSessionSnapshot,
+  ThreadHistoryItem,
+  ThreadHistoryTurn,
+  RealtimeServerMessage,
+  ServerNotification,
+  ThreadSettingsState,
+  ThreadTokenUsageState,
+  TerminalSessionSnapshot,
+  GatewayConfig,
+} from "~~/shared/types";
+import type { AppServerEventParams } from "~~/shared/thread-history/app-server-event-handlers/types";
 import type { ThreadRuntimeStatus } from "./types";
 import { EventEmitter } from "@posva/event-emitter";
 
+type RealtimeMessage<T extends RealtimeServerMessage["type"]> = Extract<
+  RealtimeServerMessage,
+  { type: T }
+>;
+
 export type GatewayDomainEventMap = {
+  "gateway-session-reset": Record<never, never>;
+  "gateway-config-applied": { config: GatewayConfig };
+  "host-removed": { hostId: number };
+  "pinned-threads-invalidated": Record<never, never>;
+  "realtime-reconnected": Record<never, never>;
+  "realtime-error-reported": {
+    message: string;
+    hostId: number | null;
+    threadId: string | null;
+  };
+  "realtime-thread-event": { event: GatewayEvent };
+  "realtime-thread-events-gap": { hostId: number; threadId: string };
+  "history-events-project": { events: GatewayEvent[] };
+  "realtime-thread-goal-updated": RealtimeMessage<"thread.goal.updated">;
+  "realtime-thread-goal-cleared": RealtimeMessage<"thread.goal.cleared">;
+  "realtime-thread-goal-snapshot": RealtimeMessage<"thread.goal.snapshot">;
+  "realtime-terminal-opened": { session: TerminalSessionSnapshot };
+  "realtime-terminal-snapshot": { sessions: TerminalSessionSnapshot[] };
+  "realtime-terminal-closed": { sessionId: string };
+  "realtime-terminal-output": { sessionId: string; data: string };
+  "realtime-terminal-exited": { sessionId: string; displayMessage: string };
+  "realtime-terminal-error": { sessionId?: string; message: string };
+  "realtime-browser-opened": { session: BrowserPreviewSessionSnapshot };
+  "realtime-browser-closed": { sessionId: string };
+  "realtime-browser-error": { message: string };
+  "realtime-browser-frame-warning": { sessionId: string; value: string };
+  "realtime-notification-published": {
+    notification: ServerNotification;
+    actionLabel: string;
+  };
+  "realtime-host-lifecycle": RealtimeMessage<"host.lifecycle">;
   "thread-summary-detected": {
     hostId: number;
-    thread: any;
+    thread: AppServerThread;
   };
   "thread-status-detected": {
     hostId: number;
@@ -41,24 +89,36 @@ export type GatewayDomainEventMap = {
     threadId: string;
     tokenUsage: ThreadTokenUsageState;
   };
-  "history-item-upsert": { hostId: number; threadId: string; item: any };
-  "history-agent-delta": { hostId: number; threadId: string; params: any };
-  "history-plan-delta": { hostId: number; threadId: string; params: any };
-  "history-reasoning-summary-delta": { hostId: number; threadId: string; params: any };
-  "history-reasoning-text-delta": { hostId: number; threadId: string; params: any };
+  "history-item-upsert": { hostId: number; threadId: string; item: ThreadHistoryItem };
+  "history-agent-delta": { hostId: number; threadId: string; params: AppServerEventParams };
+  "history-plan-delta": { hostId: number; threadId: string; params: AppServerEventParams };
+  "history-reasoning-summary-delta": {
+    hostId: number;
+    threadId: string;
+    params: AppServerEventParams;
+  };
+  "history-reasoning-text-delta": {
+    hostId: number;
+    threadId: string;
+    params: AppServerEventParams;
+  };
   "history-command-output-delta": {
     hostId: number;
     threadId: string;
-    params: any;
+    params: AppServerEventParams;
   };
   "history-server-request-resolved": {
     hostId: number;
     threadId: string;
     requestId: string | number;
   };
-  "history-turn-diff-updated": { hostId: number; threadId: string; params: any };
-  "history-turn-appended": { hostId: number; threadId: string; turn: any };
-  "history-turn-synced": { hostId: number; threadId: string; turn: any };
+  "history-turn-diff-updated": {
+    hostId: number;
+    threadId: string;
+    params: AppServerEventParams;
+  };
+  "history-turn-appended": { hostId: number; threadId: string; turn: ThreadHistoryTurn };
+  "history-turn-synced": { hostId: number; threadId: string; turn: ThreadHistoryTurn };
 };
 
 export const gatewayDomainEvents = new EventEmitter<GatewayDomainEventMap>();

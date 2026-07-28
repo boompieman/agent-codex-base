@@ -2,36 +2,51 @@ import type { HostWithSecret } from "../infra/ssh-types";
 import { notificationCenter } from "../notifications/notification-center";
 import { TmuxMonitorRepository } from "./repository";
 import type { StoredTmuxMonitor } from "./types";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export class TmuxMonitorNotifier {
+  private readonly pendingMonitorIds = new Set<number>();
+
   constructor(private readonly repository: TmuxMonitorRepository) {}
 
   publishCompletion(host: HostWithSecret, monitor: StoredTmuxMonitor) {
-    if (!this.repository.claimNotification(monitor.userId, monitor.id)) return;
-    notificationCenter.publish({
-      key: `tmux-monitor:${monitor.userId}:${monitor.id}:completed`,
-      title: `Tmux 任务已结束 · ${host.name || host.sshHost} · ${monitor.sessionName}`,
-      body: [
-        `Host：${host.name || host.sshHost}`,
-        `Thread：${threadLabel(monitor)}`,
-        `Tmux：${monitor.sessionName}`,
-        `状态：${reasonLabel(monitor)}`,
-      ].join("\n"),
-      group: "tmux-monitor",
-      target: {
-        kind: "tmuxMonitor",
-        hostId: monitor.hostId,
-        monitorId: monitor.id,
-        projectId: monitor.projectId,
-        threadId: monitor.threadId,
-      },
-    });
+    if (this.pendingMonitorIds.has(monitor.id)) return;
+    const persisted = this.repository.getOwned(monitor.userId, monitor.id);
+    if (persisted === null || persisted.notificationSentAt !== null) return;
+
+    this.pendingMonitorIds.add(monitor.id);
+    try {
+      notificationCenter.publish({
+        key: `tmux-monitor:${monitor.userId}:${monitor.id}:completed`,
+        title: `Tmux 任务已结束 · ${firstNonEmptyString([host.name, host.sshHost]) ?? String(host.id)} · ${monitor.sessionName}`,
+        body: [
+          `Host：${firstNonEmptyString([host.name, host.sshHost]) ?? String(host.id)}`,
+          `Thread：${threadLabel(monitor)}`,
+          `Tmux：${monitor.sessionName}`,
+          `状态：${reasonLabel(monitor)}`,
+        ].join("\n"),
+        group: "tmux-monitor",
+        target: {
+          kind: "tmuxMonitor",
+          hostId: monitor.hostId,
+          monitorId: monitor.id,
+          projectId: monitor.projectId,
+          threadId: monitor.threadId,
+        },
+      });
+      // Mark only after the notification center accepted browser fan-out and Bark scheduling.
+      // Marking first creates an at-most-once crash window where a process exit loses the task
+      // completion forever; a retry after an unconfirmed publish is the safer notification policy.
+      this.repository.markNotificationSent(monitor.userId, monitor.id);
+    } finally {
+      this.pendingMonitorIds.delete(monitor.id);
+    }
   }
 }
 
 function threadLabel(monitor: StoredTmuxMonitor) {
-  if (!monitor.threadId) return "主机级监控";
-  return monitor.threadTitle || monitor.threadId;
+  if (monitor.threadId === null) return "主机级监控";
+  return firstNonEmptyString([monitor.threadTitle, monitor.threadId]) ?? monitor.threadId;
 }
 
 function reasonLabel(monitor: StoredTmuxMonitor) {
@@ -44,7 +59,8 @@ function reasonLabel(monitor: StoredTmuxMonitor) {
       return "Pane 已退出";
     case "paneReplaced":
       return "Pane 已被替换";
-    default:
+    case "cancelled":
+    case null:
       return "监控已完成";
   }
 }

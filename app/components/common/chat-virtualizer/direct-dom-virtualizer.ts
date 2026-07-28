@@ -297,7 +297,7 @@ export function useDirectDomVirtualizer<
   }
 
   function refresh(options: { forceStyles?: boolean; remeasure?: boolean } = {}) {
-    if (options.forceStyles) {
+    if (options.forceStyles === true) {
       invalidateDirectStyles();
     }
     instance._willUpdate();

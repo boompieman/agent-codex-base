@@ -9,14 +9,15 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
-import type { ThreadRuntimeStatus } from "@/stores/gateway";
+import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import { selectedRowClass } from "./sidebar-utils";
 import SidebarRowLabel from "./SidebarRowLabel.vue";
 import ThreadStatusIndicator from "./ThreadStatusIndicator.vue";
+import type { SidebarThreadRow } from "./sidebar-types";
 
 const props = defineProps<{
-  thread: any;
+  thread: SidebarThreadRow;
   testId: string;
   selected: boolean;
   status: ThreadRuntimeStatus;

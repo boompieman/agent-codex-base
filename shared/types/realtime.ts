@@ -194,6 +194,13 @@ export type RealtimeServerMessage =
       type: "thread.event";
       event: GatewayEvent;
     }
+  | {
+      type: "thread.events.gap";
+      hostId: number;
+      threadId: string;
+      afterId: number;
+      lastEventId: number;
+    }
   | ({
       type: "thread.snapshot";
       requestId: string;

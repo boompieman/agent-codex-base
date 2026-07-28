@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Loader2Icon } from "@lucide/vue";
 import { computed } from "vue";
+import type { ThreadTimelineTurn } from "~~/shared/types";
 import type { SubAgentPanelState, ThreadViewState } from "@/stores/gateway/types";
 import ThreadVirtualTimeline from "@/components/thread/ThreadVirtualTimeline.vue";
-import type { ThreadTimelineTurn } from "@/components/thread/timeline-rows";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 
 const props = defineProps<{

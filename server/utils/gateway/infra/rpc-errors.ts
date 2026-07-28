@@ -51,8 +51,8 @@ export function createRpcTransportError(
 }
 
 function causeMessage(prefix: string, error: unknown) {
-  const detail = error instanceof Error ? error.message : String(error);
-  return detail ? `${prefix}: ${detail}` : prefix;
+  const detail = trimmedOrNull(ensureError(error).message);
+  return detail === null ? prefix : `${prefix}: ${detail}`;
 }
 
 function formatTransportErrorMessage(message: string, detail: CodexRpcTransportError["detail"]) {
@@ -60,8 +60,10 @@ function formatTransportErrorMessage(message: string, detail: CodexRpcTransportE
     `host=${detail.hostName}#${detail.hostId}`,
     `phase=${detail.phase}`,
     detail.code == null ? null : `channelExit=${detail.code}`,
-    detail.signal ? `signal=${detail.signal}` : null,
-    detail.stderr ? `remoteStderr=${detail.stderr}` : "remoteStderr=<empty>",
-  ].filter(Boolean);
+    detail.signal === null ? null : `signal=${detail.signal}`,
+    detail.stderr === "" ? "remoteStderr=<empty>" : `remoteStderr=${detail.stderr}`,
+  ].filter((part): part is string => part !== null);
   return `${message} (${parts.join(", ")})`;
 }
+import ensureError from "ensure-error";
+import { trimmedOrNull } from "~~/shared/utils/strings";

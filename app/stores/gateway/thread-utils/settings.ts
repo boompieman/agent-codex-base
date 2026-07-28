@@ -1,11 +1,12 @@
 import type { ThreadSettingsState } from "~~/shared/types";
+import { trimmedOrNull } from "~~/shared/utils/strings";
 
 export function normalizeThreadSettings(
   settings: ThreadSettingsState | null | undefined,
 ): ThreadSettingsState {
   return {
-    model: settings?.model || null,
-    effort: settings?.effort || null,
+    model: trimmedOrNull(settings?.model),
+    effort: trimmedOrNull(settings?.effort),
     approvalPolicy:
       settings?.approvalPolicy === "untrusted" ||
       settings?.approvalPolicy === "on-request" ||

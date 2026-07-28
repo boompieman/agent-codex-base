@@ -1,6 +1,5 @@
 import { browserPreviewManager } from "../browser-preview/browser-preview-manager";
 import { gatewayEventStore } from "../state/gateway-events";
-import { projectStore } from "../state/projects";
 import { subAgentThreadStore } from "../state/sub-agent-threads";
 import { threadMetadataStore } from "../state/thread-metadata";
 import { threadSnapshotStore } from "../state/thread-snapshots";
@@ -17,15 +16,17 @@ export const hostResourceLifecycle = {
     closeEphemeralResources(userId, previous.id);
     if (remoteIdentityFingerprint(previous) !== remoteIdentityFingerprint(next)) {
       clearThreadRuntime(previous.id);
-      tmuxMonitorService.repository.deleteHost(userId, previous.id);
+      tmuxMonitorService.removeHost(userId, previous.id);
     }
   },
 
   deleted(userId: number, hostId: number) {
-    projectStore.deleteForHost(hostId);
+    // Config relations were removed inside UserConfigMutationService's draft transaction.
+    // This hook is deliberately limited to ephemeral resources so it cannot create a
+    // memory/SQLite split after the durable commit has already succeeded.
     clearThreadRuntime(hostId);
     closeEphemeralResources(userId, hostId);
-    tmuxMonitorService.repository.deleteHost(userId, hostId);
+    tmuxMonitorService.removeHost(userId, hostId);
   },
 };
 

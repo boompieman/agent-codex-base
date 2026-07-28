@@ -2,7 +2,7 @@
 import ThreadRow from "./ThreadRow.vue";
 import { formatRelative, threadKey } from "./sidebar-utils";
 import type { ThreadActivitySummary } from "@/stores/gateway-thread-activity";
-import type { ThreadRuntimeStatus } from "@/stores/gateway";
+import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 
 type RecentThread = ThreadActivitySummary & {
   id: string;

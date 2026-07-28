@@ -1,6 +1,7 @@
 import type { ThreadOpenResult } from "~~/shared/types";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
-import { useGatewayStore } from "@/stores/gateway";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
@@ -12,45 +13,51 @@ import { runtimeStatusFromThreadState } from "../thread-utils/status";
 import type { ThreadSnapshotMessage } from "./transport";
 
 export function applyOpenedThreadResult(threadId: string, result: ThreadOpenResult) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   views.currentThread = result.thread;
   views.history = result.history;
-  if (result.projectId) navigation.selectedProjectId = result.projectId;
+  if (result.projectId !== null && result.projectId !== undefined) {
+    navigation.selectedProjectId = result.projectId;
+  }
   navigation.selectedThreadId = threadId;
   useGatewayRealtimeStore().rememberThreadSubscription(result.hostId, threadId, result.lastEventId);
-  if (result.project) gateway.mergeProjects([result.project]);
+  if (result.project !== null && result.project !== undefined)
+    gateway.mergeProjects([result.project]);
   applyCommonThreadResult(threadId, result, result.lastEventId);
-  for (const event of result.recentEvents) views.applyLiveEvent(event);
+  views.applyLiveEvents(result.recentEvents);
   syncRuntimeStatusFromResult(threadId, result, {
     thread: views.currentThread,
     history: views.history,
   });
-  navigation.upsertPinnedMetadataFromThread(result.thread as any);
+  navigation.upsertPinnedMetadataFromThread(result.thread);
 }
 
 export function applyThreadSnapshotResult(threadId: string, result: ThreadSnapshotMessage) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   views.currentThread = result.thread;
   views.history = result.history;
-  if (result.projectId) navigation.selectedProjectId = result.projectId;
+  if (result.projectId !== null && result.projectId !== undefined) {
+    navigation.selectedProjectId = result.projectId;
+  }
   navigation.selectedThreadId = threadId;
-  if (result.project) gateway.mergeProjects([result.project]);
+  if (result.project !== null && result.project !== undefined)
+    gateway.mergeProjects([result.project]);
   applyCommonThreadResult(threadId, result, result.lastEventId);
   syncRuntimeStatusFromResult(threadId, result, {
     thread: views.currentThread,
     history: views.history,
   });
-  navigation.upsertPinnedMetadataFromThread(result.thread as any);
+  navigation.upsertPinnedMetadataFromThread(result.thread);
 }
 
 export function applyStartedThreadResult(result: ThreadOpenResult) {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
-  const threadId = String((result.thread as any).id);
+  const threadId = result.thread.id;
   views.currentThread = result.thread;
   views.history = result.history;
   navigation.selectedThreadId = threadId;
@@ -63,21 +70,22 @@ function applyCommonThreadResult(
   result: ThreadOpenResult,
   explicitLastEventId?: number,
 ) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayCatalogStore();
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
   const views = useGatewayThreadViewStore();
-  const hostId = result.hostId || navigation.selectedHostId;
-  if (!hostId) return;
+  const hostId = result.hostId ?? navigation.selectedHostId;
+  if (hostId === null) return;
   useGatewayThreadActivityStore().upsertThread(hostId, result.thread, gateway.projects);
   views.events = result.recentEvents;
   views.olderTurnsCursor = result.turnsPage.nextCursor;
   views.newerTurnsCursor = result.turnsPage.backwardsCursor;
   views.lastEventId = explicitLastEventId ?? result.recentEvents.at(-1)?.id ?? 0;
   composer.setThreadSettings(hostId, threadId, result.threadSettings);
-  if (result.tokenUsage) runtime.setThreadTokenUsage(hostId, threadId, result.tokenUsage);
-  else syncTokenUsageFromRecentEvents(result.recentEvents);
+  if (result.tokenUsage !== null && result.tokenUsage !== undefined) {
+    runtime.setThreadTokenUsage(hostId, threadId, result.tokenUsage);
+  } else syncTokenUsageFromRecentEvents(result.recentEvents);
   syncRuntimeStatusFromResult(threadId, result);
 }
 
@@ -90,21 +98,24 @@ function syncRuntimeStatusFromResult(
   },
 ) {
   const hostId = useGatewayNavigationStore().selectedHostId;
-  if (!hostId || !threadId) return;
+  if (hostId === null || threadId === "") return;
   const status =
     result.runtimeStatus ??
     runtimeStatusFromThreadState(fallbackState.thread, fallbackState.history);
-  if (status) useGatewayThreadRuntimeStore().setThreadStatus(hostId, threadId, status);
+  if (status !== null) useGatewayThreadRuntimeStore().setThreadStatus(hostId, threadId, status);
 }
 
 function syncTokenUsageFromRecentEvents(events: ThreadOpenResult["recentEvents"]) {
   const runtime = useGatewayThreadRuntimeStore();
   for (const event of events) {
     if (event.method !== "thread/tokenUsage/updated") continue;
-    const params = (event.payload as any)?.params || {};
-    const threadId = threadIdFromParams(params);
-    const tokenUsage = normalizeTokenUsage(params.tokenUsage);
-    if (threadId && event.hostId && tokenUsage) {
+    const params = recordFromUnknown(event.payload)?.params;
+    if (params === undefined) continue;
+    const paramsRecord = recordFromUnknown(params);
+    if (paramsRecord === null) continue;
+    const threadId = threadIdFromParams(paramsRecord);
+    const tokenUsage = normalizeTokenUsage(paramsRecord.tokenUsage);
+    if (threadId !== null && event.hostId !== null && tokenUsage !== null) {
       runtime.setThreadTokenUsage(event.hostId, String(threadId), tokenUsage);
     }
   }

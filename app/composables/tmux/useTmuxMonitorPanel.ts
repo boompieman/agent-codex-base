@@ -7,6 +7,7 @@ import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
 import type { TmuxRemoteHostState } from "@/stores/gateway-tmux";
 import { paneSnapshotFromMonitor } from "@/stores/gateway-tmux/pane";
 import { gatewayErrorMessage } from "@/utils/gateway-error";
+import { trimmedOrFallback } from "~~/shared/utils/strings";
 
 const EMPTY_REMOTE_STATE: TmuxRemoteHostState = {
   sessions: [],
@@ -27,7 +28,10 @@ export function useTmuxMonitorPanel() {
   const preview = ref<{ hostId: number; pane: TmuxPaneSnapshot } | null>(null);
   const previewHostTitle = computed(() =>
     preview.value
-      ? dashboard.hostNames.value[preview.value.hostId] || `Host ${preview.value.hostId}`
+      ? trimmedOrFallback(
+          dashboard.hostNames.value[preview.value.hostId],
+          `Host ${preview.value.hostId}`,
+        )
       : "",
   );
 
@@ -55,7 +59,7 @@ export function useTmuxMonitorPanel() {
     await Promise.all([...expandedHostIds.value].map((hostId) => tmux.refreshSessions(hostId)));
   }
 
-  const sessionRefresh = useIntervalFn(refreshExpandedHosts, 15_000, {
+  const sessionRefresh = useIntervalFn(() => void refreshExpandedHosts(), 15_000, {
     immediate: false,
     immediateCallback: false,
   });
@@ -76,7 +80,7 @@ export function useTmuxMonitorPanel() {
     ([open, hostId]) => {
       // Opening the dashboard from a conversation should reveal that Host immediately.
       // Other Hosts remain lazy: expanding their tree node starts the singleflight SSH scan.
-      if (open && hostId) setHostExpanded(hostId, true);
+      if (open && hostId !== null) setHostExpanded(hostId, true);
     },
     { immediate: true },
   );
@@ -84,15 +88,15 @@ export function useTmuxMonitorPanel() {
   async function addMonitor(hostId: number, pane: TmuxPaneSnapshot, mode: TmuxMonitorMode) {
     const binding = dashboard.currentThreadBindingForHost(hostId);
     const paneKey = `${hostId}:${pane.sessionId}:${pane.paneId}`;
-    if (addingPaneKey.value) return;
+    if (addingPaneKey.value !== null) return;
     addingPaneKey.value = paneKey;
     try {
       await tmux.addMonitor(hostId, pane, binding, mode);
       toast.success(
         t(mode === "permanent" ? "app.tmuxPermanentMonitorAdded" : "app.tmuxMonitorAdded", {
           session: pane.sessionName,
-          host: dashboard.hostNames.value[hostId] || `Host ${hostId}`,
-          thread: binding?.threadTitle || t("app.tmuxHostLevelMonitor"),
+          host: trimmedOrFallback(dashboard.hostNames.value[hostId], `Host ${hostId}`),
+          thread: trimmedOrFallback(binding?.threadTitle, t("app.tmuxHostLevelMonitor")),
         }),
       );
     } catch (error) {
@@ -103,7 +107,7 @@ export function useTmuxMonitorPanel() {
   }
 
   async function promoteMonitor(monitor: TmuxMonitor) {
-    if (promotingMonitorId.value) return;
+    if (promotingMonitorId.value !== null) return;
     promotingMonitorId.value = monitor.id;
     try {
       await tmux.promoteMonitor(monitor.hostId, monitor.id);
@@ -134,24 +138,28 @@ export function useTmuxMonitorPanel() {
           candidate.paneIndex === monitor.paneIndex &&
           (monitor.mode === "permanent" || candidate.running),
       );
-    if (!pane) {
-      toast.error(state.error || t("app.tmuxPreviousPaneUnavailable"));
+    if (pane === undefined) {
+      toast.error(trimmedOrFallback(state.error, t("app.tmuxPreviousPaneUnavailable")));
       return;
     }
-    const binding = monitor.threadId
-      ? {
-          projectId: monitor.projectId,
-          threadId: monitor.threadId,
-          threadTitle: monitor.threadTitle || monitor.threadId,
-        }
-      : null;
+    const binding =
+      monitor.threadId !== null && monitor.threadId !== ""
+        ? {
+            projectId: monitor.projectId,
+            threadId: monitor.threadId,
+            threadTitle: trimmedOrFallback(monitor.threadTitle, monitor.threadId),
+          }
+        : null;
     try {
       await tmux.addMonitor(monitor.hostId, pane, binding, monitor.mode);
       toast.success(
         t(monitor.mode === "permanent" ? "app.tmuxPermanentMonitorAdded" : "app.tmuxMonitorAdded", {
           session: pane.sessionName,
-          host: dashboard.hostNames.value[monitor.hostId] || `Host ${monitor.hostId}`,
-          thread: binding?.threadTitle || t("app.tmuxHostLevelMonitor"),
+          host: trimmedOrFallback(
+            dashboard.hostNames.value[monitor.hostId],
+            `Host ${monitor.hostId}`,
+          ),
+          thread: trimmedOrFallback(binding?.threadTitle, t("app.tmuxHostLevelMonitor")),
         }),
       );
     } catch (error) {

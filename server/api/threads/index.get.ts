@@ -12,6 +12,11 @@ import { projectStore } from "../../utils/gateway/state/projects";
 import { threadMetadataStore } from "../../utils/gateway/state/thread-metadata";
 import { remoteFiles } from "../../utils/gateway/infra/host-services";
 import { withAllThreadSources } from "../../utils/gateway/protocol/thread-list";
+import { threadProjectDiscovery } from "../../utils/gateway/runtime/thread-project-discovery";
+import type { AppServerThread } from "~~/shared/types";
+import type { HostWithSecret } from "../../utils/gateway/infra/ssh-types";
+import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
+import { trimmedOrNull } from "~~/shared/utils/strings";
 
 export default defineGatewayEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (body) => threadListSchema.parse(body));
@@ -28,18 +33,20 @@ export default defineGatewayEventHandler(async (event) => {
 
   const listParams = withAllThreadSources({
     limit: query.limit,
-    cursor: query.cursor || null,
-    cwd: query.cwd || undefined,
-    searchTerm: query.searchTerm || undefined,
+    cursor: trimmedOrNull(query.cursor),
+    cwd: trimmedOrNull(query.cwd) ?? undefined,
+    searchTerm: trimmedOrNull(query.searchTerm) ?? undefined,
     useStateDbOnly: query.useRemoteStateIndexOnly ?? false,
   });
-  const result = await threadBroker.listThreads(host, listParams);
+  const page = await threadBroker.listThreads(host, listParams);
+  const threads = page.data
+    .map(appServerThreadFromUnknown)
+    .filter((thread): thread is AppServerThread => thread !== null);
+  threadProjectDiscovery.indexPage(host.id, page);
 
-  const threads = Array.isArray((result as any)?.data) ? (result as any).data : [];
-  indexThreadProjects(host.id, threads);
-
-  if (shouldDiscoverHostProjects(query)) {
-    await discoverHostProjects(host, result, listParams);
+  const userId = event.context.auth?.user.id;
+  if (userId !== undefined && shouldDiscoverHostProjects(query)) {
+    threadProjectDiscovery.schedule(userId, host, page, listParams);
   }
   const mergedThreads = mergeThreads(
     threads,
@@ -52,7 +59,7 @@ export default defineGatewayEventHandler(async (event) => {
   const projects = projectStore.list(host.id);
   const projectDirectoryAvailability = await inspectProjectAvailability(host, projects);
   return {
-    ...(result as Record<string, unknown>),
+    ...page,
     data: mergedThreads,
     projects,
     projectDirectoryAvailability,
@@ -60,7 +67,7 @@ export default defineGatewayEventHandler(async (event) => {
 });
 
 async function inspectProjectAvailability(
-  host: any,
+  host: HostWithSecret,
   projects: Array<{ id: number; remotePath: string }>,
 ) {
   try {
@@ -71,7 +78,7 @@ async function inspectProjectAvailability(
     return Object.fromEntries(
       projects.flatMap((project) => {
         const availability = byPath.get(project.remotePath.trim());
-        return availability ? [[project.id, availability]] : [];
+        return availability === undefined ? [] : [[project.id, availability]];
       }),
     );
   } catch (error) {
@@ -91,52 +98,20 @@ function shouldDiscoverHostProjects(query: {
   searchTerm?: string | null;
   cursor?: string | null;
 }) {
-  return !query.projectId && !query.cwd && !query.searchTerm && !query.cursor;
+  return (
+    (query.projectId === null || query.projectId === undefined) &&
+    trimmedOrNull(query.cwd) === null &&
+    trimmedOrNull(query.searchTerm) === null &&
+    trimmedOrNull(query.cursor) === null
+  );
 }
 
-async function discoverHostProjects(
-  host: any,
-  firstPage: unknown,
-  firstParams: Record<string, unknown>,
+function mergeThreads(
+  remoteThreads: AppServerThread[],
+  indexedThreads: AppServerThread[],
+  searchTerm: string | null,
 ) {
-  let cursor =
-    typeof (firstPage as any)?.nextCursor === "string" ? (firstPage as any).nextCursor : null;
-  const seenCursors = new Set<string>();
-
-  while (cursor && !seenCursors.has(cursor)) {
-    seenCursors.add(cursor);
-    const page = await threadBroker.listThreads(host, {
-      ...firstParams,
-      cursor,
-      useStateDbOnly: false,
-    });
-    const threads = Array.isArray((page as any)?.data) ? (page as any).data : [];
-    indexThreadProjects(host.id, threads);
-    cursor = typeof (page as any)?.nextCursor === "string" ? (page as any).nextCursor : null;
-  }
-}
-
-function indexThreadProjects(hostId: number, threads: any[]) {
-  for (const thread of threads) {
-    if (typeof thread?.cwd !== "string" || !thread.cwd.trim()) {
-      continue;
-    }
-    try {
-      const project = projectStore.ensureForPath(hostId, thread.cwd);
-      threadMetadataStore.record(hostId, project.id, thread);
-    } catch (error) {
-      console.warn("[gateway] failed to index thread project", {
-        hostId,
-        threadId: thread?.id,
-        cwd: thread.cwd,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-}
-
-function mergeThreads(remoteThreads: any[], indexedThreads: any[], searchTerm: string | null) {
-  const byId = new Map<string, any>();
+  const byId = new Map<string, AppServerThread>();
   for (const thread of indexedThreads) {
     byId.set(String(thread.id), thread);
   }
@@ -155,12 +130,12 @@ function mergeThreads(remoteThreads: any[], indexedThreads: any[], searchTerm: s
         return true;
       }
       return [thread.id, thread.title, thread.name, thread.preview, thread.cwd]
-        .filter(Boolean)
+        .filter((value): value is string => typeof value === "string")
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     })
     .sort(
       (left, right) =>
-        Number(right.recencyAt || right.updatedAt || 0) -
-        Number(left.recencyAt || left.updatedAt || 0),
+        Number(right.recencyAt ?? right.updatedAt ?? 0) -
+        Number(left.recencyAt ?? left.updatedAt ?? 0),
     );
 }

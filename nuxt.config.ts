@@ -9,36 +9,23 @@ export default defineNuxtConfig({
     server: false,
   },
   experimental: {
+    buildCache: true,
     checkOutdatedBuildInterval: 5 * 60_000,
     emitRouteChunkError: "automatic-immediate",
+    // Nuxt 4.5 reuses Vite's watcher instead of opening a second watcher tree.
+    watcher: "builder",
   },
   css: ["~/assets/css/tailwind.css"],
-  modules: [
-    "@pinia/nuxt",
-    "pinia-plugin-persistedstate/nuxt",
-    "@nuxtjs/device",
-    "@nuxtjs/i18n",
-    "shadcn-nuxt",
-  ],
+  modules: ["@pinia/nuxt", "@nuxtjs/device", "@nuxtjs/i18n", "shadcn-nuxt"],
   shadcn: {
     prefix: "",
     componentDir: "./app/components/ui",
   },
   vite: {
-    build: {
-      rolldownOptions: {
-        onLog(level, log, handler) {
-          const message = typeof log.message === "string" ? log.message : "";
-          if (
-            level === "warn" &&
-            log.code === "INVALID_ANNOTATION" &&
-            message.includes("@vueuse/core")
-          ) {
-            return;
-          }
-          handler(level, log);
-        },
-      },
+    resolve: {
+      // Open File Viewer loads Prism languages in dependency order. One shared Prism instance
+      // preserves that side-effect ordering without forcing all languages into a vendor chunk.
+      dedupe: ["prismjs"],
     },
     plugins: [tailwindcss()],
   },

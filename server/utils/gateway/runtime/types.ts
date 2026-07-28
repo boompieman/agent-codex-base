@@ -1,23 +1,27 @@
 import type {
+  AppServerThread,
   ApprovalPolicy,
   HostRecord,
   ReasoningEffort,
   ThreadSettingsState,
   ThreadTokenUsageState,
+  ThreadHistoryState,
+  ThreadHistoryTurn,
+  RpcEnvelope,
 } from "~~/shared/types";
 import { OLDER_TURN_PAGE_LIMIT } from "~~/shared/config";
 
 export const DEFAULT_TURN_PAGE_LIMIT = OLDER_TURN_PAGE_LIMIT;
 
 export interface TurnsPage {
-  data?: any[];
+  data?: ThreadHistoryTurn[];
   nextCursor?: string | null;
   backwardsCursor?: string | null;
 }
 
 export interface ThreadOpenSnapshot {
-  thread: any;
-  history: any;
+  thread: AppServerThread;
+  history: ThreadHistoryState;
   projectId: number | null;
   turnsPage: {
     nextCursor: string | null;
@@ -86,6 +90,6 @@ export type HostControllersLookup = (hostId: number) => ThreadControllerLike[];
 export interface ThreadControllerLike {
   readonly host: HostRecord;
   readonly threadId: string;
-  handleNotification(message: any): void;
+  handleNotification(message: RpcEnvelope): void;
   handleStderr(text: string): void;
 }

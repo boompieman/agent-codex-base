@@ -9,11 +9,11 @@ export function itemTimestampMs(value: unknown) {
   return null;
 }
 
-export function itemStartedAtMs(item: Record<string, any>) {
+export function itemStartedAtMs(item: ThreadHistoryItem) {
   return itemTimestampMs(item.startedAt ?? item.createdAt ?? item.startTime);
 }
 
-export function itemCompletedAtMs(item: Record<string, any>) {
+export function itemCompletedAtMs(item: ThreadHistoryItem) {
   return itemTimestampMs(item.completedAt ?? item.updatedAt ?? item.endTime);
 }
 
@@ -29,3 +29,4 @@ export function formatDurationMs(value: number) {
   }
   return `${formattedSeconds}s`;
 }
+import type { ThreadHistoryItem } from "~~/shared/types";

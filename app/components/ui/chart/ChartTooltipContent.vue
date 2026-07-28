@@ -4,6 +4,9 @@ import type { ChartConfig } from ".";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
 
+type ChartTooltipValue = string | number | Date | null | undefined;
+type ChartTooltipPayload = Record<string, ChartTooltipValue> & { fill?: string };
+
 const props = withDefaults(
   defineProps<{
     hideLabel?: boolean;
@@ -12,7 +15,7 @@ const props = withDefaults(
     nameKey?: string;
     labelKey?: string;
     labelFormatter?: (d: number | Date) => string;
-    payload?: Record<string, any>;
+    payload?: ChartTooltipPayload;
     config?: ChartConfig;
     class?: HTMLAttributes["class"];
     color?: string;

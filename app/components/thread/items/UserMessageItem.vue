@@ -4,27 +4,36 @@ import { Badge } from "@/components/ui/badge";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import ThreadImageAttachment from "@/components/thread/attachments/ThreadImageAttachment.vue";
 import { threadItemText } from "@/utils/thread-items";
+import type { ThreadHistoryItem } from "~~/shared/types";
+import { recordFromUnknown } from "~~/shared/utils/records";
 
 const props = defineProps<{
-  item: Record<string, any>;
+  item: ThreadHistoryItem;
   hostId: number | null;
   variant?: "normal" | "steer";
 }>();
 
 const { t } = useI18n();
 const text = computed(() => threadItemText(props.item));
+type ImagePart = Record<string, unknown> & { type: "image" | "localImage" };
+
+function isImagePart(part: Record<string, unknown> | null): part is ImagePart {
+  return part?.type === "image" || part?.type === "localImage";
+}
+
 const imageParts = computed(() => {
   if (!Array.isArray(props.item.content)) {
     return [];
   }
   return props.item.content
-    .filter((part: any) => part?.type === "image" || part?.type === "localImage")
-    .map((part: any, index: number) => ({
+    .map(recordFromUnknown)
+    .filter(isImagePart)
+    .map((part, index: number) => ({
       id: `${props.item.id || props.item.clientId || "image"}-${index}`,
       type: part.type,
       url: typeof part.url === "string" ? part.url : "",
       path: typeof part.path === "string" ? part.path : "",
-      detail: part.detail || null,
+      detail: typeof part.detail === "string" ? part.detail : null,
     }));
 });
 

@@ -30,7 +30,7 @@ docker compose -p "$project_name" -f "$compose_file" build \
 # gateway network namespace preserves the production-like nip.io subdomain routing used by browser
 # preview tests without coupling process memory.
 docker compose -p "$project_name" -f "$compose_file" run --rm build-runner \
-  bash -lc 'rm -rf .output .nuxt .data-e2e/* /e2e-output/* && pnpm build && cp -a .output/. /e2e-output/ && node scripts/create-user.mjs "$E2E_GATEWAY_USERNAME" "$E2E_GATEWAY_PASSWORD"'
+  bash -lc 'rm -rf .output .nuxt .data-e2e/* /e2e-output/* && pnpm exec nuxt build --extends ./tests/e2e/nuxt-layer && cp -a .output/. /e2e-output/ && node scripts/create-user.mjs "$E2E_GATEWAY_USERNAME" "$E2E_GATEWAY_PASSWORD"'
 docker compose -p "$project_name" -f "$compose_file" up -d --wait gateway-under-test
 docker compose -p "$project_name" -f "$compose_file" run --rm test-runner \
   bash -lc 'exec pnpm exec playwright test "$@"' \

@@ -4,6 +4,7 @@ import { createWriteStream } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createError, type H3Event } from "h3";
+import ensureError from "ensure-error";
 
 const MAX_UPLOAD_FILES = 8;
 const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
@@ -17,9 +18,13 @@ export interface ParsedUploadFile {
 }
 
 export function streamMultipartUploads(event: H3Event, tempDir: string) {
+  const contentType = event.node.req.headers["content-type"];
+  if (typeof contentType !== "string" || contentType === "") {
+    throw createError({ statusCode: 415, statusMessage: "Expected multipart content type" });
+  }
   return new Promise<ParsedUploadFile[]>((resolve, reject) => {
     const parser = new Busboy({
-      headers: event.node.req.headers as { "content-type": string },
+      headers: { ...event.node.req.headers, "content-type": contentType },
       limits: {
         files: MAX_UPLOAD_FILES,
         fileSize: MAX_UPLOAD_FILE_BYTES,
@@ -39,8 +44,8 @@ export function streamMultipartUploads(event: H3Event, tempDir: string) {
       }
       settled = true;
       event.node.req.off("aborted", handleAbort);
-      if (error) {
-        reject(error);
+      if (error !== undefined) {
+        reject(ensureError(error));
       } else {
         resolve(files);
       }
@@ -52,7 +57,7 @@ export function streamMultipartUploads(event: H3Event, tempDir: string) {
     };
 
     parser.on("file", (fieldName, stream, filename, _encoding, mimeType) => {
-      if (fieldName !== "files" || !filename) {
+      if (fieldName !== "files" || filename === "") {
         stream.resume();
         return;
       }
@@ -61,7 +66,7 @@ export function streamMultipartUploads(event: H3Event, tempDir: string) {
       const localPath = join(tempDir, safeName);
       const file: ParsedUploadFile = {
         originalName,
-        mimeType: mimeType || null,
+        mimeType: mimeType === "" ? null : mimeType,
         localPath,
         safeName,
         size: 0,

@@ -14,6 +14,6 @@ export class CodexUpgradeQueue {
 
   async run<T>(work: () => Promise<T>) {
     const userId = currentGatewayUserId();
-    return await this.limit(() => (userId ? runWithGatewayUser(userId, work) : work()));
+    return await this.limit(() => (userId === null ? work() : runWithGatewayUser(userId, work)));
   }
 }

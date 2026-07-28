@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { CheckIcon, CopyIcon } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { toast } from "vue-sonner";
@@ -7,7 +8,7 @@ import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isItemInProgress, threadItemText } from "@/utils/thread-items";
 
-const props = defineProps<{ item: Record<string, any> }>();
+const props = defineProps<{ item: ThreadHistoryItem }>();
 
 const { t } = useI18n();
 const text = computed(() => threadItemText(props.item));

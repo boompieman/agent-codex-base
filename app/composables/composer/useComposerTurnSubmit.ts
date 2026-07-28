@@ -83,7 +83,7 @@ export function useComposerTurnSubmit(input: {
   }
 
   function planCollaborationMode() {
-    if (!input.activeModel.value) {
+    if (input.activeModel.value === null || input.activeModel.value === "") {
       return undefined;
     }
     const mode = planModeActive.value ? "plan" : "default";

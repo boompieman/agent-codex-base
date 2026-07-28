@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { HostRecord } from "../../shared/types";
 import { parseCodexVersion } from "../../server/utils/gateway/infra/codex-version";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
+import { hostRecordSchema } from "./helpers/http-schemas";
 import {
   addRemoteHost,
   addRemoteProject,
@@ -44,19 +45,23 @@ test("upgrades empty, legacy Node, and legacy Codex SSH hosts serially", async (
   const hosts: HostRecord[] = [];
   for (const environment of environments) {
     hosts.push(
-      await authenticatedFetch<HostRecord>(page, {
-        url: "/api/hosts",
-        method: "POST",
-        body: {
-          name: `upgrade-${environment.runtimeFixture}-${Date.now()}`,
-          sshHost: environment.host,
-          username: environment.username,
-          port: Number(environment.port),
-          authMode: "password",
-          password: environment.password,
-          proxyUrl: environment.proxyUrl ?? null,
+      await authenticatedFetch(
+        page,
+        {
+          url: "/api/hosts",
+          method: "POST",
+          body: {
+            name: `upgrade-${environment.runtimeFixture}-${Date.now()}`,
+            sshHost: environment.host,
+            username: environment.username,
+            port: Number(environment.port),
+            authMode: "password",
+            password: environment.password,
+            proxyUrl: environment.proxyUrl ?? null,
+          },
         },
-      }),
+        (value) => hostRecordSchema.parse(value),
+      ),
     );
   }
 
@@ -73,10 +78,14 @@ test("upgrades empty, legacy Node, and legacy Codex SSH hosts serially", async (
 
   for (const [index, environment] of environments.entries()) {
     if (environment === remote) continue;
-    await authenticatedFetch(page, {
-      url: `/api/hosts/${hosts[index]!.id}`,
-      method: "DELETE",
-    });
+    await authenticatedFetch(
+      page,
+      {
+        url: `/api/hosts/${hosts[index]!.id}`,
+        method: "DELETE",
+      },
+      () => undefined,
+    );
     await stopRemoteFixture(environment);
   }
 

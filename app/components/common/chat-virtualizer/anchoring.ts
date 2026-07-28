@@ -43,6 +43,7 @@ export function createChatVirtualizerBehavior(options: {
 
 export function shouldAdjustChatScrollForSizeChange(
   item: VirtualItem,
+  delta: number,
   instance: Virtualizer<HTMLElement, Element>,
   followLatest: boolean,
 ) {
@@ -50,13 +51,25 @@ export function shouldAdjustChatScrollForSizeChange(
 
   const viewport = instance.scrollElement;
   const scrollOffset = viewport instanceof HTMLElement ? viewport.scrollTop : instance.scrollOffset;
-  // Dynamic rows entering the overscan window still use estimated heights. While scrolling
-  // upward, replacing an estimate above the viewport without compensation moves every visible
-  // row; once scrolling stops, nearby rows are measured and the same bug appears to disappear.
+  const isFirstMeasurement = !instance.itemSizeCache.has(item.key);
+  const measuredEnd = item.end + delta;
+  // Dynamic rows enter the overscan window with estimated heights. Replacing an estimate for a
+  // row that is entirely above the viewport must move scrollTop by the same delta or every visible
+  // row drifts. This is the standard TanStack chat predicate used by Vibe Kanban and NextClaw.
   //
-  // Vibe Kanban and NextClaw use this same fully-above-fold predicate for TanStack chat lists.
-  // Do not broaden it to item.start < scrollOffset: a visible streaming Agent row can begin above
-  // the fold, and compensating that row would fight the reader. Diff and command output own
-  // separate bounded scrollports, so their internal size changes do not enter this predicate.
-  return item.end <= (scrollOffset ?? 0);
+  // Use the measured end, not item.end: item still contains the old estimate when this callback
+  // runs. A row can shrink from an estimate that crosses the fold to a real box entirely above it;
+  // checking the stale end skips the required correction and shifts the viewport by that row's
+  // full estimate delta. Do not broaden this to item.start < scrollOffset: a row that remains
+  // visible across the top edge must not move content under the reader.
+  //
+  // For rows TanStack has already measured, retain Virtual Core's backward direction guard.
+  // Otherwise iOS queues those remeasurement deltas during touch/momentum and replays a stale
+  // aggregate after touchend. TanStack still owns correction timing and its iOS deferral; this
+  // predicate only decides which deltas are valid. Diff and command output use separate bounded
+  // scrollports and never enter this rule.
+  return (
+    measuredEnd <= (scrollOffset ?? 0) &&
+    (isFirstMeasurement || instance.scrollDirection !== "backward")
+  );
 }

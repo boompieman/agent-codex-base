@@ -1,12 +1,14 @@
 import { storeToRefs } from "pinia";
 
 import { computed } from "vue";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
-import { pinnedKey, titleForThread } from "@/stores/gateway/thread-utils/identity";
+import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
+import { subAgentDisplayName } from "@/components/thread/subagent/display-name";
 import {
   subAgentWorkspacePanelId,
   terminalWorkspacePanelId,
@@ -16,7 +18,8 @@ import {
 import type { WorkspacePanelSelection } from "./types";
 
 export function useWorkspacePanels(selection: WorkspacePanelSelection) {
-  const gateway = useGatewayStore();
+  const { t } = useI18n();
+  const catalog = useGatewayCatalogStore();
   const threadView = useGatewayThreadViewStore();
   const terminalStore = useGatewayTerminalStore();
   const browserStore = useGatewayBrowserStore();
@@ -27,16 +30,18 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   const terminalPanels = computed(() =>
     Object.values(terminalSessions.value)
       .filter((session) => {
-        if (!session || session.hostId !== selection.selectedHostId.value) return false;
+        if (session.hostId !== selection.selectedHostId.value) return false;
         if (session.scope === "thread")
           return session.threadId === selection.selectedThreadId.value;
         if (session.scope === "project") {
           return (
-            !selection.selectedThreadId.value &&
+            selection.selectedThreadId.value === null &&
             session.projectId === selection.selectedProjectId.value
           );
         }
-        return !selection.selectedThreadId.value && !selection.selectedProjectId.value;
+        return (
+          selection.selectedThreadId.value === null && selection.selectedProjectId.value === null
+        );
       })
       .map((session) => ({ id: terminalWorkspacePanelId(session.sessionId), session })),
   );
@@ -44,15 +49,17 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   const subAgentPanels = computed(() =>
     visibleSubAgentPanels.value.map((panel) => {
       const key = pinnedKey(panel.hostId, panel.threadId);
-      const thread = threadViews.value[key]?.currentThread as Record<string, any> | null;
+      const thread = threadViews.value[key]?.currentThread ?? null;
       return {
         id: subAgentWorkspacePanelId(key),
         hostId: panel.hostId,
         threadId: panel.threadId,
-        title:
-          (panel.title !== panel.threadId ? panel.title : null) ||
-          (thread ? titleForThread(thread) : null) ||
-          panel.threadId,
+        title: subAgentDisplayName({
+          thread,
+          titleCandidate: panel.title,
+          threadId: panel.threadId,
+          fallback: t("app.subAgentPanel"),
+        }),
       };
     }),
   );
@@ -74,9 +81,9 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   });
 
   const fileWorkspaceRoot = computed(() => {
-    const thread = currentThread.value as Record<string, unknown> | null;
-    const cwd = typeof thread?.cwd === "string" ? thread.cwd : "";
-    return cwd || gateway.selectedProject?.remotePath || "";
+    const cwd = currentThread.value?.cwd ?? "";
+    if (cwd !== "") return cwd;
+    return projectById(catalog.projects, selection.selectedProjectId.value)?.remotePath ?? "";
   });
 
   return { terminalPanels, subAgentPanels, browserPanels, tmuxPanels, fileWorkspaceRoot };

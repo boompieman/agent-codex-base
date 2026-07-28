@@ -5,7 +5,7 @@ export interface GatewayRouteSelection {
 }
 
 function numberFromQuery(value: string | null) {
-  if (!value) {
+  if (value === null || value === "") {
     return null;
   }
   const parsed = Number(value);
@@ -13,8 +13,7 @@ function numberFromQuery(value: string | null) {
 }
 
 function stringFromQuery(value: string | null) {
-  const trimmed = value?.trim();
-  return trimmed || null;
+  return trimmedOrNull(value);
 }
 
 export function readGatewayRouteSelection(): GatewayRouteSelection {
@@ -30,7 +29,7 @@ export function readGatewayRouteSelection(): GatewayRouteSelection {
 }
 
 export function hasGatewayRouteSelection(selection = readGatewayRouteSelection()) {
-  return Boolean(selection.hostId || selection.projectId || selection.threadId);
+  return selection.hostId !== null || selection.projectId !== null || selection.threadId !== null;
 }
 
 export function writeGatewayRouteSelection(
@@ -63,3 +62,4 @@ function setRouteParam(url: URL, key: string, value: string | number | null | un
   }
   url.searchParams.set(key, String(value));
 }
+import { trimmedOrNull } from "~~/shared/utils/strings";

@@ -14,6 +14,8 @@ import {
   replaceCurrentGatewayMemoryState,
   runWithGatewayUser,
 } from "../state/memory";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export class CodexRpcError extends Error {
   constructor(
@@ -57,7 +59,7 @@ export function defineGatewayEventHandler<T>(handler: (event: H3Event) => Promis
         {
           method: event.method,
           path: url.pathname,
-          query: url.search || null,
+          query: url.search.length > 0 ? url.search : null,
           ...context?.details,
         },
         error,
@@ -120,16 +122,10 @@ export function setGatewayRequestLogContext(
 }
 
 export function gatewayRequestLogContext(event: H3Event) {
-  const context = event.context.gatewayLog;
-  if (!context || typeof context !== "object") {
-    return null;
-  }
-  const scope = typeof context.scope === "string" ? context.scope : null;
-  const details =
-    context.details && typeof context.details === "object"
-      ? (context.details as Record<string, unknown>)
-      : {};
-  return scope ? { scope, details } : null;
+  const record = recordFromUnknown(event.context.gatewayLog);
+  const scope = typeof record?.scope === "string" ? record.scope : null;
+  const details = recordFromUnknown(record?.details) ?? {};
+  return scope === null ? null : { scope, details };
 }
 
 export function hostLogContext(host: HostRecord) {
@@ -163,7 +159,7 @@ function serializeError(error: unknown): Record<string, unknown> {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      cause: serializeCause((error as any).cause),
+      cause: serializeCause(error.cause),
     };
   }
   return {
@@ -175,17 +171,18 @@ function statusCodeFromError(error: unknown) {
   if (isStaleThreadCursorErrorLike(error)) {
     return 409;
   }
-  const statusCode =
-    typeof (error as any)?.statusCode === "number" ? Number((error as any).statusCode) : null;
-  if (statusCode && statusCode >= 400 && statusCode < 600) {
+  const statusCodeValue = recordFromUnknown(error)?.statusCode;
+  const statusCode = typeof statusCodeValue === "number" ? statusCodeValue : null;
+  if (statusCode !== null && statusCode >= 400 && statusCode < 600) {
     return statusCode;
   }
   return 502;
 }
 
 function publicErrorCode(error: unknown) {
-  if (typeof (error as any)?.code === "string") {
-    return String((error as any).code);
+  const code = recordFromUnknown(error)?.code;
+  if (typeof code === "string") {
+    return code;
   }
   if (isStaleThreadCursorErrorLike(error)) {
     return STALE_THREAD_CURSOR_ERROR_CODE;
@@ -195,10 +192,10 @@ function publicErrorCode(error: unknown) {
 
 function publicErrorMessage(error: unknown) {
   if (error instanceof CodexRpcError) {
-    return error.message || `Codex RPC ${error.rpcMethod} failed`;
+    return firstNonEmptyString([error.message]) ?? `Codex RPC ${error.rpcMethod} failed`;
   }
   if (error instanceof Error) {
-    return error.message || error.name || "Gateway request failed";
+    return firstNonEmptyString([error.message, error.name]) ?? "Gateway request failed";
   }
   if (typeof error === "string") {
     return error;
@@ -215,13 +212,13 @@ function publicErrorDetails(event: H3Event, scope: string, details: Record<strin
     scope,
     method: event.method,
     path: url.pathname,
-    query: url.search || null,
+    query: url.search.length > 0 ? url.search : null,
     ...details,
   };
 }
 
 function serializeCause(cause: unknown) {
-  if (!cause) {
+  if (cause === null || cause === undefined) {
     return undefined;
   }
   if (cause instanceof Error) {

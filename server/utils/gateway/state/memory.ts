@@ -4,9 +4,12 @@ import type {
   HostRecord,
   PinnedThreadRecord,
   ProjectRecord,
+  ThreadHistoryStatus,
 } from "~~/shared/types";
 import { normalizeNotificationSettings } from "~~/shared/config";
+import { trimmedOrNull } from "~~/shared/utils/strings";
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { ThreadOpenSnapshot } from "../runtime/types";
 
 export type StoredHostRecord = HostRecord;
 
@@ -19,7 +22,7 @@ export interface ThreadMetadataRecord {
   name: string | null;
   preview: string | null;
   cwd: string | null;
-  status: unknown;
+  status: ThreadHistoryStatus;
   recencyAt: number | null;
   updatedAt: number;
 }
@@ -27,7 +30,7 @@ export interface ThreadMetadataRecord {
 export interface ThreadSnapshotRecord {
   hostId: number;
   threadId: string;
-  snapshot: unknown;
+  snapshot: ThreadOpenSnapshot;
   updatedAt: string;
 }
 
@@ -48,6 +51,7 @@ export interface GatewayMemoryState {
   threadSnapshots: ThreadSnapshotRecord[];
   subAgentThreads: SubAgentThreadRecord[];
   events: GatewayEvent[];
+  eventPrunedThroughByThread: Record<string, number>;
   nextEventId: number;
   publishedNotificationKeys: string[];
   deliveredNotificationKeys: string[];
@@ -66,6 +70,7 @@ function createGatewayMemoryState(): GatewayMemoryState {
     threadSnapshots: [],
     subAgentThreads: [],
     events: [],
+    eventPrunedThroughByThread: {},
     nextEventId: 1,
     publishedNotificationKeys: [],
     deliveredNotificationKeys: [],
@@ -78,15 +83,101 @@ const anonymousState = createGatewayMemoryState();
 const statesByUser = new Map<number, GatewayMemoryState>();
 const userScope = new AsyncLocalStorage<number>();
 
-export const gatewayMemoryState = new Proxy({} as GatewayMemoryState, {
-  get(_target, property: keyof GatewayMemoryState) {
-    return currentGatewayMemoryState()[property];
+// Keep the existing property API while making the AsyncLocalStorage boundary fully typed.
+// A Proxy would make every indexed write `unknown`; explicit accessors let TypeScript verify
+// each field and still resolve the state for the current user at access time.
+export const gatewayMemoryState: GatewayMemoryState = {
+  get hosts() {
+    return currentGatewayMemoryState().hosts;
   },
-  set(_target, property: keyof GatewayMemoryState, value) {
-    currentGatewayMemoryState()[property] = value as never;
-    return true;
+  set hosts(value) {
+    currentGatewayMemoryState().hosts = value;
   },
-});
+  get projects() {
+    return currentGatewayMemoryState().projects;
+  },
+  set projects(value) {
+    currentGatewayMemoryState().projects = value;
+  },
+  get configuredProjectIds() {
+    return currentGatewayMemoryState().configuredProjectIds;
+  },
+  set configuredProjectIds(value) {
+    currentGatewayMemoryState().configuredProjectIds = value;
+  },
+  get pinnedThreads() {
+    return currentGatewayMemoryState().pinnedThreads;
+  },
+  set pinnedThreads(value) {
+    currentGatewayMemoryState().pinnedThreads = value;
+  },
+  get notifications() {
+    return currentGatewayMemoryState().notifications;
+  },
+  set notifications(value) {
+    currentGatewayMemoryState().notifications = value;
+  },
+  get threadMetadata() {
+    return currentGatewayMemoryState().threadMetadata;
+  },
+  set threadMetadata(value) {
+    currentGatewayMemoryState().threadMetadata = value;
+  },
+  get threadSnapshots() {
+    return currentGatewayMemoryState().threadSnapshots;
+  },
+  set threadSnapshots(value) {
+    currentGatewayMemoryState().threadSnapshots = value;
+  },
+  get subAgentThreads() {
+    return currentGatewayMemoryState().subAgentThreads;
+  },
+  set subAgentThreads(value) {
+    currentGatewayMemoryState().subAgentThreads = value;
+  },
+  get events() {
+    return currentGatewayMemoryState().events;
+  },
+  set events(value) {
+    currentGatewayMemoryState().events = value;
+  },
+  get eventPrunedThroughByThread() {
+    return currentGatewayMemoryState().eventPrunedThroughByThread;
+  },
+  set eventPrunedThroughByThread(value) {
+    currentGatewayMemoryState().eventPrunedThroughByThread = value;
+  },
+  get nextEventId() {
+    return currentGatewayMemoryState().nextEventId;
+  },
+  set nextEventId(value) {
+    currentGatewayMemoryState().nextEventId = value;
+  },
+  get publishedNotificationKeys() {
+    return currentGatewayMemoryState().publishedNotificationKeys;
+  },
+  set publishedNotificationKeys(value) {
+    currentGatewayMemoryState().publishedNotificationKeys = value;
+  },
+  get deliveredNotificationKeys() {
+    return currentGatewayMemoryState().deliveredNotificationKeys;
+  },
+  set deliveredNotificationKeys(value) {
+    currentGatewayMemoryState().deliveredNotificationKeys = value;
+  },
+  get pendingNotificationKeys() {
+    return currentGatewayMemoryState().pendingNotificationKeys;
+  },
+  set pendingNotificationKeys(value) {
+    currentGatewayMemoryState().pendingNotificationKeys = value;
+  },
+  get configLoaded() {
+    return currentGatewayMemoryState().configLoaded;
+  },
+  set configLoaded(value) {
+    currentGatewayMemoryState().configLoaded = value;
+  },
+};
 
 export function currentGatewayUserId() {
   return userScope.getStore() ?? null;
@@ -94,11 +185,11 @@ export function currentGatewayUserId() {
 
 export function currentGatewayMemoryState() {
   const userId = currentGatewayUserId();
-  if (!userId) {
+  if (userId === null) {
     return anonymousState;
   }
   let state = statesByUser.get(userId);
-  if (!state) {
+  if (state === undefined) {
     state = createGatewayMemoryState();
     statesByUser.set(userId, state);
   }
@@ -107,7 +198,7 @@ export function currentGatewayMemoryState() {
 
 export function replaceCurrentGatewayMemoryState(nextState: GatewayMemoryState) {
   const userId = currentGatewayUserId();
-  if (!userId) {
+  if (userId === null) {
     Object.assign(anonymousState, nextState);
     return;
   }
@@ -118,12 +209,14 @@ export function runWithGatewayUser<T>(userId: number, callback: () => T): T {
   return userScope.run(userId, callback);
 }
 
-export function bindGatewayUser<T extends (...args: any[]) => any>(callback: T): T {
+export function bindGatewayUser<Args extends unknown[], Result>(
+  callback: (...args: Args) => Result,
+): (...args: Args) => Result {
   const userId = currentGatewayUserId();
-  if (!userId) {
+  if (userId === null) {
     return callback;
   }
-  return ((...args: Parameters<T>) => runWithGatewayUser(userId, () => callback(...args))) as T;
+  return (...args: Args) => runWithGatewayUser(userId, () => callback(...args));
 }
 
 export function buildGatewayMemoryState(config: GatewayConfig): GatewayMemoryState {
@@ -131,8 +224,8 @@ export function buildGatewayMemoryState(config: GatewayConfig): GatewayMemorySta
     ...createGatewayMemoryState(),
     hosts: config.hosts.map((host) => ({
       ...host,
-      proxyUrl: host.proxyUrl?.trim() || null,
-      hasPassword: Boolean(host.password),
+      proxyUrl: trimmedOrNull(host.proxyUrl),
+      hasPassword: typeof host.password === "string" && host.password.length > 0,
     })),
     projects: (config.projects ?? []).map((project) => ({
       ...project,
@@ -155,6 +248,7 @@ export const initialGatewayMemoryState: GatewayMemoryState = {
   threadSnapshots: [],
   subAgentThreads: [],
   events: [],
+  eventPrunedThroughByThread: {},
   nextEventId: 1,
   publishedNotificationKeys: [],
   deliveredNotificationKeys: [],
@@ -168,8 +262,8 @@ export function normalizePinnedThreads(threads: PinnedThreadRecord[]) {
     projectId: thread.projectId ?? null,
     threadId: thread.threadId.trim(),
     title: thread.title.trim(),
-    subtitle: thread.subtitle?.trim() || null,
-    projectName: thread.projectName?.trim() || null,
+    subtitle: trimmedOrNull(thread.subtitle),
+    projectName: trimmedOrNull(thread.projectName),
     updatedAt: thread.updatedAt ?? null,
   }));
 }
@@ -186,7 +280,7 @@ export function toTimestamp(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value > 1_000_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
   }
-  if (typeof value === "string" && value.trim()) {
+  if (typeof value === "string" && value.trim() !== "") {
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null;
   }

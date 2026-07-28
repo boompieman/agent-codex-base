@@ -1,34 +1,36 @@
 <script setup lang="ts">
 import ThreadRow from "./ThreadRow.vue";
 import { formatRelative, pinnedThreadId, pinnedThreadKey } from "./sidebar-utils";
+import type { HostRecord, PinnedThreadRecord } from "./sidebar-types";
+import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 
 const props = defineProps<{
-  threads: any[];
-  hosts: any[];
+  threads: PinnedThreadRecord[];
+  hosts: HostRecord[];
   selectedHostId: number | null;
   selectedThreadId: string | null;
   renamingThreadKey: string | null;
   renameValue: string;
   longPressHandlers?: Record<string, unknown>;
-  runtimeStatus: (thread: any) => any;
-  completionAttention: (thread: any) => boolean;
+  runtimeStatus: (thread: PinnedThreadRecord) => ThreadRuntimeStatus;
+  completionAttention: (thread: PinnedThreadRecord) => boolean;
 }>();
 
 const emit = defineEmits<{
-  open: [thread: any];
-  unpin: [thread: any];
-  rename: [thread: any];
+  open: [thread: PinnedThreadRecord];
+  unpin: [thread: PinnedThreadRecord];
+  rename: [thread: PinnedThreadRecord];
   submitRename: [];
   renameKeydown: [event: KeyboardEvent];
   "update:renameValue": [value: string];
 }>();
 
-function subtitleForPinnedThread(thread: any) {
+function subtitleForPinnedThread(thread: PinnedThreadRecord) {
   const hostName = props.hosts.find((host) => host.id === thread.hostId)?.name;
   return [hostName, thread.projectName].filter(Boolean).join(" / ");
 }
 
-function isSelectedPinnedThread(thread: any) {
+function isSelectedPinnedThread(thread: PinnedThreadRecord) {
   return (
     pinnedThreadId(thread) === String(props.selectedThreadId) &&
     thread.hostId === props.selectedHostId

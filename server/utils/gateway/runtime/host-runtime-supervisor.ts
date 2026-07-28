@@ -59,7 +59,7 @@ class HostRuntimeSupervisor {
 
   syncCurrentUserConfig() {
     const userId = currentGatewayUserId();
-    if (!userId) {
+    if (userId === null) {
       return;
     }
     const state = currentGatewayMemoryState();

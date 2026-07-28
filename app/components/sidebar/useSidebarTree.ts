@@ -1,18 +1,22 @@
 import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch, type Ref } from "vue";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedThreadId, pinnedThreadKey, threadKey } from "./sidebar-utils";
+import type { PinnedThreadRecord, ProjectRecord } from "./sidebar-types";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export function useSidebarTree(longPressTriggered: Ref<boolean>) {
-  const store = useGatewayStore();
+  const store = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
   const threadView = useGatewayThreadViewStore();
-  const { hosts, projects, projectDirectoryAvailability, pinnedThreads, hostConnectionStatuses } =
+  const { hosts, projects, projectDirectoryAvailability, hostConnectionStatuses } =
     storeToRefs(store);
+  const pinnedThreads = useGatewayPinnedThreads();
   const { threads, openingPinnedThreadKey, selectedHostId, selectedProjectId, selectedThreadId } =
     storeToRefs(navigation);
   const { unviewedCompletedThreadKeys, threadStatuses } = storeToRefs(runtime);
@@ -22,10 +26,14 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
   const suppressTreeAutoExpand = ref(false);
 
   const projectThreads = computed(() =>
-    threads.value.filter((thread) => !thread.pinned).slice(0, 20),
+    threads.value.filter((thread) => thread.pinned !== true).slice(0, 20),
   );
   const selectedThreadIsPinned = computed(() => {
-    if (!selectedHostId.value || !selectedThreadId.value) {
+    if (
+      selectedHostId.value === null ||
+      selectedThreadId.value === null ||
+      selectedThreadId.value === ""
+    ) {
       return false;
     }
     return pinnedThreads.value.some(
@@ -60,16 +68,17 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     void threadView.openThread(threadId, context);
   }
 
-  function openPinnedThread(thread: any) {
+  function openPinnedThread(thread: PinnedThreadRecord) {
     if (longPressTriggered.value) {
       return;
     }
     suppressTreeAutoExpand.value = true;
-    void navigation.openPinnedThread(thread).finally(async () => {
-      await nextTick();
-      expandedHostIds.value = new Set();
-      expandedProjectIds.value = new Set();
-      suppressTreeAutoExpand.value = false;
+    void navigation.openPinnedThread(thread).finally(() => {
+      void nextTick().then(() => {
+        expandedHostIds.value = new Set();
+        expandedProjectIds.value = new Set();
+        suppressTreeAutoExpand.value = false;
+      });
     });
   }
 
@@ -90,10 +99,12 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     if (longPressTriggered.value) {
       return;
     }
-    if (event && event.button !== 0) {
+    if (event !== undefined && event.button !== 0) {
       return;
     }
-    const isProjectListVisible = projectId === selectedProjectId.value && !selectedThreadId.value;
+    const isProjectListVisible =
+      projectId === selectedProjectId.value &&
+      (selectedThreadId.value === null || selectedThreadId.value === "");
     const next = new Set(expandedProjectIds.value);
     if (next.has(projectId) && isProjectListVisible) {
       next.delete(projectId);
@@ -113,10 +124,11 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     expandedMissingProjectHostIds.value = next;
   }
 
-  function startThreadInProject(project: any) {
+  function startThreadInProject(project: ProjectRecord) {
     void threadView.startThread(
       {
-        model: store.defaultModel?.model || store.defaultModel?.id || undefined,
+        model:
+          firstNonEmptyString([store.defaultModel?.model, store.defaultModel?.id]) ?? undefined,
       },
       {
         hostId: project.hostId,
@@ -133,7 +145,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     return unviewedCompletedThreadKeys.value.includes(threadKey(hostId, threadId));
   }
 
-  function pinnedRuntimeStatus(thread: any) {
+  function pinnedRuntimeStatus(thread: PinnedThreadRecord) {
     const key = pinnedThreadKey(thread);
     if (openingPinnedThreadKey.value === key) {
       return "running";
@@ -141,7 +153,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     return threadRuntimeStatus(thread.hostId, String(thread.threadId));
   }
 
-  function pinnedCompletionAttention(thread: any) {
+  function pinnedCompletionAttention(thread: PinnedThreadRecord) {
     return threadCompletionAttention(thread.hostId, pinnedThreadId(thread));
   }
 
@@ -150,7 +162,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     (hostId) => {
       if (suppressTreeAutoExpand.value) return;
       if (selectedThreadIsPinned.value) return;
-      if (!hostId) return;
+      if (hostId === null) return;
       expandedHostIds.value = new Set(expandedHostIds.value).add(hostId);
     },
     { immediate: true },
@@ -161,7 +173,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     (projectId) => {
       if (suppressTreeAutoExpand.value) return;
       if (selectedThreadIsPinned.value) return;
-      if (!projectId) return;
+      if (projectId === null) return;
       expandedProjectIds.value = new Set(expandedProjectIds.value).add(projectId);
     },
     { immediate: true },
@@ -176,9 +188,9 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
   watch(
     [selectedProjectId, projectDirectoryAvailability],
     ([projectId]) => {
-      if (!projectId || projectDirectoryAvailability.value[projectId] !== "missing") return;
+      if (projectId === null || projectDirectoryAvailability.value[projectId] !== "missing") return;
       const project = projects.value.find((item) => item.id === projectId);
-      if (!project) return;
+      if (project === undefined) return;
       expandedMissingProjectHostIds.value = new Set(expandedMissingProjectHostIds.value).add(
         project.hostId,
       );

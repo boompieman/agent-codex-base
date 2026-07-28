@@ -15,7 +15,7 @@ export function useComposerDraft() {
   const turnText = ref("");
   const attachedFiles = ref<ComposerAttachment[]>([]);
   const draftKey = computed(() =>
-    selectedHostId.value && selectedThreadId.value
+    selectedHostId.value !== null && selectedThreadId.value !== null
       ? `${selectedHostId.value}:${selectedThreadId.value}`
       : "",
   );

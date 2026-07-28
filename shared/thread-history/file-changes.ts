@@ -1,14 +1,17 @@
 import type { ThreadFileChange } from "./types";
 
-export function mergeFileChanges(existingChanges: unknown, incomingChanges: unknown) {
+export function mergeFileChanges(
+  existingChanges: ThreadFileChange[] | undefined,
+  incomingChanges: ThreadFileChange[] | undefined,
+) {
   if (!Array.isArray(incomingChanges)) {
-    return Array.isArray(existingChanges) ? existingChanges : incomingChanges;
+    return existingChanges;
   }
   if (!Array.isArray(existingChanges) || !existingChanges.length) {
-    return (incomingChanges as ThreadFileChange[]).sort(compareFileChangeOrder);
+    return incomingChanges.sort(compareFileChangeOrder);
   }
-  const next = [...existingChanges] as ThreadFileChange[];
-  for (const incoming of incomingChanges as ThreadFileChange[]) {
+  const next = [...existingChanges];
+  for (const incoming of incomingChanges) {
     const index = next.findIndex((candidate) => sameFileChange(candidate, incoming));
     if (index >= 0) {
       const existing = next[index];
@@ -40,7 +43,11 @@ function fileChangeChanged(left: ThreadFileChange, right: ThreadFileChange) {
 }
 
 function fileChangePath(change: ThreadFileChange) {
-  return String(change?.path || change?.filePath || change?.pathAfter || change?.pathBefore || "");
+  return (
+    [change.path, change.filePath, change.pathAfter, change.pathBefore].find(
+      (path): path is string => typeof path === "string" && path.length > 0,
+    ) ?? ""
+  );
 }
 
 function compareFileChangeOrder(left: ThreadFileChange, right: ThreadFileChange) {

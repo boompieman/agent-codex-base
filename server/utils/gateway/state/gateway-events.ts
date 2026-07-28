@@ -1,4 +1,4 @@
-import type { GatewayEvent } from "~~/shared/types";
+import type { GatewayEvent, RpcEnvelope } from "~~/shared/types";
 import { rpcEnvelopeCreatedAt } from "~~/shared/types/records";
 import { SERVER_THREAD_CACHE_LIMIT } from "~~/shared/config";
 import { gatewayMemoryState } from "./memory";
@@ -8,21 +8,31 @@ export const gatewayEventStore = {
     gatewayMemoryState.events = gatewayMemoryState.events.filter((event) =>
       hostIds.has(event.hostId),
     );
+    gatewayMemoryState.eventPrunedThroughByThread = Object.fromEntries(
+      Object.entries(gatewayMemoryState.eventPrunedThroughByThread).filter(([key]) =>
+        hostIds.has(hostIdFromEventKey(key)),
+      ),
+    );
   },
 
   deleteForHost(hostId: number) {
     gatewayMemoryState.events = gatewayMemoryState.events.filter(
       (event) => event.hostId !== hostId,
     );
+    gatewayMemoryState.eventPrunedThroughByThread = Object.fromEntries(
+      Object.entries(gatewayMemoryState.eventPrunedThroughByThread).filter(
+        ([key]) => hostIdFromEventKey(key) !== hostId,
+      ),
+    );
   },
 
-  add(hostId: number, threadId: string, method: string, payload: unknown): GatewayEvent {
-    const event = {
+  add(hostId: number, threadId: string, method: string, payload: RpcEnvelope): GatewayEvent {
+    const event: GatewayEvent = {
       id: gatewayMemoryState.nextEventId++,
       hostId,
       threadId,
       method,
-      payload: payload as GatewayEvent["payload"],
+      payload,
       // App-server time preserves the true event order across SSH/network latency.
       // Gateway-generated events have no emittedAtMs and intentionally use receive time.
       createdAt: rpcEnvelopeCreatedAt(payload),
@@ -59,6 +69,13 @@ export const gatewayEventStore = {
     );
   },
 
+  hasReplayGap(hostId: number, threadId: string, afterId: number) {
+    if (afterId <= 0) return false;
+    return (
+      afterId < (gatewayMemoryState.eventPrunedThroughByThread[eventKey(hostId, threadId)] ?? 0)
+    );
+  },
+
   prune(hostId: number, threadId: string, keep: number) {
     const retained = gatewayMemoryState.events
       .filter((event) => event.hostId === hostId && event.threadId === threadId)
@@ -66,6 +83,12 @@ export const gatewayEventStore = {
       .slice(0, keep)
       .map((event) => event.id);
     const retainedIds = new Set(retained);
+    recordPrunedEvents(
+      gatewayMemoryState.events.filter(
+        (event) =>
+          event.hostId === hostId && event.threadId === threadId && !retainedIds.has(event.id),
+      ),
+    );
     gatewayMemoryState.events = gatewayMemoryState.events.filter(
       (event) =>
         event.hostId !== hostId || event.threadId !== threadId || retainedIds.has(event.id),
@@ -87,8 +110,31 @@ export const gatewayEventStore = {
         .slice(0, keep)
         .map(([key]) => key),
     );
+    recordPrunedEvents(
+      gatewayMemoryState.events.filter(
+        (event) => !retainedThreads.has(eventKey(event.hostId, event.threadId)),
+      ),
+    );
     gatewayMemoryState.events = gatewayMemoryState.events.filter((event) =>
-      retainedThreads.has(`${event.hostId}:${event.threadId}`),
+      retainedThreads.has(eventKey(event.hostId, event.threadId)),
     );
   },
 };
+
+function recordPrunedEvents(events: GatewayEvent[]) {
+  if (events.length === 0) return;
+  const next = { ...gatewayMemoryState.eventPrunedThroughByThread };
+  for (const event of events) {
+    const key = eventKey(event.hostId, event.threadId);
+    next[key] = Math.max(next[key] ?? 0, event.id);
+  }
+  gatewayMemoryState.eventPrunedThroughByThread = next;
+}
+
+function eventKey(hostId: number, threadId: string) {
+  return `${hostId}:${threadId}`;
+}
+
+function hostIdFromEventKey(key: string) {
+  return Number(key.slice(0, key.indexOf(":")));
+}

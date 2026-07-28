@@ -4,6 +4,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "../thread-utils/identity";
 import type { ThreadViewState } from "../types";
+import { threadViewSubscriptionLeases } from "./thread-view-subscription-leases";
 
 export function threadViewKey(hostId: number, threadId: string) {
   return pinnedKey(hostId, threadId);
@@ -11,7 +12,7 @@ export function threadViewKey(hostId: number, threadId: string) {
 
 export function selectedThreadViewKey() {
   const navigation = useGatewayNavigationStore();
-  return navigation.selectedHostId && navigation.selectedThreadId
+  return navigation.selectedHostId !== null && navigation.selectedThreadId !== null
     ? threadViewKey(navigation.selectedHostId, navigation.selectedThreadId)
     : null;
 }
@@ -19,7 +20,7 @@ export function selectedThreadViewKey() {
 export function selectedThreadView() {
   const views = useGatewayThreadViewStore();
   const key = selectedThreadViewKey();
-  return key ? (views.threadViews[key] ?? null) : null;
+  return key === null ? null : (views.threadViews[key] ?? null);
 }
 
 export function upsertThreadView(view: ThreadViewState) {
@@ -33,7 +34,7 @@ function pruneThreadViews(threadViews: Record<string, ThreadViewState>) {
   const views = useGatewayThreadViewStore();
   const protectedKeys = new Set<string>();
   const selectedKey = selectedThreadViewKey();
-  if (selectedKey) protectedKeys.add(selectedKey);
+  if (selectedKey !== null) protectedKeys.add(selectedKey);
   for (const panel of views.subAgentPanels) {
     protectedKeys.add(threadViewKey(panel.hostId, panel.threadId));
   }
@@ -41,7 +42,8 @@ function pruneThreadViews(threadViews: Record<string, ThreadViewState>) {
   while (entries.length > CLIENT_THREAD_CACHE_LIMIT) {
     const index = entries.findIndex(([key]) => !protectedKeys.has(key));
     if (index < 0) break;
-    entries.splice(index, 1);
+    const [, evicted] = entries.splice(index, 1)[0]!;
+    threadViewSubscriptionLeases.release(evicted.hostId, evicted.threadId);
   }
   return Object.fromEntries(entries);
 }
@@ -63,7 +65,7 @@ export function activateThreadViewFromCache(hostId: number, threadId: string) {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   const view = views.threadViews[threadViewKey(hostId, threadId)];
-  if (!view) return false;
+  if (view === undefined) return false;
   navigation.selectedHostId = view.hostId;
   navigation.selectedProjectId = view.projectId;
   navigation.selectedThreadId = view.threadId;
@@ -80,10 +82,10 @@ export function saveSelectedThreadView() {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   if (
-    !navigation.selectedHostId ||
-    !navigation.selectedThreadId ||
-    !views.currentThread ||
-    !views.history
+    navigation.selectedHostId === null ||
+    navigation.selectedThreadId === null ||
+    views.currentThread === null ||
+    views.history === null
   ) {
     return;
   }
@@ -113,6 +115,7 @@ export function removeThreadView(hostId: number, threadId: string) {
   const key = threadViewKey(hostId, threadId);
   const { [key]: _removed, ...remaining } = views.threadViews;
   views.threadViews = remaining;
+  if (_removed !== undefined) threadViewSubscriptionLeases.release(hostId, threadId);
 }
 
 export function appendEventToThreadView(event: GatewayEvent) {
@@ -120,13 +123,13 @@ export function appendEventToThreadView(event: GatewayEvent) {
 }
 
 export function appendEventsToThreadView(events: GatewayEvent[]) {
-  if (!events.length) return;
+  if (events.length === 0) return;
   const views = useGatewayThreadViewStore();
   const first = events[0]!;
   const view = views.threadViews[threadViewKey(first.hostId, first.threadId)];
-  if (!view) return;
+  if (view === undefined) return;
   const fresh = events.filter((event) => event.id > view.lastEventId);
-  if (!fresh.length) return;
+  if (fresh.length === 0) return;
   patchThreadView(first.hostId, first.threadId, {
     events: [...view.events, ...fresh].slice(-500),
     lastEventId: fresh.at(-1)!.id,

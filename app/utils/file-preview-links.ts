@@ -29,7 +29,7 @@ export function parseRemoteFileLink(href: string, baseHref: string): RemoteFileL
 
 function splitLineSuffix(path: string) {
   const match = /^(.*):(\d+)$/.exec(path);
-  if (!match?.[1] || !match[2]) {
+  if (match?.[1] === undefined || match[1] === "" || match[2] === undefined) {
     return { path, line: null };
   }
   return {

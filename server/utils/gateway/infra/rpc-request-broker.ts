@@ -1,5 +1,6 @@
 import type { RpcEnvelope } from "~~/shared/types";
 import { CodexRpcError } from "../http/errors";
+import ensureError from "ensure-error";
 
 interface PendingRequest {
   method: string;
@@ -12,26 +13,26 @@ export class RpcRequestBroker {
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
 
-  request<T>(
+  request(
     method: string,
     params: unknown,
     timeoutMs: number,
     send: (message: RpcEnvelope) => void,
-  ): Promise<T> {
+  ): Promise<unknown> {
     const id = this.nextId++;
     const message = { id, method, params };
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Codex RPC request timed out: ${method}`));
       }, timeoutMs);
-      this.pending.set(id, { method, resolve: (value) => resolve(value as T), reject, timer });
+      this.pending.set(id, { method, resolve, reject, timer });
       try {
         send(message);
       } catch (error) {
         clearTimeout(timer);
         this.pending.delete(id);
-        reject(error);
+        reject(ensureError(error));
       }
     });
   }

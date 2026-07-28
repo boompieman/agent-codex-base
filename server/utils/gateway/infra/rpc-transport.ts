@@ -146,12 +146,12 @@ export class CodexRpcTransport {
   private closedMessage(code: number | null, signal: string | null) {
     const detail = [
       code == null ? null : `code ${code}`,
-      signal ? `signal ${signal}` : null,
-      this.stderrBuffer.trim() ? `stderr: ${this.stderrBuffer.trim()}` : null,
+      signal === null ? null : `signal ${signal}`,
+      this.stderrBuffer.trim() === "" ? null : `stderr: ${this.stderrBuffer.trim()}`,
     ]
       .filter(Boolean)
       .join(", ");
-    return detail ? `Codex RPC transport closed (${detail})` : "Codex RPC transport closed";
+    return detail === "" ? "Codex RPC transport closed" : `Codex RPC transport closed (${detail})`;
   }
 }
 

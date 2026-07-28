@@ -3,6 +3,7 @@ import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { projectStore } from "../state/projects";
 import { threadBroker } from "./broker";
 import { runtimeLog } from "./runtime-log";
+import { trimmedOrNull } from "~~/shared/utils/strings";
 
 interface WarmPinnedThreadsInput {
   host: HostRecord;
@@ -11,7 +12,7 @@ interface WarmPinnedThreadsInput {
 
 export async function warmPinnedThreads({ host, pinnedThreads }: WarmPinnedThreadsInput) {
   const threads = pinnedThreads.filter((thread) => thread.hostId === host.id);
-  if (!threads.length) {
+  if (threads.length === 0) {
     return;
   }
 
@@ -38,11 +39,12 @@ export async function warmPinnedThreads({ host, pinnedThreads }: WarmPinnedThrea
 }
 
 function resolvePinnedProjectId(thread: PinnedThreadRecord) {
-  if (thread.projectId) {
+  if (thread.projectId !== null) {
     return thread.projectId;
   }
-  if (thread.subtitle?.trim()) {
-    return projectStore.ensureForPath(thread.hostId, thread.subtitle).id;
+  const remotePath = trimmedOrNull(thread.subtitle);
+  if (remotePath !== null) {
+    return projectStore.ensureForPath(thread.hostId, remotePath).id;
   }
   return null;
 }

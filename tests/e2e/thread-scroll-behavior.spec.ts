@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { ThreadHistoryState } from "../../shared/types";
+import type { ThreadViewState } from "../../app/stores/gateway/types";
 import { openApp } from "./helpers/app";
 import {
   appendAgentStreamLines,
@@ -253,6 +255,79 @@ test("streaming Agent output keeps a manually detached reader in place", async (
   await page.waitForTimeout(300);
   await expect.poll(() => chatViewportScrollTop(page)).toBeGreaterThanOrEqual(scrollTop - 2);
   await expect.poll(() => chatViewportScrollTop(page)).toBeLessThanOrEqual(scrollTop + 2);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+});
+
+test("dragging the native scrollbar away from latest disables bottom following", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-scrollbar-thumb-detach-thread";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Scrollbar Thumb Detach" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: buildVariableHeightTurns(threadId, 36, "scrollbar drag history"),
+      },
+    },
+  });
+
+  await scrollChatViewportToBottom(page);
+  await page.getByTestId("chat-scroll-area").evaluate((root: HTMLElement) => {
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (viewport === null) throw new Error("Missing chat viewport");
+    const box = viewport.getBoundingClientRect();
+    viewport.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        clientX: box.right - 1,
+        clientY: box.top + box.height / 2,
+        pointerId: 1,
+        pointerType: "mouse",
+      }),
+    );
+    viewport.scrollTop = Math.max(0, viewport.scrollTop - viewport.clientHeight);
+    viewport.dispatchEvent(new Event("scroll"));
+    viewport.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true, pointerId: 1, pointerType: "mouse" }),
+    );
+  });
+
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+});
+
+test("a settled detached reader keeps its anchor when an already measured row above reflows", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-settled-row-reflow-thread";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Settled Row Reflow" },
+    history: {
+      thread: {
+        id: threadId,
+        turns: buildVariableHeightTurns(threadId, 42, "settled reflow history"),
+      },
+    },
+  });
+
+  await parkChatViewportInMiddle(page);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+  // TanStack clears isScrolling after its scroll-end delay. The case under test is a later
+  // Markdown/image reflow, not a ResizeObserver callback racing active touch momentum.
+  await page.waitForTimeout(300);
+  const anchor = await captureVisibleTextAnchor(page, "settled reflow history");
+  await growMeasuredRowAboveViewport(page);
+
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
@@ -518,7 +593,7 @@ function buildMeasuredTurns(threadId: string, lineCount: number) {
   ];
 }
 
-function cachedThreadView(threadId: string, history: unknown) {
+function cachedThreadView(threadId: string, history: ThreadHistoryState): ThreadViewState {
   return {
     hostId: 1,
     projectId: 1,
@@ -555,6 +630,22 @@ async function setDocumentVisibility(page: Page, visibility: "hidden" | "visible
     });
     document.dispatchEvent(new Event("visibilitychange"));
   }, visibility);
+}
+
+async function growMeasuredRowAboveViewport(page: Page) {
+  await page.getByTestId("chat-scroll-area").evaluate((root: HTMLElement) => {
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (viewport === null) throw new Error("Missing chat viewport");
+    const viewportTop = viewport.getBoundingClientRect().top;
+    const row = Array.from(root.querySelectorAll<HTMLElement>("[data-row-key]")).find(
+      (candidate) => candidate.getBoundingClientRect().bottom <= viewportTop,
+    );
+    if (row === undefined) throw new Error("Missing measured overscan row above viewport");
+    const delayedContent = document.createElement("div");
+    delayedContent.style.height = "160px";
+    delayedContent.dataset.testid = "delayed-row-content";
+    row.append(delayedContent);
+  });
 }
 
 test("streaming output does not force scroll when the user is reading earlier content", async ({
@@ -997,15 +1088,15 @@ async function startTimelineRowCountTracking(page: Page) {
     const samples = [count()];
     const observer = new MutationObserver(() => samples.push(count()));
     observer.observe(root, { childList: true, subtree: true });
-    (window as any).__timelineRowCountSamples = samples;
-    (window as any).__timelineRowCountObserver = observer;
+    window.__timelineRowCountSamples = samples;
+    window.__timelineRowCountObserver = observer;
   });
 }
 
 async function stopTimelineRowCountTracking(page: Page) {
   return page.evaluate(() => {
-    (window as any).__timelineRowCountObserver?.disconnect();
-    return ((window as any).__timelineRowCountSamples ?? []) as number[];
+    window.__timelineRowCountObserver?.disconnect();
+    return window.__timelineRowCountSamples ?? [];
   });
 }
 

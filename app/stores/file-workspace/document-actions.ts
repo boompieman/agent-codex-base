@@ -26,6 +26,7 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
   const documents = shallowRef<Record<string, FilePreviewDocument>>({});
   const filesByKey = shallowRef<Record<string, File | null>>({});
   const viewPositions = ref<Record<string, { left: number; top: number }>>({});
+  const loadControllers = new Map<string, AbortController>();
 
   async function openFile(input: OpenWorkspaceFileInput) {
     const scope = ensureScope(input);
@@ -38,27 +39,29 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     const document = ensureDocument(input);
     document.line = input.line ?? document.line;
     document.updatedAt = Date.now();
-    if (!document.objectUrl && !document.loading) await loadDocument(document);
+    if (document.objectUrl === "" && !document.loading) await loadDocument(document);
   }
 
   async function activateFile(hostId: number, threadId: string, path: string) {
     const scope = options.scopeFor(hostId, threadId);
-    if (!scope?.openPaths.includes(path)) return;
+    if (scope === null || !scope.openPaths.includes(path)) return;
     const current = activeDocumentFor(hostId, threadId);
-    if (current?.dirty) await saveFileDocument(current);
+    if (current?.dirty === true) await saveFileDocument(current);
     scope.activePath = path;
     const document = documentFor(hostId, threadId, path);
-    if (document && (document.stale || !document.objectUrl) && !document.loading) {
+    if (document !== null && (document.stale || document.objectUrl === "") && !document.loading) {
       await loadDocument(document);
     }
   }
 
   function closeFile(hostId: number, threadId: string, path: string) {
     const scope = options.scopeFor(hostId, threadId);
-    if (!scope) return;
+    if (scope === null) return;
     const index = scope.openPaths.indexOf(path);
     if (index < 0) return;
     const key = fileDocumentKey(hostId, threadId, path);
+    loadControllers.get(key)?.abort();
+    loadControllers.delete(key);
     disposeFileDocument(documents.value[key]);
     const nextDocuments = { ...documents.value };
     const nextFiles = { ...filesByKey.value };
@@ -79,15 +82,15 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
 
   function documentsForScope(hostId: number, threadId: string) {
     const scope = options.scopeFor(hostId, threadId);
-    if (!scope) return [];
+    if (scope === null) return [];
     return scope.openPaths
       .map((path) => documentFor(hostId, threadId, path))
-      .filter((document): document is FilePreviewDocument => Boolean(document));
+      .filter((document): document is FilePreviewDocument => document !== null);
   }
 
   function activeDocumentFor(hostId: number, threadId: string) {
     const path = options.scopeFor(hostId, threadId)?.activePath;
-    return path ? documentFor(hostId, threadId, path) : null;
+    return path === null || path === undefined ? null : documentFor(hostId, threadId, path);
   }
 
   function documentFor(hostId: number, threadId: string, path: string) {
@@ -112,11 +115,11 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
 
   async function restoreScopeDocuments(hostId: number, threadId: string) {
     const scope = options.scopeFor(hostId, threadId);
-    if (!scope) return;
+    if (scope === null) return;
     for (const path of scope.openPaths) {
       ensureDocument({ hostId, projectId: scope.projectId, threadId, path });
     }
-    if (scope.activePath) await activateFile(hostId, threadId, scope.activePath);
+    if (scope.activePath !== null) await activateFile(hostId, threadId, scope.activePath);
   }
 
   async function reloadDocument(document: FilePreviewDocument) {
@@ -126,12 +129,27 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
 
   async function revalidateActiveFile(hostId: number, threadId: string) {
     const document = activeDocumentFor(hostId, threadId);
-    if (document && !document.loading) await loadDocument(document);
+    if (document !== null && !document.loading) await loadDocument(document);
   }
 
   async function loadDocument(document: FilePreviewDocument) {
-    const file = await loadFileDocument(document);
-    if (file !== undefined) filesByKey.value = { ...filesByKey.value, [document.key]: file };
+    loadControllers.get(document.key)?.abort();
+    const controller = new AbortController();
+    loadControllers.set(document.key, controller);
+    try {
+      const file = await loadFileDocument(document, controller.signal);
+      // A closed document is no longer the owner of this result even if a transport ignored the
+      // abort. Identity checking keeps stale requests from recreating filesByKey entries.
+      if (
+        !controller.signal.aborted &&
+        documents.value[document.key] === document &&
+        file !== undefined
+      ) {
+        filesByKey.value = { ...filesByKey.value, [document.key]: file };
+      }
+    } finally {
+      if (loadControllers.get(document.key) === controller) loadControllers.delete(document.key);
+    }
   }
 
   function ensureScope(input: OpenWorkspaceFileInput) {
@@ -149,10 +167,20 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
   function ensureDocument(input: OpenWorkspaceFileInput) {
     const key = fileDocumentKey(input.hostId, input.threadId, input.path);
     const existing = documents.value[key];
-    if (existing) return existing;
+    if (existing !== undefined) return existing;
     const document = createFileDocument(input);
     documents.value = { ...documents.value, [key]: document };
     return document;
+  }
+
+  function resetRuntime() {
+    for (const controller of loadControllers.values()) controller.abort();
+    loadControllers.clear();
+    for (const document of Object.values(documents.value)) disposeFileDocument(document);
+    documents.value = {};
+    filesByKey.value = {};
+    viewPositions.value = {};
+    options.workspaceOpenRequest.value = null;
   }
 
   return {
@@ -169,5 +197,6 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     reloadDocument,
     revalidateActiveFile,
     ensureDocument,
+    resetRuntime,
   };
 }

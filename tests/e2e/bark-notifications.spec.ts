@@ -61,3 +61,48 @@ test("Bark sends ordinary turn notifications and only notifies when an app-serve
   expect(requests[1]?.body).toContain("tokens");
   await expect(page.locator("[data-sonner-toast]").filter({ hasText: "目标已结束" })).toBeVisible();
 });
+
+test("Bark keeps monitoring an active main turn after the last browser closes", async ({
+  page,
+}) => {
+  const bark = await useBarkReceiver();
+  const remote = await readRemoteEnv();
+  await openApp(page);
+  await configureBarkNotifications(page, bark.url);
+
+  const host = await addRemoteHost(page, remote, `bark-handoff-host-${Date.now()}`);
+  const project = await addRemoteProject(page, remote, host.id);
+  await startRemoteThreadFromProjectMenu(page, project.id);
+  await page
+    .getByPlaceholder("输入后续修改要求")
+    .fill(
+      [
+        "运行下面的命令，命令结束后简短回复。",
+        "python - <<'PY'",
+        "import time",
+        "time.sleep(8)",
+        "print('browser lease handoff finished')",
+        "PY",
+      ].join("\n"),
+    );
+  await page.getByTestId("send-turn-button").click();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            window.__codexGatewayE2e?.views.events.filter(
+              (event) => event.method === "turn/started",
+            ).length ?? 0,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(0);
+  await page.close();
+
+  // Closing the last browser releases its UI lease, not the active app-server subscription.
+  // The background monitor must own it until turn/completed so VS Code-only and closed-page
+  // workflows receive the same completion notification as an open Gateway page.
+  await expect.poll(async () => (await bark.readRequests()).length, { timeout: 60_000 }).toBe(1);
+  expect((await bark.readRequests())[0]?.title).toContain("回合已结束");
+});

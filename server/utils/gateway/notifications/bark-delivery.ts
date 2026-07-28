@@ -2,6 +2,7 @@ import { normalizeNotificationSettings } from "~~/shared/config";
 import { gatewayMemoryState } from "../state/memory";
 import { sendBarkNotification } from "./bark-provider";
 import type { ServerNotification } from "~~/shared/types";
+import pRetry from "p-retry";
 
 const MAX_DELIVERED_NOTIFICATION_KEYS = 1_000;
 
@@ -15,7 +16,12 @@ export function deliverBarkNotification(notification: ServerNotification) {
   }
   markPending(notification.key);
 
-  void sendBarkNotification(settings, notification)
+  void pRetry(() => sendBarkNotification(settings, notification), {
+    retries: 4,
+    minTimeout: 1_000,
+    maxTimeout: 15_000,
+    factor: 2,
+  })
     .then(() => markDelivered(notification.key))
     .catch((error) => {
       console.error("[gateway] Bark notification failed", {

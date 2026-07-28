@@ -1,5 +1,6 @@
 import type { ComposerTurnOptions } from "~~/shared/types";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
@@ -21,46 +22,48 @@ import { requestTurnStart, requestTurnSteer } from "./transport";
 import type { Translate, TurnRequestResult } from "./types";
 
 export async function sendTurn(t: Translate, text: string, options: ComposerTurnOptions = {}) {
-  const gateway = useGatewayStore();
+  const catalog = useGatewayCatalogStore();
+  const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
   const runtimeStore = useGatewayThreadRuntimeStore();
   const views = useGatewayThreadViewStore();
   const hostId = navigation.selectedHostId;
   const threadId = navigation.selectedThreadId;
-  if (!hostId || !threadId) {
+  if (hostId === null || threadId === null) {
     return;
   }
 
   const runtime = runtimeStore.threadRuntimeProjection(hostId, threadId);
   const steerTurnId = runtime.canSteer ? runtime.activeTurnId : null;
-  const shouldSteerActiveTurn = Boolean(steerTurnId);
+  const shouldSteerActiveTurn = steerTurnId !== null;
   const clientUserMessageId = createClientUserMessageId(shouldSteerActiveTurn ? "steer" : "turn");
   if (!shouldSteerActiveTurn) {
     runtimeStore.setThreadRunning(hostId, threadId, true);
   }
 
   const optimisticContent = optimisticUserContent(text, options);
-  if (steerTurnId) {
+  if (steerTurnId !== null) {
     insertOptimisticSteerMessage(threadId, steerTurnId, clientUserMessageId, optimisticContent);
   } else {
     insertOptimisticNewTurnMessage(threadId, clientUserMessageId, optimisticContent);
   }
 
   const projectId = navigation.selectedProjectId;
-  const cwd = gateway.projects.find((project) => project.id === projectId)?.remotePath ?? null;
+  const cwd = catalog.projects.find((project) => project.id === projectId)?.remotePath ?? null;
   const requestKind = shouldSteerActiveTurn ? "steer" : "start";
-  const executeTurnRequest = steerTurnId
-    ? () =>
-        requestTurnSteer({
-          hostId,
-          threadId,
-          expectedTurnId: steerTurnId,
-          text,
-          clientUserMessageId,
-          options,
-        })
-    : () => requestTurnStart({ hostId, threadId, text, clientUserMessageId, cwd, options });
+  const executeTurnRequest =
+    steerTurnId !== null
+      ? () =>
+          requestTurnSteer({
+            hostId,
+            threadId,
+            expectedTurnId: steerTurnId,
+            text,
+            clientUserMessageId,
+            options,
+          })
+      : () => requestTurnStart({ hostId, threadId, text, clientUserMessageId, cwd, options });
 
   views.loading = true;
   gateway.clearError();
@@ -101,17 +104,27 @@ function applyAcceptedTurnResult(
   optimisticContent: unknown[],
 ) {
   const runtime = useGatewayThreadRuntimeStore();
-  if (result?.type === "turn.start.accepted" && result.turn) {
-    const startedTurnId = result.turn?.id ? String(result.turn.id) : "";
-    if (startedTurnId && !startedTurnId.startsWith("client-")) {
+  if (result?.type === "turn.start.accepted" && result.turn !== null && result.turn !== undefined) {
+    const startedTurnId =
+      result.turn.id === null || result.turn.id === undefined ? "" : String(result.turn.id);
+    if (startedTurnId !== "" && !startedTurnId.startsWith("client-")) {
       runtime.setThreadStatus(hostId, threadId, "running", { turnId: startedTurnId });
     }
     mergeStartedTurn(threadId, result.turn);
   }
-  if (result?.type === "turn.start.accepted" && result.turn?.items?.length) {
+  if (
+    result?.type === "turn.start.accepted" &&
+    result.turn?.items !== null &&
+    result.turn?.items !== undefined &&
+    result.turn.items.length > 0
+  ) {
     mergeTurnItems(threadId, result.turn);
   }
-  if (result?.type === "turn.steer.accepted" && result.turnId) {
+  if (
+    result?.type === "turn.steer.accepted" &&
+    result.turnId !== undefined &&
+    result.turnId !== ""
+  ) {
     insertOptimisticSteerMessage(threadId, result.turnId, clientUserMessageId, optimisticContent);
   }
 }

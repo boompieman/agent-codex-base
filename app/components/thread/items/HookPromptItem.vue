@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { WebhookIcon } from "@lucide/vue";
 import { computed } from "vue";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { threadItemText } from "@/utils/thread-items";
 
-const props = defineProps<{ item: Record<string, any> }>();
+const props = defineProps<{ item: ThreadHistoryItem }>();
 const { t } = useI18n();
 const text = computed(() => threadItemText(props.item));
 </script>

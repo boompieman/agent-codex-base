@@ -4,8 +4,8 @@ export interface AppServerEventPayload {
 }
 
 export interface ApplyAppServerEventInput {
-  history: unknown;
-  currentThread: unknown;
+  history: ThreadHistoryState | null;
+  currentThread: AppServerThread | null;
   threadId: string;
   method: string;
   payload?: AppServerEventPayload | null;
@@ -19,6 +19,8 @@ export type AppServerHistoryReducer = (
   input: ApplyAppServerEventInput,
   params: AppServerEventParams,
   requestId: AppServerRequestId,
-) => unknown;
+) => ThreadHistoryState | null;
 
 export type AppServerHistoryReducerRegistry = Record<string, AppServerHistoryReducer>;
+import type { AppServerThread } from "../../types/thread";
+import type { ThreadHistoryState } from "../types";

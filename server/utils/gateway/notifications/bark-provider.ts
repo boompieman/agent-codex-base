@@ -1,5 +1,6 @@
 import type { BarkNotificationSettings } from "~~/shared/types";
 import type { ServerNotification } from "~~/shared/types";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 const BARK_REQUEST_TIMEOUT_MS = 10_000;
 const BARK_RETRY_DELAYS_MS = [1_000, 3_000] as const;
@@ -44,8 +45,8 @@ function buildBarkUrl(settings: BarkNotificationSettings, notification: ServerNo
   const url = new URL(
     `${base}/${encodeURIComponent(settings.deviceKey)}/${encodeURIComponent(notification.title)}/${encodeURIComponent(notification.body)}`,
   );
-  const group = notification.group?.trim() || settings.group?.trim();
-  if (group) {
+  const group = firstNonEmptyString([notification.group, settings.group]);
+  if (group !== null) {
     url.searchParams.set("group", group);
   }
   return url;

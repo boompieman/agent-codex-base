@@ -7,7 +7,7 @@ import {
   Loader2Icon,
 } from "@lucide/vue";
 import { computed } from "vue";
-import type { ThreadRuntimeStatus } from "@/stores/gateway";
+import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 import { statusClass, statusLabelKey } from "./sidebar-utils";
 
 const props = defineProps<{

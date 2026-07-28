@@ -10,11 +10,11 @@ export function parseCodexVersion(output: string): ParsedCodexVersion | null {
   const match = raw.match(
     /\b(?:codex-cli|codex_cli_rs|codex-tui|codex_app_server|Codex Desktop)[ /](\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/i,
   );
-  if (!match) {
+  if (match === null) {
     return null;
   }
   const version = match[1];
-  if (!version) {
+  if (version === undefined) {
     return null;
   }
   return {

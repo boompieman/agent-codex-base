@@ -1,5 +1,5 @@
 import { extname } from "node:path";
-import { createError, getValidatedQuery } from "h3";
+import { getValidatedQuery } from "h3";
 import { isDedicatedDocumentPreviewPath } from "~~/shared/file-preview";
 import {
   defineGatewayEventHandler,
@@ -43,20 +43,11 @@ export default defineGatewayEventHandler(async (event) => {
     path: query.path,
   });
 
-  try {
-    return await sendRemoteFile(event, host, query.path, {
-      maxSize: MAX_REMOTE_FILE_BYTES,
-      contentType: mimeTypeForPath(query.path),
-      previewKind: isDedicatedDocumentPreviewPath(query.path) ? "document" : "detect",
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const statusCode = message.includes("exceeds") ? 413 : 404;
-    throw createError({
-      statusCode,
-      statusMessage: message || "Remote file not found",
-    });
-  }
+  return sendRemoteFile(event, host, query.path, {
+    maxSize: MAX_REMOTE_FILE_BYTES,
+    contentType: mimeTypeForPath(query.path),
+    previewKind: isDedicatedDocumentPreviewPath(query.path) ? "document" : "detect",
+  });
 });
 
 function mimeTypeForPath(path: string) {

@@ -5,6 +5,7 @@ import { sshConnections } from "../infra/host-services";
 import { shellQuote } from "../infra/shell";
 import type { HostWithSecret } from "../infra/ssh-types";
 import { currentGatewayUserId } from "../state/memory";
+import { hostRuntimeFingerprint } from "../runtime/host-runtime-fingerprint";
 
 const FIELD_SEPARATOR = "|";
 const RECORD_KIND = "pane";
@@ -22,7 +23,10 @@ export class RemoteTmuxScanner {
   private readonly pendingScans = new Map<string, Promise<TmuxSessionSnapshot[]>>();
 
   async scan(host: HostWithSecret): Promise<TmuxSessionSnapshot[]> {
-    const key = `${currentGatewayUserId() ?? "anonymous"}:${host.id}`;
+    // Host ids are user-config identifiers, not remote-machine identities. Including the runtime
+    // fingerprint prevents a scan already running against the old SSH target from being reused
+    // immediately after that Host record is edited to point at another machine.
+    const key = `${currentGatewayUserId() ?? "anonymous"}:${host.id}:${hostRuntimeFingerprint(host)}`;
     const pending = this.pendingScans.get(key);
     if (pending) return await pending;
 

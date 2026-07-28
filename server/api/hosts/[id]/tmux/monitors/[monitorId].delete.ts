@@ -8,9 +8,5 @@ export default defineGatewayEventHandler((event) => {
   const hostId = Number(getRouterParam(event, "id"));
   const monitorId = Number(getRouterParam(event, "monitorId"));
   requireRecord(hostStore.get(hostId), "Host not found");
-  const monitor = tmuxMonitorService.repository.getOwned(event.context.auth!.user.id, monitorId);
-  if (!monitor || monitor.hostId !== hostId) {
-    return requireRecord(null, "Active monitor not found");
-  }
-  return tmuxMonitorService.cancel(event.context.auth!.user.id, monitorId);
+  return tmuxMonitorService.cancelForHost(event.context.auth!.user.id, hostId, monitorId);
 });

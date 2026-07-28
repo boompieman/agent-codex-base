@@ -1,25 +1,47 @@
 <script setup lang="ts">
 import { BotIcon } from "@lucide/vue";
 import { computed } from "vue";
+import type { ThreadTimelineTurn } from "~~/shared/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useOpenSubAgentPanel } from "@/composables/thread/useOpenSubAgentPanel";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
+import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
+import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 import { activeSubAgentsFromTurns } from "./active-subagents";
+import { subAgentDisplayName } from "./display-name";
 
 const props = defineProps<{
-  turns: Array<Record<string, any>>;
+  turns: ThreadTimelineTurn[];
   hostId: number | null;
   parentThreadId: string;
 }>();
+const { t } = useI18n();
 const threadView = useGatewayThreadViewStore();
+const threadActivity = useGatewayThreadActivityStore();
+const { openSubAgentPanel } = useOpenSubAgentPanel();
 const agents = computed(() => activeSubAgentsFromTurns(props.turns));
 
+function displayName(agent: (typeof agents.value)[number]) {
+  const thread = props.hostId
+    ? threadView.threadViews[pinnedKey(props.hostId, agent.threadId)]?.currentThread
+    : null;
+  const summary = props.hostId
+    ? threadActivity.summariesByKey[pinnedKey(props.hostId, agent.threadId)]
+    : undefined;
+  return subAgentDisplayName({
+    thread: thread ?? summary,
+    agentPath: agent.agentPath,
+    threadId: agent.threadId,
+    fallback: t("app.subAgentPanel"),
+  });
+}
+
 function open(agent: (typeof agents.value)[number]) {
-  if (!props.hostId) return;
-  void threadView.openSubAgentPanel({
+  void openSubAgentPanel({
     hostId: props.hostId,
     threadId: agent.threadId,
-    title: agent.title,
+    titleCandidate: agent.agentPath,
     parentHostId: props.hostId,
     parentThreadId: props.parentThreadId,
   });
@@ -43,11 +65,11 @@ function open(agent: (typeof agents.value)[number]) {
       variant="outline"
       size="sm"
       class="h-7 shrink-0 gap-1.5 px-2"
-      :title="agent.threadId"
+      :title="displayName(agent)"
       data-testid="open-active-subagent"
       @click="open(agent)"
     >
-      <span class="max-w-40 truncate">{{ agent.title }}</span>
+      <span class="max-w-40 truncate">{{ displayName(agent) }}</span>
       <span class="size-1.5 rounded-full bg-primary" />
     </Button>
   </div>

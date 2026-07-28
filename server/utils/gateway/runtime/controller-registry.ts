@@ -1,5 +1,6 @@
 import type { HostRecord } from "~~/shared/types";
 import { currentGatewayUserId } from "../state/memory";
+import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 import { HostRpcSession } from "./host-rpc-session";
 import { hostSessionEvents } from "./host-session-events";
 import { ThreadController } from "./thread-controller";
@@ -9,6 +10,7 @@ export class ControllerRegistry {
   private readonly pendingControllers = new Map<string, Promise<ThreadController>>();
   private readonly controllerGenerations = new Map<string, number>();
   private readonly hostSessions = new Map<string, HostRpcSession>();
+  private readonly subscriptionLeaseCounts = new Map<string, number>();
 
   async getController(host: HostRecord, threadId: string) {
     const userId = this.userKey();
@@ -56,6 +58,37 @@ export class ControllerRegistry {
     return this.getHostClientForUser(this.userKey(), host);
   }
 
+  retainSubscription(host: HostRecord, threadId: string) {
+    const userId = this.userKey();
+    const key = this.key(userId, host.id, threadId);
+    this.subscriptionLeaseCounts.set(key, (this.subscriptionLeaseCounts.get(key) ?? 0) + 1);
+    const ready = this.getController(host, threadId).then((controller) =>
+      controller.ensureSubscribed(),
+    );
+    let released = false;
+    return {
+      ready,
+      release: () => {
+        if (released) return;
+        released = true;
+        const remaining = Math.max(0, (this.subscriptionLeaseCounts.get(key) ?? 1) - 1);
+        if (remaining > 0) {
+          this.subscriptionLeaseCounts.set(key, remaining);
+          return;
+        }
+        this.subscriptionLeaseCounts.delete(key);
+        // Replacing a peer subscription releases the old callback before retaining the new one.
+        // Deferring zero-count disposal by one microtask coalesces that handoff without keeping
+        // abandoned controllers alive indefinitely.
+        queueMicrotask(() => {
+          if ((this.subscriptionLeaseCounts.get(key) ?? 0) === 0) {
+            this.releaseUnleasedController(key);
+          }
+        });
+      },
+    };
+  }
+
   controllersForHost(hostId: number) {
     return this.controllersForUserHost(this.userKey(), hostId);
   }
@@ -66,16 +99,15 @@ export class ControllerRegistry {
 
   close(hostId: number, threadId: string) {
     const key = this.key(this.userKey(), hostId, threadId);
-    this.invalidateController(key);
-    this.pendingControllers.delete(key);
-    this.controllers.get(key)?.close();
-    this.controllers.delete(key);
+    this.subscriptionLeaseCounts.delete(key);
+    this.closeByKey(key);
   }
 
   closeHost(hostId: number) {
     const userId = this.userKey();
     for (const controller of this.controllersForUserHost(userId, hostId)) {
       const key = this.key(userId, hostId, controller.threadId);
+      this.subscriptionLeaseCounts.delete(key);
       this.invalidateController(key);
       controller.close();
       this.controllers.delete(key);
@@ -106,12 +138,24 @@ export class ControllerRegistry {
     if (this.controllerGeneration(key) !== generation) {
       throw new Error("Thread controller creation was superseded");
     }
-    const controller = new ThreadController(host, threadId, client, true, false, false, () => {
-      if (this.controllers.get(key) === controller) {
-        this.controllers.delete(key);
-        this.deleteUnusedControllerGeneration(key);
-      }
-    });
+    const inheritedSubscription = activeMainThreadMonitor.reclaimSubscribedThread(
+      host.id,
+      threadId,
+    );
+    const controller = new ThreadController(
+      host,
+      threadId,
+      client,
+      true,
+      inheritedSubscription,
+      false,
+      () => {
+        if (this.controllers.get(key) === controller) {
+          this.controllers.delete(key);
+          this.deleteUnusedControllerGeneration(key);
+        }
+      },
+    );
     this.controllers.set(key, controller);
     return controller;
   }
@@ -165,10 +209,42 @@ export class ControllerRegistry {
     const prefix = `${userId}:${hostId}:`;
     for (const key of this.pendingControllers.keys()) {
       if (key.startsWith(prefix)) {
+        this.subscriptionLeaseCounts.delete(key);
         this.invalidateController(key);
         this.pendingControllers.delete(key);
       }
     }
+  }
+
+  private closeByKey(key: string) {
+    this.invalidateController(key);
+    this.pendingControllers.delete(key);
+    this.controllers.get(key)?.close();
+    this.controllers.delete(key);
+    this.deleteUnusedControllerGeneration(key);
+  }
+
+  private releaseUnleasedController(key: string) {
+    const controller = this.controllers.get(key);
+    if (controller?.shouldTransferSubscriptionToMonitor() !== true) {
+      this.closeByKey(key);
+      return;
+    }
+
+    activeMainThreadMonitor.adoptSubscribedThread(
+      {
+        host: controller.host,
+        client: controller.client,
+        hasController: (threadId) =>
+          this.controllers.has(this.key(this.userKey(), controller.host.id, threadId)),
+      },
+      controller.threadId,
+    );
+    this.invalidateController(key);
+    this.pendingControllers.delete(key);
+    controller.disposeKeepingUpstreamSubscription();
+    this.controllers.delete(key);
+    this.deleteUnusedControllerGeneration(key);
   }
 
   private controllerGeneration(key: string) {
@@ -195,7 +271,7 @@ export class ControllerRegistry {
 
   private userKey() {
     const userId = currentGatewayUserId();
-    if (!userId) {
+    if (userId === null) {
       throw new Error("Gateway runtime requires an authenticated user scope");
     }
     return userId;

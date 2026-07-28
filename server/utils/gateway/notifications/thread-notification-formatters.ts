@@ -1,18 +1,16 @@
-import type {
-  GatewayEvent,
-  ThreadGoal,
-  ThreadGoalStatus,
-  ThreadRuntimeStatus,
-} from "~~/shared/types";
+import type { GatewayEvent, ThreadGoalStatus, ThreadRuntimeStatus } from "~~/shared/types";
 import { terminalTurnStatus } from "~~/shared/thread-runtime-status";
 import { gatewayMemoryState } from "../state/memory";
 import { hostStore } from "../state/hosts";
 import type { ServerNotification } from "~~/shared/types";
+import { threadGoalFromUnknown, threadHistoryTurnFromUnknown } from "~~/shared/runtime/app-server";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export function threadTurnCompletedNotification(event: GatewayEvent): ServerNotification | null {
-  const params = (event.payload as any)?.params ?? {};
-  const turn = params.turn ?? {};
-  const turnId = turn.id ? String(turn.id) : `event-${event.id}`;
+  const params = recordFromUnknown(event.payload.params);
+  const turn = threadHistoryTurnFromUnknown(params?.turn) ?? {};
+  const turnId = turn.id === null || turn.id === undefined ? `event-${event.id}` : String(turn.id);
   const status = terminalTurnStatus(turn.status);
   return {
     key: `thread-terminal:${event.hostId}:${event.threadId}:turn:${turnId}:${status}`,
@@ -24,9 +22,9 @@ export function threadTurnCompletedNotification(event: GatewayEvent): ServerNoti
 }
 
 export function threadGoalCompletedNotification(event: GatewayEvent): ServerNotification | null {
-  const params = (event.payload as any)?.params ?? {};
-  const goal = params.goal as ThreadGoal | undefined;
-  if (!goal || !isTerminalGoalStatus(goal.status)) {
+  const params = recordFromUnknown(event.payload.params);
+  const goal = threadGoalFromUnknown(params?.goal);
+  if (goal === null || !isTerminalGoalStatus(goal.status)) {
     return null;
   }
   return {
@@ -67,11 +65,18 @@ function threadTitle(hostId: number, threadId: string) {
   const metadata = gatewayMemoryState.threadMetadata.find(
     (thread) => thread.hostId === hostId && thread.threadId === threadId,
   );
-  return pinnedThread?.title || metadata?.title || metadata?.name || metadata?.preview || threadId;
+  return (
+    firstNonEmptyString([
+      pinnedThread?.title,
+      metadata?.title,
+      metadata?.name,
+      metadata?.preview,
+    ]) ?? threadId
+  );
 }
 
 function hostTitle(hostId: number) {
-  return hostStore.get(hostId)?.name || `Host ${hostId}`;
+  return firstNonEmptyString([hostStore.get(hostId)?.name]) ?? `Host ${hostId}`;
 }
 
 function turnStatusLabel(status: ThreadRuntimeStatus) {

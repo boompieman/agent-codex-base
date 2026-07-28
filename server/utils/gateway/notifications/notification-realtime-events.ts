@@ -8,7 +8,7 @@ class NotificationRealtimeEvents {
 
   publish(notification: ServerNotification) {
     const userId = currentGatewayUserId();
-    if (!userId) {
+    if (userId === null) {
       throw new Error("Realtime notifications require an authenticated user scope");
     }
     for (const subscriber of this.subscribersByUser.get(userId) ?? []) {
@@ -27,7 +27,7 @@ class NotificationRealtimeEvents {
     this.subscribersByUser.set(userId, subscribers);
     return () => {
       subscribers.delete(subscriber);
-      if (!subscribers.size) {
+      if (subscribers.size === 0) {
         this.subscribersByUser.delete(userId);
       }
     };

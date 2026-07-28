@@ -1,3 +1,5 @@
+import type { AppServerThread } from "~~/shared/types";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 import { unknownGatewayErrorFromError } from "../errors";
 
 export interface ErrorMessageLabels {
@@ -27,7 +29,7 @@ const defaultErrorLabels: ErrorMessageLabels = {
 };
 
 export function messageFromError(
-  error: any,
+  error: unknown,
   fallback: string,
   labels: ErrorMessageLabels = defaultErrorLabels,
 ) {
@@ -54,25 +56,48 @@ export function pinnedKey(hostId: number, threadId: string) {
 }
 
 export function selectedThreadKey(hostId: number | null, threadId: string | null) {
-  return hostId && threadId ? pinnedKey(hostId, threadId) : null;
+  return hostId !== null && threadId !== null && threadId !== ""
+    ? pinnedKey(hostId, threadId)
+    : null;
 }
 
-export function threadIdFromParams(params: any) {
-  return params?.threadId;
+export function selectedThreadScope(hostId: number | null, threadId: string | null) {
+  if (hostId === null || threadId === null || threadId === "") return null;
+  return { hostId, threadId };
 }
 
-export function titleForThread(thread: any) {
-  return thread?.title || thread?.name || thread?.preview || thread?.id || "Untitled";
+export function threadIdFromParams(params: Record<string, unknown>) {
+  const value = params.threadId;
+  return typeof value === "string" || typeof value === "number" ? String(value) : null;
 }
 
-export function sortThreads(threads: any[]) {
+export function titleForThread(
+  thread:
+    | {
+        id?: string | number;
+        threadId?: string | number;
+        title?: string | null;
+        name?: string | null;
+        preview?: string | null;
+      }
+    | null
+    | undefined,
+) {
+  if (thread === null || thread === undefined) return "Untitled";
+  const label = firstNonEmptyString([thread.title, thread.name, thread.preview]);
+  if (label !== null) return label;
+  const identity = thread.id ?? thread.threadId;
+  return identity === undefined ? "Untitled" : String(identity);
+}
+
+export function sortThreads(threads: AppServerThread[]) {
   return [...threads].sort((left, right) => {
     if (Boolean(left.pinned) !== Boolean(right.pinned)) {
-      return left.pinned ? -1 : 1;
+      return left.pinned === true ? -1 : 1;
     }
     return (
-      Number(right.recencyAt || right.updatedAt || 0) -
-      Number(left.recencyAt || left.updatedAt || 0)
+      Number(right.recencyAt ?? right.updatedAt ?? 0) -
+      Number(left.recencyAt ?? left.updatedAt ?? 0)
     );
   });
 }

@@ -28,7 +28,7 @@ export function resolveSshConfig(host: HostWithSecret) {
 
   for (const rawLine of lines) {
     const line = rawLine.replace(/\s+#.*$/, "").trim();
-    if (!line) {
+    if (line === "") {
       continue;
     }
 
@@ -42,20 +42,20 @@ export function resolveSshConfig(host: HostWithSecret) {
       continue;
     }
 
-    if (!active || !value) {
+    if (!active || value === "") {
       continue;
     }
 
     if (keyword === "hostname") {
       result.hostName = value;
-    } else if (keyword === "user" && !host.username) {
+    } else if (keyword === "user" && (host.username === null || host.username === "")) {
       result.username = value;
     } else if (keyword === "port" && host.port == null) {
       result.port = Number(value) || result.port;
     } else if (
       keyword === "identityfile" &&
       host.authMode === "privateKey" &&
-      !host.privateKeyPath
+      (host.privateKeyPath === null || host.privateKeyPath === "")
     ) {
       result.privateKeyPath = value;
     }
@@ -90,7 +90,7 @@ export function sshConnectionKey(
 
 export function parseProxyUrl(proxyUrl?: string | null) {
   const raw = proxyUrl?.trim();
-  if (!raw) {
+  if (raw === undefined || raw === "") {
     return null;
   }
   const url = new URL(raw);
@@ -98,7 +98,7 @@ export function parseProxyUrl(proxyUrl?: string | null) {
     throw new Error(`Unsupported SSH proxy protocol: ${url.protocol}`);
   }
   const port = Number(url.port);
-  if (!url.hostname || !Number.isInteger(port) || port <= 0 || port > 65535) {
+  if (url.hostname === "" || !Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error(`Invalid SSH proxy URL: ${raw}`);
   }
   return {
@@ -122,8 +122,8 @@ export async function createProxySocket(options: {
       host: options.proxy.host,
       port: options.proxy.port,
       type: 5,
-      userId: options.proxy.username || undefined,
-      password: options.proxy.password || undefined,
+      userId: options.proxy.username === "" ? undefined : options.proxy.username,
+      password: options.proxy.password === "" ? undefined : options.proxy.password,
     },
     destination: {
       host: options.targetHost,

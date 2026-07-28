@@ -7,6 +7,10 @@ import {
 } from "./remote-command";
 import type { SshConnectionPool } from "./ssh-connection";
 import type { HostWithSecret } from "./ssh-types";
+import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
+import { parseLoadedThreadsPage } from "~~/shared/runtime/app-server";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export interface AppServerRuntimeState {
   running: boolean;
@@ -64,7 +68,8 @@ export class AppServerRuntimeProbe {
     );
     if (result.code !== 0) {
       throw new Error(
-        result.stderr || result.stdout || "Failed to terminate unmanaged remote Codex app-server",
+        firstNonEmptyString([result.stderr, result.stdout]) ??
+          "Failed to terminate unmanaged remote Codex app-server",
       );
     }
     this.ssh.disconnectHost(host);
@@ -72,7 +77,7 @@ export class AppServerRuntimeProbe {
 
   async readRunningVersion(host: HostWithSecret) {
     const result = await this.readRunningVersionResult(host);
-    if (result.error) {
+    if (result.error !== null) {
       throw new Error(result.error);
     }
     return result.version;
@@ -86,11 +91,11 @@ export class AppServerRuntimeProbe {
     });
     try {
       const userAgent = await client.probeRuntimeVersion();
-      if (!userAgent) {
+      if (userAgent === null || userAgent === undefined || userAgent.length === 0) {
         return { version: null, error: null };
       }
       const parsed = parseCodexVersion(userAgent);
-      if (!parsed) {
+      if (parsed === null) {
         return {
           version: null,
           error: `Unable to parse remote app-server version: ${userAgent}`,
@@ -115,18 +120,12 @@ export class AppServerRuntimeProbe {
     });
     try {
       await client.connect();
-      const loaded = await client.request<{ data?: string[]; nextCursor?: string | null }>(
-        "thread/loaded/list",
-        {},
-        30_000,
-      );
+      const loaded = await client.request("thread/loaded/list", {}, 30_000, parseLoadedThreadsPage);
       for (const threadId of loaded.data ?? []) {
-        const read = await client.request<any>(
-          "thread/read",
-          { threadId, includeTurns: false },
-          30_000,
-        );
-        if (isActiveThreadStatus(read?.thread?.status ?? read?.status)) {
+        const read = await client.request("thread/read", { threadId, includeTurns: false }, 30_000);
+        const record = recordFromUnknown(read);
+        const thread = appServerThreadFromUnknown(record?.thread);
+        if (isActiveThreadStatus(thread?.status ?? record?.status)) {
           return true;
         }
       }
@@ -137,8 +136,8 @@ export class AppServerRuntimeProbe {
   }
 }
 
-function isActiveThreadStatus(status: any) {
-  const value = typeof status === "string" ? status : status?.type;
+function isActiveThreadStatus(status: unknown) {
+  const value = typeof status === "string" ? status : recordFromUnknown(status)?.type;
   return value === "active" || value === "inProgress" || value === "running";
 }
 
@@ -146,7 +145,8 @@ function parseAppServerRuntimeStateOutput(
   output: string,
 ): { status?: string; backend?: string; appServerVersion?: string } | null {
   try {
-    const parsed = JSON.parse(output.trim());
+    const parsed = recordFromUnknown(JSON.parse(output.trim()));
+    if (parsed === null) return null;
     return {
       status: typeof parsed.status === "string" ? parsed.status : undefined,
       backend: typeof parsed.backend === "string" ? parsed.backend : undefined,
@@ -159,5 +159,5 @@ function parseAppServerRuntimeStateOutput(
 }
 
 function hostDisplayName(host: HostWithSecret) {
-  return host.name || host.sshHost;
+  return firstNonEmptyString([host.name, host.sshHost]) ?? "unknown host";
 }

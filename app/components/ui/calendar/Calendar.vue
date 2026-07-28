@@ -72,6 +72,20 @@ const [DefineMonthTemplate, ReuseMonthTemplate] = createReusableTemplate<{ date:
 const [DefineYearTemplate, ReuseYearTemplate] = createReusableTemplate<{ date: DateValue }>();
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
+
+function selectedNumber(event: Event): number | undefined {
+  return event.target instanceof HTMLSelectElement ? Number(event.target.value) : undefined;
+}
+
+function selectMonth(event: Event): void {
+  const month = selectedNumber(event);
+  if (month !== undefined) placeholder.value = placeholder.value.set({ month });
+}
+
+function selectYear(event: Event): void {
+  const year = selectedNumber(event);
+  if (year !== undefined) placeholder.value = placeholder.value.set({ year });
+}
 </script>
 
 <template>
@@ -81,16 +95,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
         <div class="absolute inset-0 flex h-full items-center text-sm pl-2 pointer-events-none">
           {{ formatter.custom(toDate(date), { month: "short" }) }}
         </div>
-        <NativeSelect
-          class="text-xs h-8 pr-6 pl-2 text-transparent relative"
-          @change="
-            (e: Event) => {
-              placeholder = placeholder.set({
-                month: Number((e?.target as any)?.value),
-              });
-            }
-          "
-        >
+        <NativeSelect class="text-xs h-8 pr-6 pl-2 text-transparent relative" @change="selectMonth">
           <NativeSelectOption
             v-for="month in createYear({ dateObj: date })"
             :key="month.toString()"
@@ -110,16 +115,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
         <div class="absolute inset-0 flex h-full items-center text-sm pl-2 pointer-events-none">
           {{ formatter.custom(toDate(date), { year: "numeric" }) }}
         </div>
-        <NativeSelect
-          class="text-xs h-8 pr-6 pl-2 text-transparent relative"
-          @change="
-            (e: Event) => {
-              placeholder = placeholder.set({
-                year: Number((e?.target as any)?.value),
-              });
-            }
-          "
-        >
+        <NativeSelect class="text-xs h-8 pr-6 pl-2 text-transparent relative" @change="selectYear">
           <NativeSelectOption
             v-for="year in yearRange"
             :key="year.toString()"

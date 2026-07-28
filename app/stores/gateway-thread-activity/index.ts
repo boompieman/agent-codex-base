@@ -1,7 +1,8 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import type { ProjectRecord, ThreadRuntimeStatus } from "~~/shared/types";
+import type { AppServerThread, ProjectRecord, ThreadRuntimeStatus } from "~~/shared/types";
 import { pinnedKey } from "../gateway/thread-utils/identity";
+import { firstNonEmptyString, trimmedOrNull } from "~~/shared/utils/strings";
 
 export interface ThreadActivitySummary {
   hostId: number;
@@ -11,6 +12,9 @@ export interface ThreadActivitySummary {
   cwd: string | null;
   projectName: string | null;
   parentThreadId: string | null;
+  agentNickname: string | null;
+  agentRole: string | null;
+  isSubAgent: boolean;
   updatedAt: number;
 }
 
@@ -19,19 +23,20 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
   const observedRunningThreadKeys = ref<string[]>([]);
   const observedRunningThreadKeySet = computed(() => new Set(observedRunningThreadKeys.value));
 
-  function ingestThreads(hostId: number, threads: any[], projects: ProjectRecord[]) {
+  function ingestThreads(hostId: number, threads: AppServerThread[], projects: ProjectRecord[]) {
     for (const thread of threads) {
       upsertThread(hostId, thread, projects);
     }
   }
 
-  function upsertThread(hostId: number, thread: any, projects: ProjectRecord[]) {
-    const threadId = String(thread?.threadId ?? thread?.id ?? "");
-    if (!threadId) return;
+  function upsertThread(hostId: number, thread: AppServerThread, projects: ProjectRecord[]) {
+    const threadId = thread.id;
+    if (threadId === null || threadId === undefined || threadId === "") return;
 
     const key = pinnedKey(hostId, threadId);
     const existing = summariesByKey.value[key];
     const project = resolveProject(hostId, thread, projects);
+    const parentThreadId = stringOrNull(thread.parentThreadId) ?? existing?.parentThreadId ?? null;
     summariesByKey.value = {
       ...summariesByKey.value,
       [key]: {
@@ -41,10 +46,16 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
         title: activityTitle(thread, existing?.title ?? threadId),
         cwd: stringOrNull(thread?.cwd) ?? existing?.cwd ?? null,
         projectName: project?.name ?? existing?.projectName ?? null,
-        parentThreadId:
-          stringOrNull(thread?.parentThreadId ?? thread?.parent_thread_id) ??
-          existing?.parentThreadId ??
-          null,
+        parentThreadId,
+        agentNickname: stringOrNull(thread.agentNickname) ?? existing?.agentNickname ?? null,
+        agentRole: stringOrNull(thread.agentRole) ?? existing?.agentRole ?? null,
+        // New app-server notifications may identify a managed child by agent metadata before a
+        // later thread/read supplies parentThreadId. Keep the classification sticky once known.
+        isSubAgent:
+          parentThreadId !== null ||
+          stringOrNull(thread.agentRole) !== null ||
+          stringOrNull(thread.agentNickname) !== null ||
+          existing?.isSubAgent === true,
         updatedAt: timestamp(thread) ?? existing?.updatedAt ?? Math.floor(Date.now() / 1000),
       },
     };
@@ -63,7 +74,7 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
   function updateTitle(hostId: number, threadId: string, title: string) {
     const key = pinnedKey(hostId, threadId);
     const existing = summariesByKey.value[key];
-    if (!existing) return;
+    if (existing === undefined) return;
     summariesByKey.value = {
       ...summariesByKey.value,
       [key]: { ...existing, title },
@@ -86,18 +97,18 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
   };
 });
 
-function resolveProject(hostId: number, thread: any, projects: ProjectRecord[]) {
+function resolveProject(hostId: number, thread: AppServerThread, projects: ProjectRecord[]) {
   const projectId = numberOrNull(thread?.projectId);
   if (projectId !== null) {
     return projects.find((project) => project.id === projectId && project.hostId === hostId);
   }
   const cwd = stringOrNull(thread?.cwd);
-  return cwd
+  return cwd !== null
     ? projects.find((project) => project.hostId === hostId && project.remotePath === cwd)
     : undefined;
 }
 
-function timestamp(thread: any) {
+function timestamp(thread: AppServerThread) {
   const raw = thread?.recencyAt ?? thread?.updatedAt ?? thread?.createdAt;
   const numeric = Number(raw);
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
@@ -105,8 +116,8 @@ function timestamp(thread: any) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function activityTitle(thread: any, fallback: string) {
-  return thread?.title || thread?.name || thread?.preview || fallback;
+function activityTitle(thread: AppServerThread, fallback: string) {
+  return firstNonEmptyString([thread.title, thread.name, thread.preview]) ?? fallback;
 }
 
 function numberOrNull(value: unknown) {
@@ -115,5 +126,5 @@ function numberOrNull(value: unknown) {
 }
 
 function stringOrNull(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === "string" ? trimmedOrNull(value) : null;
 }

@@ -1,28 +1,28 @@
 import type { ThreadTokenUsageState, TokenUsageBreakdown } from "./types";
+import { recordFromUnknown } from "./utils/records";
 
-export function normalizeTokenUsage(value: any): ThreadTokenUsageState | null {
-  const total = normalizeTokenBreakdown(value?.total);
-  const last = normalizeTokenBreakdown(value?.last);
+export function normalizeTokenUsage(value: unknown): ThreadTokenUsageState | null {
+  const usage = recordFromUnknown(value);
+  const total = normalizeTokenBreakdown(usage?.total);
+  const last = normalizeTokenBreakdown(usage?.last);
   if (!total || !last) {
     return null;
   }
   return {
     total,
     last,
-    modelContextWindow: numberOrNull(value?.modelContextWindow ?? value?.model_context_window),
+    modelContextWindow: numberOrNull(usage?.modelContextWindow),
   };
 }
 
-function normalizeTokenBreakdown(value: any): TokenUsageBreakdown | null {
-  const totalTokens = numberOrNull(value?.totalTokens ?? value?.total_tokens);
-  const inputTokens = numberOrNull(value?.inputTokens ?? value?.input_tokens);
-  const cachedInputTokens = numberOrNull(value?.cachedInputTokens ?? value?.cached_input_tokens);
-  const cacheWriteInputTokens =
-    numberOrNull(value?.cacheWriteInputTokens ?? value?.cache_write_input_tokens) ?? 0;
-  const outputTokens = numberOrNull(value?.outputTokens ?? value?.output_tokens);
-  const reasoningOutputTokens = numberOrNull(
-    value?.reasoningOutputTokens ?? value?.reasoning_output_tokens,
-  );
+function normalizeTokenBreakdown(value: unknown): TokenUsageBreakdown | null {
+  const usage = recordFromUnknown(value);
+  const totalTokens = numberOrNull(usage?.totalTokens);
+  const inputTokens = numberOrNull(usage?.inputTokens);
+  const cachedInputTokens = numberOrNull(usage?.cachedInputTokens);
+  const cacheWriteInputTokens = numberOrNull(usage?.cacheWriteInputTokens) ?? 0;
+  const outputTokens = numberOrNull(usage?.outputTokens);
+  const reasoningOutputTokens = numberOrNull(usage?.reasoningOutputTokens);
   if (
     totalTokens == null ||
     inputTokens == null ||

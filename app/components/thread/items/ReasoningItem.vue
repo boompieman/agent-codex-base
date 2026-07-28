@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import { useTimestamp } from "@vueuse/core";
 import { BrainIcon, Loader2Icon } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
@@ -6,7 +7,7 @@ import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { isItemInProgress, threadItemText } from "@/utils/thread-items";
 import { formatDurationMs, itemCompletedAtMs, itemStartedAtMs } from "@/utils/item-timing";
 
-const props = defineProps<{ item: Record<string, any> }>();
+const props = defineProps<{ item: ThreadHistoryItem }>();
 const { t } = useI18n();
 const { timestamp: now, pause, resume } = useTimestamp({ controls: true, interval: 100 });
 const localStartedAt = ref(Date.now());

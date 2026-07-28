@@ -1,4 +1,5 @@
 import type { RealtimeClientMessage } from "~~/shared/types";
+import { firstNonEmptyString, trimmedOrNull } from "~~/shared/utils/strings";
 import { requireRecord } from "../../http/validation/common";
 import { hostStore } from "../../state/hosts";
 import { projectStore } from "../../state/projects";
@@ -23,7 +24,7 @@ export async function openTerminal(
     projectId: request.projectId ?? null,
     threadId: request.threadId ?? null,
     cwd: resolveTerminalCwd(request),
-    title: request.title || terminalTitle(request),
+    title: trimmedOrNull(request.title) ?? terminalTitle(request),
   };
   const session = await terminalManager.open(userId, host, target);
   sendRealtimePeerMessage(peer, { type: "terminal.opened", requestId: request.requestId, session });
@@ -76,18 +77,20 @@ export function subscribeTerminalEvents(peer: RealtimePeer) {
 }
 
 function resolveTerminalCwd(request: Extract<RealtimeClientMessage, { type: "terminal.open" }>) {
-  if (request.cwd?.trim()) {
-    return request.cwd.trim();
+  const requestedCwd = trimmedOrNull(request.cwd);
+  if (requestedCwd !== null) {
+    return requestedCwd;
   }
-  if (request.threadId) {
+  if (typeof request.threadId === "string" && request.threadId.length > 0) {
     const metadata = threadMetadataStore.get(request.hostId, request.threadId);
-    if (metadata?.cwd?.trim()) {
-      return metadata.cwd.trim();
+    const metadataCwd = trimmedOrNull(metadata?.cwd);
+    if (metadataCwd !== null) {
+      return metadataCwd;
     }
   }
-  if (request.projectId) {
+  if (request.projectId !== null && request.projectId !== undefined) {
     const project = projectStore.get(request.projectId);
-    if (project?.hostId === request.hostId && project.remotePath.trim()) {
+    if (project?.hostId === request.hostId && trimmedOrNull(project.remotePath) !== null) {
       return project.remotePath.trim();
     }
   }
@@ -96,13 +99,20 @@ function resolveTerminalCwd(request: Extract<RealtimeClientMessage, { type: "ter
 
 function terminalTitle(request: Extract<RealtimeClientMessage, { type: "terminal.open" }>) {
   if (request.scope === "thread") {
-    const metadata = request.threadId
-      ? threadMetadataStore.get(request.hostId, request.threadId)
-      : null;
-    return metadata?.title || metadata?.name || request.threadId || "Thread terminal";
+    const metadata =
+      typeof request.threadId === "string" && request.threadId.length > 0
+        ? threadMetadataStore.get(request.hostId, request.threadId)
+        : null;
+    return (
+      firstNonEmptyString([metadata?.title, metadata?.name, request.threadId]) ?? "Thread terminal"
+    );
   }
-  if (request.scope === "project" && request.projectId) {
-    return projectStore.get(request.projectId)?.name || "Project terminal";
+  if (
+    request.scope === "project" &&
+    request.projectId !== null &&
+    request.projectId !== undefined
+  ) {
+    return firstNonEmptyString([projectStore.get(request.projectId)?.name]) ?? "Project terminal";
   }
   return "Host terminal";
 }

@@ -35,11 +35,14 @@ defineExpose({ getViewport });
 
 <template>
   <div data-slot="scroll-area" :class="props.class" :style="props.style">
+    <!-- A stable gutter makes native scrollbar-thumb intent measurable even in browsers that
+         otherwise use overlay scrollbars. Do not replace this with a guessed edge width: that
+         would detach bottom-follow for ordinary content clicks near the right edge. -->
     <div
       ref="viewportRef"
       data-slot="scroll-area-viewport"
       :class="[
-        'h-full w-full [overflow-anchor:none]',
+        'h-full w-full [overflow-anchor:none] [scrollbar-gutter:stable]',
         props.allowHorizontalOverflow ? 'overflow-auto' : 'overflow-y-auto overflow-x-hidden',
         props.viewportClass,
       ]"

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { GatewayConfig } from "~~/shared/types";
 import { DEFAULT_BARK_GROUP, DEFAULT_BARK_SERVER_URL } from "~~/shared/config";
+import { trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
 import { optionalPositiveInt } from "./common";
 import { hostBaseSchema, validateHostProxy } from "./hosts-projects";
 
@@ -53,7 +54,7 @@ export const gatewayConfigSchema = z
         bark: z
           .object({
             enabled: z.boolean().default(false),
-            serverUrl: z.string().trim().url().default(DEFAULT_BARK_SERVER_URL),
+            serverUrl: z.url().default(DEFAULT_BARK_SERVER_URL),
             deviceKey: z.string().trim().default(""),
             group: z.string().trim().nullable().optional().default(DEFAULT_BARK_GROUP),
           })
@@ -86,40 +87,41 @@ export function parseGatewayConfig(body: unknown): GatewayConfig {
       id: host.id,
       name: host.name.trim(),
       sshHost: host.sshHost.trim(),
-      username: host.username?.trim() || null,
+      username: trimmedOrNull(host.username),
       port: host.port ?? null,
       authMode: host.authMode,
-      privateKeyPath: host.privateKeyPath?.trim() || null,
-      privateKey: host.privateKey || null,
-      password: host.password || null,
-      proxyUrl: host.proxyUrl?.trim() || null,
-      hasPassword: Boolean(host.password || host.hasPassword),
-      createdAt: host.createdAt || timestamp,
-      updatedAt: host.updatedAt || timestamp,
+      privateKeyPath: trimmedOrNull(host.privateKeyPath),
+      privateKey: host.privateKey ?? null,
+      password: host.password ?? null,
+      proxyUrl: trimmedOrNull(host.proxyUrl),
+      hasPassword:
+        typeof host.password === "string" ? host.password.length > 0 : (host.hasPassword ?? false),
+      createdAt: host.createdAt ?? timestamp,
+      updatedAt: host.updatedAt ?? timestamp,
     })),
     projects: input.projects.map((project) => ({
       id: project.id,
       hostId: project.hostId,
       name: project.name.trim(),
       remotePath: project.remotePath.trim(),
-      createdAt: project.createdAt || timestamp,
-      updatedAt: project.updatedAt || timestamp,
+      createdAt: project.createdAt ?? timestamp,
+      updatedAt: project.updatedAt ?? timestamp,
     })),
     pinnedThreads: input.pinnedThreads.map((thread) => ({
       hostId: thread.hostId,
       projectId: thread.projectId ?? null,
       threadId: thread.threadId.trim(),
       title: thread.title.trim(),
-      subtitle: thread.subtitle?.trim() || null,
-      projectName: thread.projectName?.trim() || null,
+      subtitle: trimmedOrNull(thread.subtitle),
+      projectName: trimmedOrNull(thread.projectName),
       updatedAt: thread.updatedAt ?? null,
     })),
     notifications: {
       bark: {
         enabled: input.notifications.bark.enabled,
-        serverUrl: input.notifications.bark.serverUrl.trim() || DEFAULT_BARK_SERVER_URL,
+        serverUrl: trimmedOrFallback(input.notifications.bark.serverUrl, DEFAULT_BARK_SERVER_URL),
         deviceKey: input.notifications.bark.deviceKey.trim(),
-        group: input.notifications.bark.group?.trim() || DEFAULT_BARK_GROUP,
+        group: trimmedOrFallback(input.notifications.bark.group, DEFAULT_BARK_GROUP),
       },
     },
   };

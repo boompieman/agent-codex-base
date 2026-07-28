@@ -1,16 +1,17 @@
 import { itemId, turnId } from "./item-identity";
 import { ensureHistoryThread } from "./shape";
-import type { ThreadHistoryItem } from "./types";
+import type { AppServerThread } from "../types/thread";
+import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
 
 export function updateItemInTurnById(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   turnIdValue: string,
   itemIdValue: string,
   createItem: () => ThreadHistoryItem,
   updateItem: (item: ThreadHistoryItem) => ThreadHistoryItem,
-) {
+): ThreadHistoryState {
   const nextHistory = ensureHistoryThread(history, currentThread, threadId);
   const turns = nextHistory.thread.turns;
   let turnIndex = turns.findIndex((candidate) => turnId(candidate) === turnIdValue);
@@ -21,7 +22,7 @@ export function updateItemInTurnById(
     turnIndex = turns.length - 1;
   }
   if (!Array.isArray(turn.items)) {
-    return history;
+    return nextHistory;
   }
 
   const items = [...turn.items];
@@ -30,7 +31,7 @@ export function updateItemInTurnById(
   if (index >= 0) {
     const existingItem = items[index];
     if (!existingItem) {
-      return history;
+      return nextHistory;
     }
     items[index] = updateItem({
       ...existingItem,

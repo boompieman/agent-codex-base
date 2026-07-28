@@ -7,36 +7,15 @@ import { shellQuote } from "./shell";
 import type { SshConnectionPool } from "./ssh-connection";
 import type { ProjectDirectoryAvailability } from "~~/shared/types";
 import type { HostWithSecret, RemoteFileMetadata, RemoteFileResult } from "./ssh-types";
-
-export class RemoteDirectoryNotFoundError extends Error {
-  readonly statusCode = 404;
-  readonly code = "remoteDirectoryNotFound";
-
-  constructor(
-    readonly inputPath: string,
-    readonly resolvedPath: string,
-  ) {
-    super(
-      `Remote directory does not exist or is not a directory: ${inputPath} (resolved to ${resolvedPath})`,
-    );
-    this.name = "RemoteDirectoryNotFoundError";
-  }
-}
-
-export class RemoteDirectoryAccessDeniedError extends Error {
-  readonly statusCode = 403;
-  readonly code = "remoteDirectoryAccessDenied";
-
-  constructor(
-    readonly inputPath: string,
-    readonly resolvedPath: string,
-  ) {
-    super(
-      `Permission denied while reading remote directory: ${inputPath} (resolved to ${resolvedPath})`,
-    );
-    this.name = "RemoteDirectoryAccessDeniedError";
-  }
-}
+import {
+  classifyRemoteDirectoryError,
+  classifyRemoteFileError,
+  isMissingSftpPath,
+  RemoteDirectoryNotFoundError,
+  RemoteFileInvalidPathError,
+  RemoteFileNotRegularError,
+  RemoteFileTooLargeError,
+} from "./remote-file-errors";
 
 export class RemoteFileService {
   constructor(private readonly ssh: SshConnectionPool) {}
@@ -47,7 +26,7 @@ export class RemoteFileService {
     const entries = await new Promise<FileEntryWithStats[]>((resolve, reject) => {
       sftp.readdir(resolvedPath, (readError, entries) => {
         if (readError) {
-          reject(directoryReadError(readError, path, resolvedPath));
+          reject(classifyRemoteDirectoryError(readError, path, resolvedPath));
           return;
         }
         resolve(entries);
@@ -99,7 +78,7 @@ export class RemoteFileService {
     const absolutePaths = [
       ...new Set(paths.map((path) => path.trim()).filter((path) => path.startsWith("/"))),
     ];
-    if (!absolutePaths.length) {
+    if (absolutePaths.length === 0) {
       return new Map<string, ProjectDirectoryAvailability>();
     }
     const sftp = await this.ssh.sftp(host);
@@ -107,8 +86,8 @@ export class RemoteFileService {
       absolutePaths.map(async (path) => [path, await inspectDirectory(sftp, path)] as const),
     );
     return new Map(
-      entries.filter((entry): entry is readonly [string, ProjectDirectoryAvailability] =>
-        Boolean(entry[1]),
+      entries.filter(
+        (entry): entry is readonly [string, ProjectDirectoryAvailability] => entry[1] !== null,
       ),
     );
   }
@@ -120,21 +99,21 @@ export class RemoteFileService {
   ): Promise<RemoteFileMetadata> {
     const path = remotePath.trim();
     if (!path.startsWith("/")) {
-      throw new Error("Remote file path must be absolute");
+      throw new RemoteFileInvalidPathError(path);
     }
     const sftp = await this.ssh.sftp(host);
     return new Promise<RemoteFileMetadata>((resolve, reject) => {
       sftp.stat(path, (statError, stats) => {
         if (statError) {
-          reject(statError);
+          reject(classifyRemoteFileError(statError, path));
           return;
         }
         if (!stats.isFile()) {
-          reject(new Error("Remote path is not a file"));
+          reject(new RemoteFileNotRegularError(path));
           return;
         }
         if (stats.size > options.maxSize) {
-          reject(new Error(`Remote file exceeds ${options.maxSize} bytes`));
+          reject(new RemoteFileTooLargeError(path, options.maxSize));
           return;
         }
         resolve({ path, size: stats.size, modifiedAt: stats.mtime * 1000 });
@@ -158,19 +137,19 @@ export class RemoteFileService {
           stream,
         });
       };
-      if (!sample.length) {
+      if (sample.length === 0) {
         openStream(0);
         return;
       }
       sftp.open(metadata.path, "r", (openError, handle) => {
         if (openError) {
-          reject(openError);
+          reject(classifyRemoteFileError(openError, metadata.path));
           return;
         }
         sftp.read(handle, sample, 0, sample.length, 0, (readError, bytesRead) => {
           sftp.close(handle, (closeError) => {
             if (readError || closeError) {
-              reject(readError || closeError);
+              reject(classifyRemoteFileError(readError ?? closeError, metadata.path));
               return;
             }
             openStream(bytesRead);
@@ -278,26 +257,6 @@ async function inspectDirectory(
   });
 }
 
-function isMissingSftpPath(error: unknown) {
-  const code = (error as { code?: unknown })?.code;
-  return code === 2 || code === "ENOENT";
-}
-
-function isDeniedSftpPath(error: unknown) {
-  const code = (error as { code?: unknown })?.code;
-  return code === 3 || code === "EACCES" || code === "EPERM";
-}
-
-function directoryReadError(error: unknown, inputPath: string, resolvedPath: string) {
-  if (isMissingSftpPath(error)) {
-    return new RemoteDirectoryNotFoundError(inputPath, resolvedPath);
-  }
-  if (isDeniedSftpPath(error)) {
-    return new RemoteDirectoryAccessDeniedError(inputPath, resolvedPath);
-  }
-  return error;
-}
-
 async function directoryResult(sftp: SFTPWrapper, path: string, source: FileEntryWithStats[]) {
   const limitSymlinkStat = pLimit(8);
   const entries = await Promise.all(
@@ -314,8 +273,11 @@ async function directoryResult(sftp: SFTPWrapper, path: string, source: FileEntr
         name: filename,
         path: entryPath,
         type: directoryEntryType(effectiveAttrs),
-        size: effectiveAttrs?.isFile() ? effectiveAttrs.size : null,
-        modifiedAt: effectiveAttrs?.mtime ? effectiveAttrs.mtime * 1000 : null,
+        size: effectiveAttrs?.isFile() === true ? effectiveAttrs.size : null,
+        modifiedAt:
+          effectiveAttrs === null || effectiveAttrs === undefined
+            ? null
+            : effectiveAttrs.mtime * 1000,
       };
     }),
   );
@@ -335,7 +297,7 @@ function statLinkedEntry(sftp: SFTPWrapper, path: string) {
 }
 
 function directoryEntryType(attrs: Stats | null) {
-  if (attrs?.isDirectory()) return "directory" as const;
-  if (attrs?.isFile()) return "file" as const;
+  if (attrs?.isDirectory() === true) return "directory" as const;
+  if (attrs?.isFile() === true) return "file" as const;
   return "other" as const;
 }

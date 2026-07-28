@@ -21,7 +21,6 @@ test("goal slash input derives the goal tag and requires an objective before sub
   await installSelectedThreadGoalSubmitMock(page, {
     hostId: 1,
     threadId: "e2e-goal-slash-thread",
-    windowKey: "__submittedGoalObjective",
   });
 
   const composer = page.getByPlaceholder("输入后续修改要求");
@@ -40,13 +39,13 @@ test("goal slash input derives the goal tag and requires an objective before sub
   await expect(page.getByText("请输入目标内容")).toBeVisible();
   await expect(page.getByTestId("chat-scroll-area").getByText("请输入目标内容")).toHaveCount(0);
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalObjective ?? null))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalObjective ?? null))
     .toBeNull();
 
   await composer.fill("/goal 完成当前重构");
   await page.keyboard.press("Enter");
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalObjective))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalObjective))
     .toBe("完成当前重构");
   await expect(composer).toHaveValue("");
   await expect(
@@ -71,19 +70,17 @@ test("goal slash menu exposes official app-server controls for an existing goal"
   await installSelectedThreadGoalSubmitMock(page, {
     hostId: 1,
     threadId,
-    windowKey: "__submittedGoalObjective",
   });
   await installSelectedThreadGoalControlMock(page, {
     hostId: 1,
     threadId,
-    windowKey: "__submittedGoalControls",
   });
 
   const composer = page.getByPlaceholder("输入后续修改要求");
   await composer.fill("/goal 保持目标控制清晰");
   await page.keyboard.press("Enter");
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalObjective))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalObjective))
     .toBe("保持目标控制清晰");
 
   await composer.fill("/goal");
@@ -94,14 +91,14 @@ test("goal slash menu exposes official app-server controls for an existing goal"
 
   await page.getByTestId("slash-command-goal-pause").click();
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalControls))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([{ type: "status", status: "paused" }]);
 
   await composer.fill("/goal");
   await expect(page.getByTestId("slash-command-goal-resume")).toBeVisible();
   await page.getByTestId("slash-command-goal-resume").click();
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalControls))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([
       { type: "status", status: "paused" },
       { type: "status", status: "active" },
@@ -114,7 +111,7 @@ test("goal slash menu exposes official app-server controls for an existing goal"
   await composer.fill("/goal");
   await page.getByTestId("slash-command-goal-clear").click();
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedGoalControls))
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([
       { type: "status", status: "paused" },
       { type: "status", status: "active" },
@@ -255,11 +252,8 @@ test("goal snapshot updates only the composer status strip without fabricating h
 
   await page.evaluate(
     (input) => {
-      const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-      const composer = app?.config?.globalProperties?.$pinia?._s?.get("gateway-composer");
-      if (!composer) {
-        throw new Error("Unable to locate gateway composer Pinia store");
-      }
+      const composer = window.__codexGatewayE2e?.composer;
+      if (!composer) throw new Error("Gateway E2E driver is unavailable");
       composer.upsertThreadGoal(input.hostId, input.threadId, {
         threadId: input.threadId,
         objective: "从 app-server 快照恢复当前目标",

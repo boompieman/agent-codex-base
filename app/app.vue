@@ -4,29 +4,21 @@ import { storeToRefs } from "pinia";
 import { Toaster } from "@/components/ui/sonner";
 import LoginScreen from "@/components/auth/LoginScreen.vue";
 import { useAuthStore } from "@/stores/auth";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
+import { refreshGatewayClient } from "@/stores/gateway-bootstrap/refresh";
+import { resetGatewayClientSession } from "@/stores/gateway-bootstrap/session-reset";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
-import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
-import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
-import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
-import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
-import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 
-const store = useGatewayStore();
+const bootstrap = useGatewayBootstrapStore();
 const navigation = useGatewayNavigationStore();
 const threadView = useGatewayThreadViewStore();
 const realtime = useGatewayRealtimeStore();
-const terminal = useGatewayTerminalStore();
-const threadTurns = useGatewayThreadTurnsStore();
-const threadActivity = useGatewayThreadActivityStore();
-const tmux = useGatewayTmuxStore();
-const workspaceLayout = useGatewayWorkspaceLayoutStore();
 const auth = useAuthStore();
 const device = useDevice();
-const { initializing } = storeToRefs(store);
+const { initializing } = storeToRefs(bootstrap);
 const { selectedThreadId } = storeToRefs(navigation);
 const { currentThread } = storeToRefs(threadView);
 const { initialized, isAuthenticated, token } = storeToRefs(auth);
@@ -71,28 +63,18 @@ watch(
     const hadPreviousSession = Boolean(activeSessionToken);
     activeSessionToken = currentToken;
     if (hadPreviousSession || !currentToken) {
-      resetClientSessionState();
+      resetGatewayClientSession();
     }
     if (!currentToken) {
       return;
     }
     realtime.installHealthCheck();
-    void store.refresh().catch((error) => {
+    void refreshGatewayClient().catch((error) => {
       console.error("[gateway] failed to refresh app", error);
     });
   },
   { immediate: true },
 );
-
-function resetClientSessionState() {
-  realtime.resetForSessionChange();
-  store.resetState();
-  terminal.resetState();
-  threadTurns.resetState();
-  threadActivity.resetState();
-  tmux.resetState();
-  workspaceLayout.resetRuntimeState();
-}
 </script>
 
 <template>

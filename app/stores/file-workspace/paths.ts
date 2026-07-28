@@ -11,7 +11,12 @@ export function directoryStateKey(hostId: number, threadId: string, path: string
 }
 
 export function fileName(path: string) {
-  return path.split("/").filter(Boolean).pop() || path;
+  return (
+    path
+      .split("/")
+      .filter((part) => part !== "")
+      .pop() ?? path
+  );
 }
 
 export function parentPath(path: string) {
@@ -22,7 +27,7 @@ export function parentPath(path: string) {
 export function parentPaths(path: string) {
   const result: string[] = [];
   let current = parentPath(path);
-  while (current && current !== "/") {
+  while (current !== "" && current !== "/") {
     result.push(current);
     current = parentPath(current);
   }
@@ -56,5 +61,6 @@ export function withoutPathAndDescendants(paths: string[], removedPath: string) 
 }
 
 function normalizeRemotePath(path: string) {
-  return path.replace(/\/+$/, "") || "/";
+  const normalized = path.replace(/\/+$/, "");
+  return normalized === "" ? "/" : normalized;
 }

@@ -1,7 +1,8 @@
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import type { PinnedThreadRecord } from "~~/shared/types";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
@@ -12,13 +13,14 @@ import {
 import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 
 export function useRecentThreadActivity() {
-  const gateway = useGatewayStore();
+  const catalog = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
   const threadView = useGatewayThreadViewStore();
   const activity = useGatewayThreadActivityStore();
   const { summariesByKey, observedRunningThreadKeys } = storeToRefs(activity);
-  const { hosts, pinnedThreads } = storeToRefs(gateway);
+  const { hosts } = storeToRefs(catalog);
+  const pinnedThreads = useGatewayPinnedThreads();
   const { threadStatuses, unviewedCompletedThreadKeys } = storeToRefs(runtime);
 
   const recentThreads = computed(() => {
@@ -32,7 +34,7 @@ export function useRecentThreadActivity() {
         (thread): thread is ThreadActivitySummary =>
           // app-server parentThreadId is the authoritative sub-agent marker.
           // Sub-agents stay in their parent workspace rather than flooding this list.
-          thread !== undefined && !thread.parentThreadId && !pinnedKeys.has(keyFor(thread)),
+          thread !== undefined && !thread.isSubAgent && !pinnedKeys.has(keyFor(thread)),
       )
       .map((thread) => ({
         ...thread,

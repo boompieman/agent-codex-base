@@ -10,14 +10,14 @@ export class PermanentTmuxMonitorChecker {
 
     // Permanent rules follow a logical tmux slot, not one pane PID. This lets a training
     // workspace return to shell or recreate the pane without silently losing the watch.
-    if (!monitor.runStartedAt) {
-      if (!pane) this.repository.recordWaitingCheck(monitor);
-      else if (pane.running) this.repository.startPermanentRun(monitor, pane);
+    if (monitor.runStartedAt === null) {
+      if (pane === undefined) this.repository.recordWaitingCheck(monitor);
+      else if (pane.running === true) this.repository.startPermanentRun(monitor, pane);
       else this.repository.recordChecked(monitor, pane);
       return null;
     }
 
-    if (!pane) {
+    if (pane === undefined) {
       const sessionExists = sessions.some((session) => session.name === monitor.sessionName);
       return this.repository.completePermanentRun(
         monitor,
@@ -29,10 +29,10 @@ export class PermanentTmuxMonitorChecker {
     const replaced = pane.sessionId !== monitor.sessionId || pane.paneId !== monitor.paneId;
     if (replaced) {
       const completed = this.repository.completePermanentRun(monitor, "paneReplaced", pane);
-      if (pane.running) this.repository.startPermanentRun(monitor, pane);
+      if (pane.running === true) this.repository.startPermanentRun(monitor, pane);
       return completed;
     }
-    if (!pane.running) {
+    if (pane.running === false) {
       return this.repository.completePermanentRun(monitor, "returnedToShell", pane);
     }
     this.repository.recordChecked(monitor, pane);

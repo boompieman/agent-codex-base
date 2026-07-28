@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayConfigStore } from "@/stores/gateway-config";
 import { normalizeNotificationSettings } from "@/stores/gateway/config";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 
-const store = useGatewayStore();
+const store = useGatewayConfigStore();
 const { t } = useI18n();
 const errorLabels = computed(() => errorMessageLabels(t));
 const saving = ref(false);
@@ -36,7 +36,7 @@ async function saveSettings() {
   saving.value = true;
   try {
     await store.saveNotificationSettings(form.value);
-  } catch (caught: any) {
+  } catch (caught: unknown) {
     error.value = messageFromError(
       caught,
       t("app.notificationSettingsSaveFailed"),

@@ -3,15 +3,19 @@ import http, {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import tls from "node:tls";
-import type { Duplex } from "node:stream";
-import { sshConnections } from "../infra/host-services";
+import { text as consumeText } from "node:stream/consumers";
+import { z } from "zod";
 import { browserPreviewEvents } from "./browser-preview-events";
 import { BrowserPreviewHttpAgent } from "./browser-preview-http-agent";
 import { browserPreviewManager, type BrowserPreviewSession } from "./browser-preview-manager";
+import {
+  browserPreviewTargetPort,
+  browserPreviewUpstreamConnector,
+} from "./browser-preview-upstream-connector";
 
 const BOOTSTRAP_PATH = "/_gateway/preview/bootstrap";
 const SESSION_PATH = "/_gateway/preview/session";
+const ticketRequestSchema = z.object({ ticket: z.string().min(1) });
 
 export async function handleBrowserPreviewRequest(
   request: IncomingMessage,
@@ -46,7 +50,7 @@ async function proxyHttpRequest(
   const headers = upstreamHeaders(session, request.headers);
   const agent = browserPreviewManager.agentFor(
     session,
-    () => new BrowserPreviewHttpAgent(() => openBrowserPreviewUpstreamSocket(session)),
+    () => new BrowserPreviewHttpAgent(() => browserPreviewUpstreamConnector.openSocket(session)),
   );
   await new Promise<void>((resolve) => {
     const upstream = http.request(
@@ -54,9 +58,9 @@ async function proxyHttpRequest(
         method: request.method,
         path: request.url,
         headers,
-        agent: agent as unknown as http.Agent,
+        agent,
         host: session.target.hostname,
-        port: String(targetPort(session)),
+        port: String(browserPreviewTargetPort(session)),
       },
       (upstreamResponse) => {
         const responseHeaders = { ...upstreamResponse.headers };
@@ -78,34 +82,18 @@ async function proxyHttpRequest(
   });
 }
 
-export async function openBrowserPreviewUpstreamSocket(
-  session: BrowserPreviewSession,
-): Promise<Duplex> {
-  const channel = await sshConnections.openTcpChannel(session.host, {
-    host: session.target.hostname,
-    port: targetPort(session),
-  });
-  browserPreviewManager.trackSocket(session, channel);
-  if (session.target.protocol !== "https:") return channel;
-  return await new Promise((resolve, reject) => {
-    const socket = tls.connect({
-      socket: channel,
-      servername: session.target.hostname,
-      rejectUnauthorized: !session.targetConfig.allowInsecureTls,
-    });
-    socket.once("secureConnect", () => resolve(socket));
-    socket.once("error", reject);
-  });
-}
-
 function upstreamHeaders(session: BrowserPreviewSession, incoming: IncomingMessage["headers"]) {
   const headers: IncomingHttpHeaders = { ...incoming, host: session.target.host };
   delete headers["x-forwarded-host"];
   delete headers["x-forwarded-proto"];
-  if (headers.origin) headers.origin = session.target.origin;
-  if (headers.referer) headers.referer = translatePreviewUrl(session, headers.referer);
+  if (typeof headers.origin === "string" && headers.origin !== "") {
+    headers.origin = session.target.origin;
+  }
+  if (typeof headers.referer === "string" && headers.referer !== "") {
+    headers.referer = translatePreviewUrl(session, headers.referer);
+  }
   headers.cookie = withoutPreviewCookie(headers.cookie);
-  if (!headers.cookie) delete headers.cookie;
+  if (headers.cookie === undefined || headers.cookie === "") delete headers.cookie;
   return headers;
 }
 
@@ -138,7 +126,7 @@ function rewriteLocation(session: BrowserPreviewSession, headers: http.OutgoingH
 
 function stripCookieDomains(headers: http.OutgoingHttpHeaders) {
   const cookies = headers["set-cookie"];
-  if (!cookies) return;
+  if (cookies === undefined) return;
   const values = Array.isArray(cookies) ? cookies : [cookies];
   headers["set-cookie"] = values.map((cookie) => cookie.replace(/;\s*domain=[^;]+/gi, ""));
 }
@@ -169,9 +157,9 @@ async function exchangeTicket(
   response: ServerResponse,
   hostname: string,
 ) {
-  const body = await readJson(request);
-  const result = browserPreviewManager.exchangeTicket(hostname, String(body.ticket ?? ""));
-  if (!result) {
+  const body = ticketRequestSchema.parse(JSON.parse(await consumeText(request)));
+  const result = browserPreviewManager.exchangeTicket(hostname, body.ticket);
+  if (result === null) {
     sendText(response, 401, "Invalid or expired browser preview ticket");
     return;
   }
@@ -194,9 +182,7 @@ const ticket=location.hash.slice(1);location.hash='';fetch('${SESSION_PATH}',{me
 }
 
 function requestHostname(request: IncomingMessage) {
-  return String(request.headers.host ?? "")
-    .split(":", 1)[0]!
-    .toLowerCase();
+  return (String(request.headers.host ?? "").split(":", 1)[0] ?? "").toLowerCase();
 }
 
 export function readPreviewCookie(value: string | undefined) {
@@ -210,16 +196,6 @@ function readCookie(request: IncomingMessage, name: string) {
 function readCookieValue(value: string | undefined, name: string) {
   const match = value?.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
   return match?.[1];
-}
-
-async function readJson(request: IncomingMessage) {
-  let body = "";
-  for await (const chunk of request) body += chunk.toString();
-  return JSON.parse(body || "{}");
-}
-
-function targetPort(session: BrowserPreviewSession) {
-  return Number(session.target.port || (session.target.protocol === "https:" ? 443 : 80));
 }
 
 export function authCookieName() {

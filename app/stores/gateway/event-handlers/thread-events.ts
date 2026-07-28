@@ -1,4 +1,6 @@
 import { normalizeTokenUsage } from "~~/shared/token-usage";
+import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
+import { recordFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
 import { gatewayDomainEvents } from "../domain-events";
 import { threadIdFromParams } from "../thread-utils/identity";
 import { runtimeStatusFromAppThreadStatus } from "../thread-utils/status";
@@ -6,16 +8,17 @@ import type { GatewayEventHandlerRegistry } from "./types";
 
 export const threadEventHandlers: GatewayEventHandlerRegistry = {
   "thread/started": (event, params) => {
-    if (params.thread?.id) {
+    const thread = appServerThreadFromUnknown(params.thread);
+    if (thread !== null) {
       gatewayDomainEvents.emit("thread-summary-detected", {
         hostId: event.hostId,
-        thread: params.thread,
+        thread,
       });
     }
   },
   "thread/status/changed": (event, params) => {
     const threadId = threadIdFromParams(params);
-    if (threadId) {
+    if (threadId !== null) {
       gatewayDomainEvents.emit("thread-status-detected", {
         hostId: event.hostId,
         threadId: String(threadId),
@@ -25,14 +28,20 @@ export const threadEventHandlers: GatewayEventHandlerRegistry = {
   },
   "thread/settings/updated": (event, params) => {
     const threadId = threadIdFromParams(params);
-    if (threadId) {
+    const settings = recordFromUnknown(params.threadSettings);
+    if (threadId !== null) {
       gatewayDomainEvents.emit("thread-settings-detected", {
         hostId: event.hostId,
         threadId: String(threadId),
         settings: {
-          model: params.threadSettings?.model ?? null,
-          effort: params.threadSettings?.effort ?? null,
-          approvalPolicy: params.threadSettings?.approvalPolicy ?? null,
+          model: stringFromUnknown(settings?.model),
+          effort: stringFromUnknown(settings?.effort),
+          approvalPolicy:
+            settings?.approvalPolicy === "untrusted" ||
+            settings?.approvalPolicy === "on-request" ||
+            settings?.approvalPolicy === "never"
+              ? settings.approvalPolicy
+              : null,
         },
       });
     }
@@ -40,7 +49,7 @@ export const threadEventHandlers: GatewayEventHandlerRegistry = {
   "thread/tokenUsage/updated": (event, params) => {
     const threadId = threadIdFromParams(params);
     const tokenUsage = normalizeTokenUsage(params.tokenUsage);
-    if (threadId && tokenUsage) {
+    if (threadId !== null && tokenUsage !== null) {
       gatewayDomainEvents.emit("thread-token-usage-detected", {
         hostId: event.hostId,
         threadId: String(threadId),

@@ -1,11 +1,13 @@
 import { isThreadActiveStatus } from "~~/shared/thread-runtime-status";
+import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
 import { isThreadPlanItem } from "@/utils/thread-plan";
+import { recordFromUnknown } from "~~/shared/utils/records";
 
 export interface ThreadTurnSections {
-  items: any[];
-  userItems: any[];
-  intermediateItems: any[];
-  finalItems: any[];
+  items: ThreadTimelineItem[];
+  userItems: ThreadTimelineItem[];
+  intermediateItems: ThreadTimelineItem[];
+  finalItems: ThreadTimelineItem[];
   finalAgentIndex: number;
   firstIntermediateIndex: number;
   hasFinalAnswer: boolean;
@@ -13,7 +15,7 @@ export interface ThreadTurnSections {
 }
 
 export function buildThreadTurnSections(
-  turn: Record<string, any>,
+  turn: ThreadTimelineTurn,
   options: { planModeActive: boolean },
 ): ThreadTurnSections {
   const items = Array.isArray(turn.items) ? turn.items : [];
@@ -35,30 +37,38 @@ export function buildThreadTurnSections(
   };
 }
 
-export function userMessageVariant(item: any, sections: Pick<ThreadTurnSections, "items">) {
+export function userMessageVariant(
+  item: ThreadTimelineItem,
+  sections: Pick<ThreadTurnSections, "items">,
+) {
   if (item?.type !== "userMessage") {
     return "normal";
   }
   if (isSteerUserMessage(item)) {
     return "steer";
   }
-  const itemIndex = sections.items.findIndex((candidate: any) => candidate === item);
+  const itemIndex = sections.items.findIndex((candidate) => candidate === item);
   return hasEarlierNonUserItem(sections.items, itemIndex) ? "steer" : "normal";
 }
 
-export function itemKey(item: any, section: string, index: number) {
-  return item?.id || item?.clientId || `${section}-${index}-${item?.type || "item"}`;
+export function itemKey(item: ThreadTimelineItem, section: string, index: number) {
+  const id = typeof item.id === "string" && item.id !== "" ? item.id : item.clientId;
+  return typeof id === "string" && id !== "" ? id : `${section}-${index}-${item.type}`;
 }
 
-export function statusValue(status: any) {
-  return typeof status === "string" ? status : status?.type;
+export function statusValue(status: unknown) {
+  return typeof status === "string" ? status : recordFromUnknown(status)?.type;
 }
 
-export function itemStatusSignature(items: any[]) {
-  return items.map((item: any) => statusValue(item?.status));
+export function itemStatusSignature(items: ThreadTimelineItem[]) {
+  return items.map((item) => statusValue(item.status));
 }
 
-function findFinalAgentIndex(turnItems: any[], status: unknown, preferPlanFinal: boolean) {
+function findFinalAgentIndex(
+  turnItems: ThreadTimelineItem[],
+  status: unknown,
+  preferPlanFinal: boolean,
+) {
   const explicitFinalIndex = findLastIndex(
     turnItems,
     (item) => item?.type === "agentMessage" && item?.phase === "final_answer",
@@ -82,24 +92,24 @@ function findFinalAgentIndex(turnItems: any[], status: unknown, preferPlanFinal:
   return findLastIndex(turnItems, (item) => item?.type === "appNotification");
 }
 
-function firstIntermediateItemIndex(items: any[]) {
+function firstIntermediateItemIndex(items: ThreadTimelineItem[]) {
   const firstNonUser = items.findIndex(
-    (item: any) => !isLeadTranscriptItem(item) || isSteerUserMessage(item),
+    (item) => !isLeadTranscriptItem(item) || isSteerUserMessage(item),
   );
   return firstNonUser >= 0 ? firstNonUser : items.length;
 }
 
-function isLeadTranscriptItem(item: any) {
+function isLeadTranscriptItem(item: ThreadTimelineItem) {
   return item?.type === "userMessage" || item?.type === "threadGoal";
 }
 
-function isTurnActive(turn: Record<string, any>, items: any[]) {
+function isTurnActive(turn: ThreadTimelineTurn, items: ThreadTimelineItem[]) {
   return (
     isThreadActiveStatus(turn.status) || items.some((item) => isThreadActiveStatus(item?.status))
   );
 }
 
-function isSteerUserMessage(item: any) {
+function isSteerUserMessage(item: ThreadTimelineItem) {
   return (
     item?.type === "userMessage" &&
     typeof item.clientId === "string" &&
@@ -107,10 +117,8 @@ function isSteerUserMessage(item: any) {
   );
 }
 
-function hasEarlierNonUserItem(items: any[], beforeIndex: number) {
-  return items.some(
-    (candidate: any, index) => index < beforeIndex && candidate?.type !== "userMessage",
-  );
+function hasEarlierNonUserItem(items: ThreadTimelineItem[], beforeIndex: number) {
+  return items.some((candidate, index) => index < beforeIndex && candidate.type !== "userMessage");
 }
 
 function findLastIndex<T>(list: T[], predicate: (item: T) => boolean) {

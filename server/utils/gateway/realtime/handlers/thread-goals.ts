@@ -19,7 +19,7 @@ export async function setThreadGoal(
     requestId: request.requestId,
     hostId: request.hostId,
     threadId: request.threadId,
-    goal: (result as any).goal,
+    goal: result.goal,
   });
 }
 
@@ -34,7 +34,7 @@ export async function getThreadGoal(
     requestId: request.requestId,
     hostId: request.hostId,
     threadId: request.threadId,
-    goal: (result as any).goal ?? null,
+    goal: result.goal,
   });
 }
 
@@ -49,6 +49,6 @@ export async function clearThreadGoal(
     requestId: request.requestId,
     hostId: request.hostId,
     threadId: request.threadId,
-    cleared: Boolean((result as any).cleared),
+    cleared: result.cleared,
   });
 }

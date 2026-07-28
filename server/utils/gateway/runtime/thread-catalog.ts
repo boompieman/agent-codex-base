@@ -1,12 +1,27 @@
 import type { HostRecord } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
+import { z } from "zod";
+
+const threadListPageSchema = z
+  .object({
+    data: z.array(z.unknown()).default([]),
+    nextCursor: z.string().nullable().optional(),
+  })
+  .loose();
+
+export interface ThreadListPage {
+  data: unknown[];
+  nextCursor?: string | null;
+  [key: string]: unknown;
+}
 
 export class ThreadCatalogService {
   constructor(private readonly registry: ControllerRegistry) {}
 
-  async listThreads(host: HostRecord, params: Record<string, unknown>) {
+  async listThreads(host: HostRecord, params: Record<string, unknown>): Promise<ThreadListPage> {
     const client = await this.registry.getHostClient(host);
-    return client.request("thread/list", params);
+    const page = threadListPageSchema.parse(await client.request("thread/list", params));
+    return { ...page, data: page.data ?? [] };
   }
 
   async listModels(host: HostRecord, params: Record<string, unknown>) {

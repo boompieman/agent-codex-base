@@ -14,13 +14,29 @@ import type { StoredTmuxMonitor } from "./types";
 import { resolveTmuxThreadBinding } from "./thread-binding";
 
 export class TmuxMonitorService {
-  readonly repository = new TmuxMonitorRepository();
+  private readonly repository = new TmuxMonitorRepository();
   private readonly scanner = new RemoteTmuxScanner();
   private readonly notifier = new TmuxMonitorNotifier(this.repository);
   private readonly permanentChecker = new PermanentTmuxMonitorChecker(this.repository);
 
   list(userId: number): TmuxMonitorListResult {
     return this.repository.listForUser(userId);
+  }
+
+  activePollGroups() {
+    return this.repository.activeGroups();
+  }
+
+  removeHost(userId: number, hostId: number) {
+    this.repository.deleteHost(userId, hostId);
+  }
+
+  cancelForHost(userId: number, hostId: number, monitorId: number) {
+    const monitor = this.repository.getOwned(userId, monitorId);
+    if (!monitor || monitor.hostId !== hostId) {
+      throw createError({ statusCode: 404, statusMessage: "Active monitor not found" });
+    }
+    return this.cancel(userId, monitorId);
   }
 
   scan(host: HostWithSecret): Promise<TmuxSessionSnapshot[]> {

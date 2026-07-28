@@ -1,6 +1,7 @@
 import { useClipboard } from "@vueuse/core";
 import { ref, toValue, type MaybeRefOrGetter } from "vue";
 import { toast } from "vue-sonner";
+import ensureError from "ensure-error";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { downloadRemoteFile } from "@/utils/remote-file-transport";
 
@@ -42,7 +43,7 @@ export function useRemoteFileTreeActions(options: {
 
   async function confirmDelete() {
     const path = pendingDeletePath.value;
-    if (!path || deleting.value) return;
+    if (path === null || path === "" || deleting.value) return;
     deleting.value = true;
     try {
       await fileWorkspace.deleteFile(toValue(options.hostId), toValue(options.threadId), path);
@@ -76,9 +77,14 @@ function saveBlob(blob: Blob, name: string) {
 }
 
 function fileName(path: string) {
-  return path.split("/").filter(Boolean).pop() || "download";
+  return (
+    path
+      .split("/")
+      .filter((part) => part !== "")
+      .pop() ?? "download"
+  );
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return ensureError(error).message;
 }

@@ -1,4 +1,5 @@
-import type { GatewayEvent } from "~~/shared/types";
+import type { GatewayEvent, RpcEnvelope } from "~~/shared/types";
+import { parseRpcEnvelope } from "~~/shared/runtime/app-server";
 import { gatewayEventStore } from "../state/gateway-events";
 import { currentGatewayUserId } from "../state/memory";
 import { subAgentThreadStore } from "../state/sub-agent-threads";
@@ -17,13 +18,14 @@ class ThreadRuntimeEventBus {
     hostId: number,
     threadId: string,
     method: string,
-    payload: unknown,
+    payload: RpcEnvelope,
     options: { resolveGoal?: ThreadGoalResolver; resolveThread?: ThreadMetadataResolver } = {},
   ) {
-    const event = gatewayEventStore.add(hostId, threadId, method, payload);
-    subAgentThreadStore.recordRuntimeEvent(hostId, threadId, method, payload);
+    const envelope = parseRpcEnvelope(payload);
+    const event = gatewayEventStore.add(hostId, threadId, method, envelope);
+    subAgentThreadStore.recordRuntimeEvent(hostId, threadId, method, envelope);
     threadSnapshotStore.update(hostId, threadId, (snapshot) =>
-      applyEventToOpenSnapshot(snapshot, method, payload, event.createdAt),
+      applyEventToOpenSnapshot(snapshot, method, envelope, event.createdAt),
     );
     this.publish(event);
     dispatchThreadRuntimeNotification(event, options);
@@ -33,14 +35,14 @@ class ThreadRuntimeEventBus {
   subscribe(hostId: number, threadId: string, subscriber: ThreadEventSubscriber) {
     const key = this.key(currentUserId(), hostId, threadId);
     let subscribers = this.subscribers.get(key);
-    if (!subscribers) {
+    if (subscribers === undefined) {
       subscribers = new Set();
       this.subscribers.set(key, subscribers);
     }
     subscribers.add(subscriber);
     return () => {
       subscribers.delete(subscriber);
-      if (!subscribers.size) {
+      if (subscribers.size === 0) {
         this.subscribers.delete(key);
       }
     };
@@ -61,7 +63,7 @@ class ThreadRuntimeEventBus {
 
 function currentUserId() {
   const userId = currentGatewayUserId();
-  if (!userId) {
+  if (userId === null) {
     throw new Error("Thread runtime events require an authenticated user scope");
   }
   return userId;

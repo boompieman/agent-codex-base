@@ -3,11 +3,11 @@ import { ClipboardPasteIcon, RefreshCwIcon } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import ConfigJsonEditor from "@/components/settings/ConfigJsonEditor.vue";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayConfigStore } from "@/stores/gateway-config";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 
 const emit = defineEmits<{ close: [] }>();
-const store = useGatewayStore();
+const store = useGatewayConfigStore();
 const { t } = useI18n();
 const errorLabels = computed(() => errorMessageLabels(t));
 const configText = ref(store.exportConfigText());
@@ -25,7 +25,7 @@ async function importConfig() {
   try {
     await store.importConfigText(configText.value);
     emit("close");
-  } catch (error: any) {
+  } catch (error: unknown) {
     configError.value = messageFromError(error, t("app.importConfigFailed"), errorLabels.value);
   }
 }

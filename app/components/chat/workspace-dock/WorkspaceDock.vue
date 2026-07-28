@@ -6,15 +6,12 @@ import BrowserOpenDialog from "@/components/browser/BrowserOpenDialog.vue";
 import { useTerminalTheme } from "@/composables/terminal/useTerminalTheme";
 import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceLaunchActions";
 import { useTmuxMonitorLauncher } from "@/composables/workspace/useTmuxMonitorLauncher";
+import { useChatWorkspaceState } from "../chat-workspace-state";
 import { fileWorkspaceScopeKey } from "@/stores/file-workspace";
 import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
 import MobileWorkspaceHeader from "../MobileWorkspaceHeader.vue";
 import { createDockTabMenu } from "./actions";
-import {
-  WORKSPACE_AGENT_PANEL_CONTEXT,
-  WORKSPACE_DOCK_UI_CONTEXT,
-  WORKSPACE_FILES_PANEL_CONTEXT,
-} from "./context";
+import { WORKSPACE_DOCK_UI_CONTEXT, WORKSPACE_FILES_PANEL_CONTEXT } from "./context";
 import type { WorkspaceDockProps } from "./types";
 import { useWorkspaceDockLifecycle } from "./useWorkspaceDockLifecycle";
 import { useWorkspaceDockPanels } from "./useWorkspaceDockPanels";
@@ -22,29 +19,33 @@ import { useWorkspacePanels } from "./useWorkspacePanels";
 import "dockview-vue/dist/styles/dockview.css";
 
 const props = defineProps<WorkspaceDockProps>();
-const emit = defineEmits<{ loadOlder: []; openTerminal: [] }>();
 const refs = toRefs(props);
+const workspace = useChatWorkspaceState();
 const { t } = useI18n();
 const { isDark } = useTerminalTheme();
 const { terminalPanels, subAgentPanels, browserPanels, tmuxPanels, fileWorkspaceRoot } =
   useWorkspacePanels({
-    selectedHostId: refs.selectedHostId,
-    selectedProjectId: refs.selectedProjectId,
-    selectedThreadId: refs.selectedThreadId,
+    selectedHostId: workspace.selectedHostId,
+    selectedProjectId: workspace.selectedProjectId,
+    selectedThreadId: workspace.selectedThreadId,
   });
 const panels = useWorkspaceDockPanels({
-  selectedThreadId: refs.selectedThreadId,
+  selectedThreadId: workspace.selectedThreadId,
   terminalPanels,
   subAgentPanels,
   browserPanels,
   tmuxPanels,
 });
 const scopeKey = computed(() =>
-  workspaceLayoutScopeKey(props.selectedHostId, props.selectedProjectId, props.selectedThreadId),
+  workspaceLayoutScopeKey(
+    workspace.selectedHostId.value,
+    workspace.selectedProjectId.value,
+    workspace.selectedThreadId.value,
+  ),
 );
 const fileRequestScopeKey = computed(() =>
-  props.selectedHostId && props.selectedThreadId
-    ? fileWorkspaceScopeKey(props.selectedHostId, props.selectedThreadId)
+  workspace.selectedHostId.value && workspace.selectedThreadId.value
+    ? fileWorkspaceScopeKey(workspace.selectedHostId.value, workspace.selectedThreadId.value)
     : null,
 );
 const panelIds = computed(() => [
@@ -65,27 +66,11 @@ const lifecycle = useWorkspaceDockLifecycle({
 });
 const dockTheme = computed(() => (isDark.value ? themeDark : themeLight));
 
-provide(WORKSPACE_AGENT_PANEL_CONTEXT, {
-  initializing: refs.initializing,
-  openingThread: refs.openingThread,
-  selectedThreadId: refs.selectedThreadId,
-  selectedThreadStatus: refs.selectedThreadStatus,
-  selectedProjectId: refs.selectedProjectId,
-  selectedHostId: refs.selectedHostId,
-  historyTurns: refs.historyTurns,
-  loading: refs.loading,
-  loadingOlderTurns: refs.loadingOlderTurns,
-  olderTurnsCursor: refs.olderTurnsCursor,
-  visibleError: refs.visibleError,
-  followKey: refs.followKey,
-  selectedThreadViewReady: refs.selectedThreadViewReady,
-  loadOlder: () => emit("loadOlder"),
-});
 provide(WORKSPACE_FILES_PANEL_CONTEXT, {
   layout: refs.layout,
-  selectedThreadId: refs.selectedThreadId,
-  selectedProjectId: refs.selectedProjectId,
-  selectedHostId: refs.selectedHostId,
+  selectedThreadId: workspace.selectedThreadId,
+  selectedProjectId: workspace.selectedProjectId,
+  selectedHostId: workspace.selectedHostId,
   rootPath: fileWorkspaceRoot,
 });
 provide(WORKSPACE_DOCK_UI_CONTEXT, {
@@ -115,10 +100,10 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <MobileWorkspaceHeader
       v-if="layout === 'mobile'"
-      :can-open-terminal="canOpenTerminal"
+      :can-open-terminal="workspace.canOpenTerminal.value"
       :tmux-active-count="tmuxLauncher.activeCount.value"
       @open-tmux="tmuxLauncher.open"
-      @open-terminal="emit('openTerminal')"
+      @open-terminal="workspaceActions.openTerminal"
       @open-browser="browserDialogOpen = true"
     >
       <template #start><slot name="mobile-header-start" /></template>

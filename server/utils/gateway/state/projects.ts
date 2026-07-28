@@ -9,7 +9,7 @@ function normalizeProject(input: ProjectCreateInput, id = nextId(gatewayMemorySt
     hostId: input.hostId,
     name: input.name.trim(),
     remotePath: input.remotePath.trim(),
-    createdAt: existing?.createdAt || timestamp,
+    createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
 }
@@ -40,7 +40,7 @@ export const projectStore = {
 
   delete(id: number) {
     const existing = this.get(id);
-    if (!existing) {
+    if (existing === null) {
       return null;
     }
     gatewayMemoryState.projects = gatewayMemoryState.projects.filter(
@@ -52,7 +52,7 @@ export const projectStore = {
 
   list(hostId?: number): ProjectRecord[] {
     return gatewayMemoryState.projects
-      .filter((project) => !hostId || project.hostId === hostId)
+      .filter((project) => hostId === undefined || project.hostId === hostId)
       .sort((left, right) => left.name.localeCompare(right.name));
   },
 
@@ -72,7 +72,7 @@ export const projectStore = {
 
   update(id: number, input: ProjectUpdateInput): ProjectRecord | null {
     const existing = this.get(id);
-    if (!existing) {
+    if (existing === null) {
       return null;
     }
     const project = normalizeProject(input, id);
@@ -88,10 +88,14 @@ export const projectStore = {
     const existing = gatewayMemoryState.projects.find(
       (project) => project.hostId === hostId && project.remotePath === normalizedPath,
     );
-    if (existing) {
+    if (existing !== undefined) {
       return existing;
     }
-    const name = normalizedPath.split("/").filter(Boolean).at(-1) || normalizedPath || "root";
+    const name =
+      normalizedPath
+        .split("/")
+        .filter((part) => part !== "")
+        .at(-1) ?? (normalizedPath === "" ? "root" : normalizedPath);
     // Thread discovery needs a runtime grouping record, not a persisted user project.
     return upsertProject({ hostId, name, remotePath: normalizedPath });
   },
@@ -107,7 +111,7 @@ function upsertProject(input: ProjectCreateInput): ProjectRecord {
     (project) => project.hostId === input.hostId && project.remotePath === remotePath,
   );
   const project = normalizeProject(input, existing?.id);
-  if (existing) {
+  if (existing !== undefined) {
     gatewayMemoryState.projects = gatewayMemoryState.projects.map((item) =>
       item.id === existing.id ? project : item,
     );

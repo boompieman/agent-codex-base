@@ -57,7 +57,7 @@ const imageInputSchema = z
     url: z.string().trim().min(1).optional(),
     detail: z.enum(["low", "high", "auto", "original"]).optional(),
   })
-  .refine((image) => Boolean(image.path || image.url), {
+  .refine((image) => image.path !== undefined || image.url !== undefined, {
     message: "Image must include path or url",
   });
 

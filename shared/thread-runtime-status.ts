@@ -50,7 +50,7 @@ const RUNTIME_STATUS_EVENT_REDUCERS: Record<string, RuntimeStatusEventReducer> =
 
 export function isThreadActiveStatus(status: unknown) {
   const value = statusValue(status);
-  return Boolean(value && ACTIVE_STATUS_VALUES.has(value));
+  return value !== null && value !== "" && ACTIVE_STATUS_VALUES.has(value);
 }
 
 export function runtimeStatusFromAppThreadStatus(status: unknown): ThreadRuntimeStatus {
@@ -85,7 +85,7 @@ export function runtimeStatusFromCompletedTurn(turn: unknown): ThreadRuntimeStat
   if (value === "completed" && hasPostTurnActiveItems(completedTurn)) {
     return "running";
   }
-  if (value && TERMINAL_STATUS_VALUES.has(value)) {
+  if (value !== null && value !== "" && TERMINAL_STATUS_VALUES.has(value)) {
     return terminalTurnStatus(value);
   }
   if (
@@ -128,7 +128,11 @@ function runtimeStatusFromThreadSnapshot(
 
   const latestTurn = turns.at(-1);
   const latestTurnStatus = statusValue(latestTurn?.status);
-  if (latestTurnStatus && TERMINAL_STATUS_VALUES.has(latestTurnStatus)) {
+  if (
+    latestTurnStatus !== null &&
+    latestTurnStatus !== "" &&
+    TERMINAL_STATUS_VALUES.has(latestTurnStatus)
+  ) {
     if (latestTurnStatus === "completed" && hasPostTurnActiveItems(latestTurn)) {
       return "running";
     }
@@ -165,7 +169,11 @@ function terminalStatusFromLatestTurn(
 ): ThreadRuntimeStatus | null {
   const latestTurn = turnsFromThreadState(thread, history).at(-1);
   const latestTurnStatus = statusValue(latestTurn?.status);
-  if (!latestTurnStatus || !TERMINAL_STATUS_VALUES.has(latestTurnStatus)) {
+  if (
+    latestTurnStatus === null ||
+    latestTurnStatus === "" ||
+    !TERMINAL_STATUS_VALUES.has(latestTurnStatus)
+  ) {
     return null;
   }
   if (latestTurnStatus === "completed" && hasPostTurnActiveItems(latestTurn)) {
@@ -203,7 +211,7 @@ function runtimeStatusFromTopLevelThreadStatus(status: unknown): ThreadRuntimeSt
   if (value === "interrupted") {
     return "interrupted";
   }
-  if (value && COMPLETED_THREAD_VALUES.has(value)) {
+  if (value !== null && value !== "" && COMPLETED_THREAD_VALUES.has(value)) {
     return "completed";
   }
   return null;
@@ -272,11 +280,11 @@ function recordField(record: unknown, key: string) {
 }
 
 function asThreadContainer(value: unknown): ThreadContainerLike | null {
-  return isRecord(value) ? (value as ThreadContainerLike) : null;
+  return isRecord(value) ? value : null;
 }
 
 function asTurnLike(value: unknown): TurnLike | null {
-  return isRecord(value) ? (value as TurnLike) : null;
+  return isRecord(value) ? value : null;
 }
 
 function isTurnLike(value: unknown): value is TurnLike {
@@ -284,5 +292,5 @@ function isTurnLike(value: unknown): value is TurnLike {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object");
+  return value !== null && typeof value === "object";
 }

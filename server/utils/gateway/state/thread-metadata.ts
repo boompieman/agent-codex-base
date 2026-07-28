@@ -1,5 +1,6 @@
 import { gatewayMemoryState, toTimestamp } from "./memory";
 import { parentThreadIdFromMetadata, subAgentThreadStore } from "./sub-agent-threads";
+import type { AppServerThread } from "~~/shared/types";
 
 export const threadMetadataStore = {
   pruneToHosts(hostIds: Set<number>) {
@@ -22,7 +23,7 @@ export const threadMetadataStore = {
     );
   },
 
-  record(hostId: number, projectId: number | null, thread: any) {
+  record(hostId: number, projectId: number | null, thread: AppServerThread) {
     const threadId = String(thread.id);
     subAgentThreadStore.recordThreadMetadata(hostId, thread);
     const timestamp = Math.floor(Date.now() / 1000);
@@ -44,7 +45,7 @@ export const threadMetadataStore = {
     );
     if (index >= 0) {
       const existing = gatewayMemoryState.threadMetadata[index];
-      if (!existing) {
+      if (existing === undefined) {
         return;
       }
       gatewayMemoryState.threadMetadata[index] = {
@@ -72,7 +73,12 @@ export const threadMetadataStore = {
         if (options.projectId != null && thread.projectId !== options.projectId) {
           return false;
         }
-        if (options.cwd && thread.cwd && thread.cwd !== options.cwd) {
+        if (
+          options.cwd !== null &&
+          options.cwd !== undefined &&
+          thread.cwd !== null &&
+          thread.cwd !== options.cwd
+        ) {
           return false;
         }
         return true;
@@ -91,8 +97,8 @@ export const threadMetadataStore = {
       }))
       .sort(
         (left, right) =>
-          Number(right.recencyAt || right.updatedAt || 0) -
-          Number(left.recencyAt || left.updatedAt || 0),
+          Number(right.recencyAt ?? right.updatedAt ?? 0) -
+          Number(left.recencyAt ?? left.updatedAt ?? 0),
       );
   },
 };

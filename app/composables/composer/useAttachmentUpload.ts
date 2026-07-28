@@ -2,14 +2,14 @@ import { ref, type Ref } from "vue";
 import { gatewayApi } from "@/utils/gateway-api";
 import type { UploadedFileRecord } from "~~/shared/types";
 import type { ComposerAttachment } from "./useComposerDraft";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 
 export function useAttachmentUpload(
   selectedHostId: Ref<number | null>,
   attachedFiles: Ref<ComposerAttachment[]>,
 ) {
-  const store = useGatewayStore();
+  const store = useGatewayBootstrapStore();
   const { t } = useI18n();
   const uploadInputRef = ref<HTMLInputElement | null>(null);
   const uploadingAttachments = ref(false);
@@ -47,7 +47,7 @@ export function useAttachmentUpload(
       });
     }
 
-    if (!otherFiles.length || !selectedHostId.value) {
+    if (otherFiles.length === 0 || selectedHostId.value === null) {
       return;
     }
 
@@ -69,7 +69,7 @@ export function useAttachmentUpload(
           id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`,
         })),
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       store.setError(
         messageFromError(error, t("app.uploadAttachmentFailed"), errorMessageLabels(t)),
         { hostId },
@@ -80,14 +80,15 @@ export function useAttachmentUpload(
   }
 
   function handleAttachmentChange(event: Event) {
-    const input = event.target as HTMLInputElement;
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
     void addFiles(Array.from(input.files ?? []));
     input.value = "";
   }
 
   function handlePaste(event: ClipboardEvent) {
     const files = Array.from(event.clipboardData?.files ?? []);
-    if (!files.length) {
+    if (files.length === 0) {
       return;
     }
     event.preventDefault();

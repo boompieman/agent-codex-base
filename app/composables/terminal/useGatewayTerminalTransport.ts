@@ -5,11 +5,11 @@ import {
   resizeTerminal,
   sendTerminalInput,
 } from "@/stores/gateway-terminal/transport";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { errorMessageLabels } from "@/stores/gateway/thread-utils/identity";
 
 export function useGatewayTerminalTransport() {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   const { t } = useI18n();
   const ctx: GatewayTerminalTransportContext = {
     t,

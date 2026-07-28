@@ -22,18 +22,13 @@ export default defineGatewayEventHandler(async (event) => {
   const host = requireRecord(hostStore.getWithSecret(query.hostId), "Host not found");
 
   const mimeType = imageMimeTypes[extname(query.path).toLowerCase()];
-  if (!mimeType) {
+  if (mimeType === undefined) {
     throw createError({ statusCode: 415, statusMessage: "Unsupported remote image type" });
   }
 
-  try {
-    return await sendRemoteFile(event, host, query.path, {
-      maxSize: MAX_REMOTE_IMAGE_BYTES,
-      contentType: mimeType,
-      previewKind: "document",
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw createError({ statusCode: 404, statusMessage: message || "Remote image not found" });
-  }
+  return sendRemoteFile(event, host, query.path, {
+    maxSize: MAX_REMOTE_IMAGE_BYTES,
+    contentType: mimeType,
+    previewKind: "document",
+  });
 });

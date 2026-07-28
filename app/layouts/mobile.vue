@@ -12,16 +12,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 
-const store = useGatewayStore();
+const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
-const { selectedProject } = storeToRefs(store);
+const { projects } = storeToRefs(catalog);
 const { selectedThreadId, selectedHostId, selectedProjectId } = storeToRefs(navigation);
 const { currentThread } = storeToRefs(useGatewayThreadViewStore());
+const selectedProject = computed(() => projectById(projects.value, selectedProjectId.value));
 const sidebarOpen = ref(false);
 const mobileTitle = computed(() => {
   if (selectedThreadId.value && currentThread.value) {

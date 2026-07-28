@@ -9,7 +9,7 @@ export function createComposerActions() {
       const composer = useGatewayComposerStore();
       const navigation = useGatewayNavigationStore();
       const key = selectedThreadKey(navigation.selectedHostId, navigation.selectedThreadId);
-      if (!key) return;
+      if (key === null) return;
       composer.composerDraftsByKey = {
         ...composer.composerDraftsByKey,
         [key]: { text: draft.text, attachedFiles: [...draft.attachedFiles] },
@@ -20,7 +20,7 @@ export function createComposerActions() {
       const composer = useGatewayComposerStore();
       const navigation = useGatewayNavigationStore();
       const key = selectedThreadKey(navigation.selectedHostId, navigation.selectedThreadId);
-      if (!key) return;
+      if (key === null) return;
       const { [key]: _removed, ...drafts } = composer.composerDraftsByKey;
       composer.composerDraftsByKey = drafts;
     },

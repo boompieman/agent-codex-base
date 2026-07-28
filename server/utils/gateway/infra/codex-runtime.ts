@@ -70,7 +70,11 @@ export class CodexRuntimeService {
         supportedVersion,
       );
 
-      if (runtimeState.running && runtimeState.versionError) {
+      if (
+        runtimeState.running === true &&
+        runtimeState.versionError !== null &&
+        runtimeState.versionError !== ""
+      ) {
         hostLifecycleBus.emit({
           hostId: host.id,
           status: "restarting",

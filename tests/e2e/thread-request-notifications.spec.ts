@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { openApp } from "./helpers/app";
 import {
   applyGatewayLiveEvent,
+  capturedRealtimeInterrupt,
+  capturedServerRequestResponse,
   interruptActiveTurnInStore,
   installRealtimeInterruptMock,
   installServerRequestResponderMock,
@@ -49,21 +51,21 @@ test("dynamic tool response submits through the server request responder and sur
 
   await installServerRequestResponderMock(page, {
     mode: "capture",
-    windowKey: "__submittedServerRequest",
   });
 
   await page.getByTestId("dynamic-tool-submit").click();
   await expect
-    .poll(() => page.evaluate(() => (window as any).__submittedServerRequest))
+    .poll(() => capturedServerRequestResponse(page))
     .toMatchObject({
       hostId: 7,
       threadId: "e2e-dynamic-tool-thread",
-      requestId: 42,
+      serverRequestId: 42,
       result: {
         contentItems: [{ type: "inputText", text: "" }],
         success: true,
       },
     });
+  await expect(page.getByTestId("dynamic-tool-submit")).toBeEnabled();
 
   await installServerRequestResponderMock(page, {
     mode: "fail",
@@ -233,12 +235,12 @@ test("terminal wait notifications mention the command being watched", async ({ p
   const chatScrollArea = page.getByTestId("chat-scroll-area");
   await expect(chatScrollArea.getByText("agent 正在等待命令：pnpm dev")).toBeVisible();
 
-  await installRealtimeInterruptMock(page, { windowKey: "__interruptRequest" });
+  await installRealtimeInterruptMock(page);
 
   await interruptActiveTurnInStore(page);
 
   await expect
-    .poll(() => page.evaluate(() => (window as any).__interruptRequest))
+    .poll(() => capturedRealtimeInterrupt(page))
     .toMatchObject({
       type: "turn.interrupt",
       hostId: 1,

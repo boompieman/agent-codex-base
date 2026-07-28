@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ThreadHistoryItem } from "~~/shared/types";
 import {
   CheckCircle2Icon,
   ChevronDownIcon,
@@ -14,15 +15,16 @@ import HighlightedCode from "@/components/common/HighlightedCode.vue";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import { ChatStickToBottomScrollArea } from "@/components/common/chat-virtualizer";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
+import { threadItemResultText } from "@/utils/thread-items";
 
 const props = defineProps<{
-  item: Record<string, any>;
+  item: ThreadHistoryItem;
   hostId: number | null;
   threadId: string | null;
 }>();
 const { t } = useI18n();
 const title = computed(() => props.item.command || "Command");
-const rawOutput = computed(() => props.item.aggregatedOutput || props.item.result?.text || "");
+const rawOutput = computed(() => props.item.aggregatedOutput || threadItemResultText(props.item));
 const output = computed(() => rawOutput.value);
 const commandStatus = computed(() =>
   typeof props.item.status === "string" ? props.item.status : props.item.status?.type,

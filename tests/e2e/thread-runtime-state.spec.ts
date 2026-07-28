@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openApp } from "./helpers/app";
+import { E2E_USERNAME, openApp } from "./helpers/app";
 import {
   applyGatewayLiveEvent,
   cacheSelectedThreadAndOpenThread,
@@ -10,6 +10,14 @@ import {
   seedGatewayThread,
   selectedThreadStatusInStore,
 } from "./helpers/gateway-store";
+import { defaultGatewayProject } from "./fixtures/thread-history";
+import { z } from "zod";
+
+const storedRouteSelectionSchema = z.object({
+  hostId: z.number().nullable(),
+  projectId: z.number().nullable(),
+  threadId: z.string().nullable(),
+});
 
 test("opening completed history does not show fake thinking", async ({ page }) => {
   await openApp(page);
@@ -113,7 +121,7 @@ test("opening a cached thread applies terminal events before deriving composer s
         threadSettings: {},
         tokenUsage: null,
         projectId: 1,
-        project: { id: 1, hostId: 1, name: "E2E Project", remotePath: "/tmp/e2e" },
+        project: defaultGatewayProject(),
         turnsPage: { nextCursor: null, backwardsCursor: null },
         recentEvents: [
           {
@@ -146,7 +154,7 @@ test("opening a thread stores browser-local last open selection", async ({ page 
         thread: { id: threadId, name: "Local Last Open Thread" },
         history: { thread: { id: threadId, turns: [] } },
         projectId: 1,
-        project: { id: 1, hostId: 1, name: "E2E Project", remotePath: "/tmp/e2e" },
+        project: defaultGatewayProject(),
       },
     },
   });
@@ -155,11 +163,14 @@ test("opening a thread stores browser-local last open selection", async ({ page 
   await openThreadInStore(page, { threadId, hostId: 1, projectId: 1 });
 
   await expect
-    .poll(() =>
-      page.evaluate(
-        () => JSON.parse(localStorage.getItem("codex-gateway-navigation")!).lastOpenThread,
-      ),
-    )
+    .poll(async () => {
+      const stored = await page.evaluate(
+        (username) =>
+          localStorage.getItem(`codex-gateway:${encodeURIComponent(username)}:last-open-thread`),
+        E2E_USERNAME,
+      );
+      return stored === null ? null : storedRouteSelectionSchema.parse(JSON.parse(stored));
+    })
     .toEqual({ hostId: 1, projectId: 1, threadId });
 });
 

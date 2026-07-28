@@ -7,7 +7,7 @@ export const optionalPositiveInt = z.preprocess(
 );
 
 export function requireRecord<T>(value: T | null | undefined, message: string): T {
-  if (!value) {
+  if (value === null || value === undefined) {
     throw createError({ statusCode: 404, statusMessage: message });
   }
   return value;

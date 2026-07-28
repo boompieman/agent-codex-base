@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { CodexRemotePlatform } from "./codex-platform";
+import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 const NPM_COMMAND_TIMEOUT_MS = 10 * 60_000;
@@ -53,7 +54,7 @@ export class CodexArtifactProvider {
   ) {
     const key = `${version}:${platform.packageName}:${options.includeNode}`;
     let entry = this.shared.get(key);
-    if (!entry) {
+    if (entry === undefined) {
       const promise = prepareBundle(version, platform, options).catch((error) => {
         this.shared.delete(key);
         throw error;
@@ -61,7 +62,7 @@ export class CodexArtifactProvider {
       entry = { promise, users: 0, cleanupTimer: null };
       this.shared.set(key, entry);
     }
-    if (entry.cleanupTimer) {
+    if (entry.cleanupTimer !== null) {
       clearTimeout(entry.cleanupTimer);
       entry.cleanupTimer = null;
     }
@@ -77,7 +78,7 @@ export class CodexArtifactProvider {
 
   private scheduleCleanup(key: string, entry: SharedBundle) {
     entry.cleanupTimer = setTimeout(() => {
-      if (entry.users || this.shared.get(key) !== entry) return;
+      if (entry.users !== 0 || this.shared.get(key) !== entry) return;
       this.shared.delete(key);
       void entry.promise.then(({ directory }) =>
         rm(directory, { recursive: true, force: true }).catch(() => undefined),
@@ -139,16 +140,16 @@ async function prepareNodeArtifact(
   const checksums = await checksumsResponse.text();
   const checksumLine = checksums.split("\n").find((line) => line.trim().endsWith(`  ${fileName}`));
   const sha256 = checksumLine?.trim().split(/\s+/, 1)[0];
-  if (!sha256 || !/^[a-f0-9]{64}$/.test(sha256)) {
+  if (sha256 === undefined || !/^[a-f0-9]{64}$/.test(sha256)) {
     throw new Error(`Official Node.js checksums do not contain ${fileName}`);
   }
 
   const response = await fetch(`${releaseRoot}/${fileName}`);
-  if (!response.ok || !response.body) {
+  if (!response.ok || response.body === null) {
     throw new Error(`Failed to download official Node.js ${fileName}: HTTP ${response.status}`);
   }
   const localPath = join(directory, fileName);
-  await pipeline(Readable.fromWeb(response.body as any), createWriteStream(localPath));
+  await pipeline(Readable.from(response.body), createWriteStream(localPath));
   const downloadedHash = await hashFile(localPath, "sha256");
   if (downloadedHash !== sha256) {
     throw new Error(`Official Node.js archive checksum mismatch for ${fileName}`);
@@ -163,12 +164,13 @@ async function readOfficialPlatformSpec(version: string, packageName: string) {
     "optionalDependencies",
     "--json",
   ]);
-  let dependencies: Record<string, unknown>;
+  let metadata: unknown;
   try {
-    dependencies = JSON.parse(stdout) as Record<string, unknown>;
+    metadata = JSON.parse(stdout);
   } catch {
     throw new Error(`npm returned invalid optional dependency metadata for Codex ${version}`);
   }
+  const dependencies = z.record(z.string(), z.unknown()).parse(metadata);
   const alias = dependencies[packageName];
   if (typeof alias !== "string" || !alias.startsWith("npm:@openai/codex@")) {
     throw new Error(`Codex ${version} does not publish the official ${packageName} package alias`);

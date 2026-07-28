@@ -14,6 +14,7 @@ const DIRECTORY_STALE_AFTER_MS = 30_000;
 export class RemoteDirectoryLoader {
   private readonly limits = new Map<number, ReturnType<typeof pLimit>>();
   private readonly pending = new Map<string, Promise<RemoteDirectoryState>>();
+  private generation = 0;
 
   createState(path: string) {
     return reactive<RemoteDirectoryState>({
@@ -30,11 +31,15 @@ export class RemoteDirectoryLoader {
 
   load(state: RemoteDirectoryState, hostId: number, path: string, force = false) {
     if (!force && !isDirectoryStale(state)) return Promise.resolve(state);
-    const key = `${hostId}:${path}`;
+    const generation = this.generation;
+    const key = `${generation}:${hostId}:${path}`;
     const existing = this.pending.get(key);
     if (existing) return existing;
 
     const request = this.limitFor(hostId)(async () => {
+      // A queued read belongs to the authenticated session that enqueued it. Letting it start
+      // after logout would issue the old path/Host lookup with the next user's credentials.
+      if (generation !== this.generation) return state;
       if (!force && !isDirectoryStale(state)) return state;
       state.loading = true;
       state.error = null;
@@ -69,6 +74,12 @@ export class RemoteDirectoryLoader {
     });
     this.pending.set(key, tracked);
     return tracked;
+  }
+
+  reset() {
+    this.generation += 1;
+    this.pending.clear();
+    this.limits.clear();
   }
 
   private limitFor(hostId: number) {

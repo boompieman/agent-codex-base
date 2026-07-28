@@ -1,6 +1,8 @@
 import type { ModelListResult, ProjectRecord, RemoteDirectoryEntry } from "~~/shared/types";
 import { gatewayApi } from "@/utils/gateway-api";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayConfigStore } from "@/stores/gateway-config";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { writeGatewayRouteSelection } from "../route-state";
@@ -16,13 +18,14 @@ export function createProjectActions() {
     beginViewTransition();
     navigation.selectedThreadId = null;
     useGatewayThreadViewStore().resetCurrentView();
-    useGatewayStore().clearError();
+    useGatewayBootstrapStore().clearError();
   }
 
   async function loadModels(hostId: number) {
-    const gateway = useGatewayStore();
+    const catalog = useGatewayCatalogStore();
+    const bootstrap = useGatewayBootstrapStore();
     const navigation = useGatewayNavigationStore();
-    gateway.loadingModels = true;
+    catalog.loadingModels = true;
     const projectId = navigation.selectedProjectId;
     const threadId = navigation.selectedThreadId;
     try {
@@ -30,15 +33,15 @@ export function createProjectActions() {
         query: { hostId, includeHidden: false, limit: 50 },
       });
       if (navigation.selectedHostId !== hostId) return;
-      gateway.models = response.data ?? [];
-      gateway.modelsHostId = hostId;
-    } catch (error: any) {
-      gateway.setError(
-        messageFromError(error, gateway.t("app.listModelsFailed"), gateway.errorLabels),
+      catalog.models = response.data ?? [];
+      catalog.modelsHostId = hostId;
+    } catch (error: unknown) {
+      bootstrap.setError(
+        messageFromError(error, bootstrap.t("app.listModelsFailed"), bootstrap.errorLabels),
         { hostId, projectId, threadId },
       );
     } finally {
-      if (navigation.selectedHostId === hostId) gateway.loadingModels = false;
+      if (navigation.selectedHostId === hostId) catalog.loadingModels = false;
     }
   }
 
@@ -52,7 +55,7 @@ export function createProjectActions() {
     },
 
     async listRemoteDirectories(path = "~", hostId = useGatewayNavigationStore().selectedHostId) {
-      if (!hostId) return { path, entries: [] as RemoteDirectoryEntry[] };
+      if (hostId === null) return { path, entries: [] as RemoteDirectoryEntry[] };
       return gatewayApi<{ path: string; entries: RemoteDirectoryEntry[] }>(
         "/api/remote/directories",
         { query: { hostId, path } },
@@ -60,11 +63,11 @@ export function createProjectActions() {
     },
 
     async listModels() {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       const hostId = useGatewayNavigationStore().selectedHostId;
-      if (!hostId) {
-        gateway.models = [];
-        gateway.modelsHostId = null;
+      if (hostId === null) {
+        catalog.models = [];
+        catalog.modelsHostId = null;
         return;
       }
       if (pendingModelRequest?.hostId === hostId) return pendingModelRequest.promise;
@@ -76,22 +79,23 @@ export function createProjectActions() {
     },
 
     async ensureSelectedHostModels() {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       const hostId = useGatewayNavigationStore().selectedHostId;
-      if (!hostId || gateway.modelsHostId === hostId) return;
-      await gateway.listModels();
+      if (hostId === null || catalog.modelsHostId === hostId) return;
+      await catalog.listModels();
     },
 
     async createProject(input: Record<string, unknown>) {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
+      const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
       const project = await gatewayApi<ProjectRecord>("/api/projects", {
         method: "POST",
         body: input,
       });
-      gateway.mergeProjects([project]);
+      catalog.mergeProjects([project]);
       upsertConfiguredProject(project);
-      gateway.persistConfig();
+      config.setCatalog(catalog.hosts, catalog.projects);
       clearThreadSelection();
       navigation.selectedHostId = project.hostId;
       navigation.selectedProjectId = project.id;
@@ -101,16 +105,16 @@ export function createProjectActions() {
     },
 
     async updateProject(projectId: number, input: Record<string, unknown>) {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       const navigation = useGatewayNavigationStore();
       const project = await gatewayApi<ProjectRecord>(`/api/projects/${projectId}`, {
         method: "PATCH",
         body: input,
       });
-      gateway.projects = gateway.projects.map((item) => (item.id === projectId ? project : item));
+      catalog.projects = catalog.projects.map((item) => (item.id === projectId ? project : item));
       upsertConfiguredProject(project);
-      gateway.projectDirectoryAvailability = omitKey(
-        gateway.projectDirectoryAvailability,
+      catalog.projectDirectoryAvailability = omitKey(
+        catalog.projectDirectoryAvailability,
         projectId,
       );
       if (navigation.selectedProjectId !== projectId) {
@@ -125,22 +129,23 @@ export function createProjectActions() {
     },
 
     async deleteProject(projectId: number) {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
+      const config = useGatewayConfigStore();
       const navigation = useGatewayNavigationStore();
-      const project = gateway.projects.find((item) => item.id === projectId);
+      const project = catalog.projects.find((item) => item.id === projectId);
       await gatewayApi(`/api/projects/${projectId}`, { method: "DELETE" });
-      gateway.projects = gateway.projects.filter((item) => item.id !== projectId);
-      gateway.projectDirectoryAvailability = omitKey(
-        gateway.projectDirectoryAvailability,
+      catalog.projects = catalog.projects.filter((item) => item.id !== projectId);
+      catalog.projectDirectoryAvailability = omitKey(
+        catalog.projectDirectoryAvailability,
         projectId,
       );
-      gateway.gatewayConfig.projects = gateway.gatewayConfig.projects.filter(
+      config.gatewayConfig.projects = config.gatewayConfig.projects.filter(
         (item) => item.id !== projectId,
       );
       if (navigation.selectedProjectId !== projectId) return;
       const nextProject =
-        gateway.projects.find((item) => item.hostId === project?.hostId) ??
-        gateway.projects.find((item) => item.hostId === navigation.selectedHostId) ??
+        catalog.projects.find((item) => item.hostId === project?.hostId) ??
+        catalog.projects.find((item) => item.hostId === navigation.selectedHostId) ??
         null;
       clearThreadSelection();
       navigation.selectedHostId = project?.hostId ?? navigation.selectedHostId;
@@ -154,30 +159,30 @@ export function createProjectActions() {
     },
 
     mergeProjects(projects: ProjectRecord[]) {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       for (const project of projects) {
-        const index = gateway.projects.findIndex((item) => item.id === project.id);
-        if (index >= 0) gateway.projects[index] = project;
-        else gateway.projects.push(project);
+        const index = catalog.projects.findIndex((item) => item.id === project.id);
+        if (index >= 0) catalog.projects[index] = project;
+        else catalog.projects.push(project);
       }
     },
 
     ensureSelectedProject() {
-      const gateway = useGatewayStore();
+      const catalog = useGatewayCatalogStore();
       const navigation = useGatewayNavigationStore();
-      if (!navigation.selectedHostId || navigation.selectedProjectId) return;
+      if (navigation.selectedHostId === null || navigation.selectedProjectId !== null) return;
       navigation.selectedProjectId =
-        gateway.projects.find((project) => project.hostId === navigation.selectedHostId)?.id ??
+        catalog.projects.find((project) => project.hostId === navigation.selectedHostId)?.id ??
         null;
     },
   };
 }
 
 function upsertConfiguredProject(project: ProjectRecord) {
-  const gateway = useGatewayStore();
-  const index = gateway.gatewayConfig.projects.findIndex((item) => item.id === project.id);
-  if (index >= 0) gateway.gatewayConfig.projects[index] = project;
-  else gateway.gatewayConfig.projects.push(project);
+  const config = useGatewayConfigStore();
+  const index = config.gatewayConfig.projects.findIndex((item) => item.id === project.id);
+  if (index >= 0) config.gatewayConfig.projects[index] = project;
+  else config.gatewayConfig.projects.push(project);
 }
 
 function omitKey<T>(record: Record<number, T>, key: number) {

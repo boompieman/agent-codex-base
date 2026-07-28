@@ -1,13 +1,16 @@
-import { EventEmitter } from "node:events";
+import { EventEmitter } from "@posva/event-emitter";
 import type { HostRecord, RpcEnvelope } from "~~/shared/types";
+import { parseRpcEnvelope } from "~~/shared/runtime/app-server";
 import { SUPPORTED_CODEX_VERSION } from "./codex-version";
 import { codexRuntime } from "./host-services";
 import { hostLifecycleBus } from "../state/host-events";
 import { RpcRequestBroker } from "./rpc-request-broker";
 import { CodexRpcTransport } from "./rpc-transport";
 import { type RpcTransportCloseDetail } from "./rpc-errors";
+import { parseInitializeResponse } from "~~/shared/runtime/app-server";
 
 export type RpcNotificationHandler = (message: RpcEnvelope) => void;
+export type RpcResponseParser<T> = (value: unknown) => T;
 
 interface CodexRpcClientOptions {
   skipVersionCheck?: boolean;
@@ -20,9 +23,18 @@ const officialTuiClientInfo = {
   version: SUPPORTED_CODEX_VERSION,
 };
 
-export class CodexRpcClient extends EventEmitter {
+type CodexRpcClientEvents = {
+  notification: RpcEnvelope;
+  request: RpcEnvelope;
+  stderr: string;
+  close: RpcTransportCloseDetail;
+  protocolError: unknown;
+};
+
+export class CodexRpcClient extends EventEmitter<CodexRpcClientEvents> {
   private initialized = false;
   private connectPromise: Promise<void> | null = null;
+  private connectionGeneration = 0;
   private readonly requests = new RpcRequestBroker();
   private transport: CodexRpcTransport | null = null;
   private deferredUpgrade = false;
@@ -38,34 +50,40 @@ export class CodexRpcClient extends EventEmitter {
     if (this.initialized) {
       return;
     }
-    if (this.connectPromise) {
+    if (this.connectPromise !== null) {
       return this.connectPromise;
     }
 
-    this.connectPromise = this.doConnect().finally(() => {
-      this.connectPromise = null;
+    const generation = this.connectionGeneration;
+    const pending = this.doConnect(generation).finally(() => {
+      if (this.connectPromise === pending) this.connectPromise = null;
     });
-    return this.connectPromise;
+    this.connectPromise = pending;
+    return pending;
   }
 
-  private async doConnect() {
+  private async doConnect(generation: number) {
     if (this.initialized) {
       return;
     }
 
-    let versionState = this.options.skipVersionCheck
-      ? null
-      : await codexRuntime.ensureCodexVersion(this.host);
-    this.deferredUpgrade = Boolean(versionState?.deferredUpgrade);
+    let versionState =
+      this.options.skipVersionCheck === true
+        ? null
+        : await codexRuntime.ensureCodexVersion(this.host);
+    this.assertCurrentConnection(generation);
+    this.deferredUpgrade = versionState?.deferredUpgrade === true;
 
     try {
-      await this.connectRemoteProxyWebSocket();
+      await this.connectRemoteProxyWebSocket(generation);
     } catch (error) {
-      if (this.options.skipVersionCheck) {
+      this.assertCurrentConnection(generation);
+      if (this.options.skipVersionCheck === true) {
         throw error;
       }
       versionState = await codexRuntime.repairAfterProxyFailure(this.host, error);
-      await this.connectRemoteProxyWebSocket();
+      this.assertCurrentConnection(generation);
+      await this.connectRemoteProxyWebSocket(generation);
     }
 
     await this.request(
@@ -81,27 +99,29 @@ export class CodexRpcClient extends EventEmitter {
       },
       30_000,
     );
+    this.assertCurrentConnection(generation);
     this.notify("initialized", {});
     this.initialized = true;
     hostLifecycleBus.emit({
       hostId: this.host.id,
       status: "connected",
       message: [
-        versionState?.upgraded
+        versionState?.upgraded === true
           ? `Upgraded Codex ${versionState.beforeVersion} -> ${versionState.version}`
           : null,
-        versionState ? `codex-cli ${versionState.version}` : null,
+        versionState === null ? null : `codex-cli ${versionState.version}`,
         "app-server RPC OK",
       ]
-        .filter(Boolean)
+        .filter((value): value is string => value !== null)
         .join("\n"),
     });
   }
 
   async probeRuntimeVersion() {
-    await this.connectRemoteProxyWebSocket();
+    const generation = this.connectionGeneration;
+    await this.connectRemoteProxyWebSocket(generation);
     try {
-      const result = await this.request<{ userAgent?: string }>(
+      const result = await this.request(
         "initialize",
         {
           clientInfo: {
@@ -110,6 +130,7 @@ export class CodexRpcClient extends EventEmitter {
           capabilities: {},
         },
         30_000,
+        parseInitializeResponse,
       );
       this.notify("initialized", {});
       return result.userAgent ?? null;
@@ -118,8 +139,23 @@ export class CodexRpcClient extends EventEmitter {
     }
   }
 
-  request<T = unknown>(method: string, params: unknown = {}, timeoutMs = 120_000): Promise<T> {
-    return this.requests.request(method, params, timeoutMs, (message) => this.send(message));
+  request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown>;
+  request<T>(
+    method: string,
+    params: unknown,
+    timeoutMs: number,
+    parse: RpcResponseParser<T>,
+  ): Promise<T>;
+  request<T>(
+    method: string,
+    params: unknown = {},
+    timeoutMs = 120_000,
+    parse?: RpcResponseParser<T>,
+  ): Promise<unknown> | Promise<T> {
+    const response = this.requests.request(method, params, timeoutMs, (message) =>
+      this.send(message),
+    );
+    return parse === undefined ? response : response.then(parse);
   }
 
   notify(method: string, params: unknown) {
@@ -142,6 +178,10 @@ export class CodexRpcClient extends EventEmitter {
   }
 
   close() {
+    // SSH package installation cannot be reliably aborted once the remote command has started.
+    // Advancing the generation instead prevents that obsolete async path from publishing a new
+    // transport after Host deletion/reconfiguration has already closed this client.
+    this.connectionGeneration += 1;
     this.initialized = false;
     this.connectPromise = null;
     this.requests.rejectAll(new Error("Codex RPC client closed"));
@@ -157,9 +197,10 @@ export class CodexRpcClient extends EventEmitter {
     this.deferredUpgrade = false;
   }
 
-  private async connectRemoteProxyWebSocket() {
+  private async connectRemoteProxyWebSocket(generation: number) {
+    this.assertCurrentConnection(generation);
     const transport = new CodexRpcTransport(this.host, {
-      requireExistingAppServer: Boolean(this.options.requireExistingAppServer),
+      requireExistingAppServer: this.options.requireExistingAppServer === true,
       onMessage: (payload) => this.handleMessage(payload),
       onStderr: (text) => this.emit("stderr", text),
       // A failed upgrade/retry attempt can close after its replacement transport is already live.
@@ -171,10 +212,17 @@ export class CodexRpcClient extends EventEmitter {
     this.transport = transport;
     try {
       await transport.connect();
+      this.assertCurrentConnection(generation);
     } catch (error) {
       if (this.transport === transport) this.transport = null;
       transport.close();
       throw error;
+    }
+  }
+
+  private assertCurrentConnection(generation: number) {
+    if (generation !== this.connectionGeneration) {
+      throw new Error("Codex RPC connection attempt was superseded");
     }
   }
 
@@ -186,24 +234,24 @@ export class CodexRpcClient extends EventEmitter {
   }
 
   private send(message: RpcEnvelope) {
-    if (!this.transport) throw new Error("Codex RPC transport is not connected");
+    if (this.transport === null) throw new Error("Codex RPC transport is not connected");
     this.transport.send(message);
   }
 
   private handleMessage(payload: string) {
-    if (!payload.trim()) {
+    if (payload.trim() === "") {
       return;
     }
 
     let message: RpcEnvelope;
     try {
-      message = JSON.parse(payload);
+      message = parseRpcEnvelope(JSON.parse(payload));
     } catch (error) {
       this.emit("protocolError", error);
       return;
     }
 
-    if (message.id !== undefined && message.method) {
+    if (message.id !== undefined && message.method !== undefined && message.method !== "") {
       this.emit("request", message);
       return;
     }

@@ -18,7 +18,12 @@ if (password.length < 8) {
   process.exit(1);
 }
 
-const dbPath = resolve(process.env.CODEX_GATEWAY_DB_PATH || "/data/codex-gateway.db");
+const configuredDbPath = process.env.CODEX_GATEWAY_DB_PATH;
+const dbPath = resolve(
+  configuredDbPath === undefined || configuredDbPath.length === 0
+    ? "/data/codex-gateway.db"
+    : configuredDbPath,
+);
 const directory = dirname(dbPath);
 if (!existsSync(directory)) {
   mkdirSync(directory, { recursive: true, mode: 0o700 });

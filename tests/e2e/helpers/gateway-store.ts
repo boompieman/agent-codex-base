@@ -1,56 +1,50 @@
 import type { Page } from "@playwright/test";
-import type { GatewayEvent } from "../../../shared/types";
+import type {
+  AppServerThread,
+  GatewayEvent,
+  HostRecord,
+  ProjectRecord,
+  ThreadGoalStatus,
+  ThreadHistoryState,
+} from "../../../shared/types";
+import type { ThreadViewState } from "../../../app/stores/gateway/types";
 import {
   defaultGatewayHost,
   defaultGatewayProject,
   emptyThreadHistory,
 } from "../fixtures/thread-history";
+import {
+  installRealtimeInterruptRoute,
+  installRealtimeServerRequestResponseRoute,
+  installRealtimeThreadSnapshotRoute,
+  realtimeInterruptRequest,
+  realtimeServerRequestResponse,
+  realtimeThreadActivateRequests,
+  type MockThreadSnapshotInput,
+} from "./realtime-route";
 
 interface SeedGatewayThreadInput {
   hostId?: number;
   projectId?: number | null;
   threadId?: string | null;
-  host?: Record<string, unknown>;
-  project?: Record<string, unknown> | null;
-  currentThread?: unknown;
-  history?: unknown;
-  threads?: unknown[];
+  host?: HostRecord;
+  project?: ProjectRecord | null;
+  currentThread?: AppServerThread | null;
+  history?: ThreadHistoryState | null;
+  threads?: AppServerThread[];
   status?: "idle" | "running" | "completed" | "failed" | "interrupted";
   loading?: boolean;
   olderTurnsCursor?: string | null;
   newerTurnsCursor?: string | null;
   events?: GatewayEvent[];
   lastEventId?: number;
-  threadViews?: Record<string, unknown>;
-}
-
-interface MockThreadSnapshotInput {
-  hostId?: number;
-  responseDelayMs?: number;
-  snapshots: Record<
-    string,
-    {
-      thread?: unknown;
-      history?: unknown;
-      projectId?: number | null;
-      project?: unknown;
-      threadSettings?: unknown;
-      tokenUsage?: unknown;
-      turnsPage?: {
-        nextCursor: string | null;
-        backwardsCursor: string | null;
-      };
-      recentEvents?: unknown[];
-      lastEventId?: number;
-      runtimeStatus?: "idle" | "running" | "completed" | "failed" | "interrupted" | null;
-    }
-  >;
+  threadViews?: Record<string, ThreadViewState>;
 }
 
 type SeedGatewayThreadRuntimeInput = SeedGatewayThreadInput & {
-  defaultHost: Record<string, unknown>;
-  defaultProject: Record<string, unknown>;
-  defaultHistory: unknown;
+  defaultHost: HostRecord;
+  defaultProject: ProjectRecord;
+  defaultHistory: ThreadHistoryState | null;
 };
 
 export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInput) {
@@ -58,37 +52,40 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     ...input,
     defaultHost: defaultGatewayHost(input.hostId ?? 1),
     defaultProject: defaultGatewayProject(input.hostId ?? 1, input.projectId ?? 1),
-    defaultHistory: input.threadId ? emptyThreadHistory(input.threadId) : null,
+    defaultHistory:
+      input.threadId !== null && input.threadId !== undefined && input.threadId !== ""
+        ? emptyThreadHistory(input.threadId)
+        : null,
   };
   await page.evaluate((input: SeedGatewayThreadRuntimeInput) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const gateway = pinia?._s?.get("gateway");
-    const navigation = pinia?._s?.get("gateway-navigation");
-    const runtime = pinia?._s?.get("gateway-thread-runtime");
-    const views = pinia?._s?.get("gateway-thread-view");
-    if (!gateway || !navigation || !runtime || !views) {
-      throw new Error("Unable to locate gateway domain stores");
-    }
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { bootstrap, catalog, navigation, runtime, views } = driver;
     const hostId = input.hostId ?? 1;
     const projectId = input.projectId ?? null;
     const threadId = input.threadId ?? null;
-    gateway.hosts = [input.host ?? input.defaultHost];
-    gateway.projects = input.project ? [input.project] : projectId ? [input.defaultProject] : [];
+    catalog.hosts = [input.host ?? input.defaultHost];
+    catalog.projects =
+      input.project !== null && input.project !== undefined
+        ? [input.project]
+        : projectId !== null
+          ? [input.defaultProject]
+          : [];
     navigation.threads = input.threads ?? [];
     navigation.selectedHostId = hostId;
     navigation.selectedProjectId = projectId;
     navigation.selectedThreadId = threadId;
-    views.currentThread = input.currentThread ?? (threadId ? { id: threadId } : null);
-    views.history = input.history ?? (threadId ? input.defaultHistory : null);
+    const hasThread = threadId !== null && threadId !== "";
+    views.currentThread = input.currentThread ?? (hasThread ? { id: threadId } : null);
+    views.history = input.history ?? (hasThread ? input.defaultHistory : null);
     views.events = input.events ?? [];
     views.lastEventId = input.lastEventId ?? views.lastEventId;
     views.olderTurnsCursor = input.olderTurnsCursor ?? null;
     views.newerTurnsCursor = input.newerTurnsCursor ?? null;
     views.threadViews = { ...views.threadViews, ...input.threadViews };
-    gateway.initializing = false;
+    bootstrap.initializing = false;
     views.loading = input.loading ?? false;
-    if (threadId && input.status) {
+    if (hasThread && input.status !== undefined) {
       runtime.setThreadStatus(hostId, threadId, input.status);
     }
   }, runtimeInput);
@@ -98,52 +95,11 @@ export async function installRealtimeThreadSnapshotMock(
   page: Page,
   input: MockThreadSnapshotInput,
 ) {
-  await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const realtime = pinia?._s?.get("gateway-realtime");
-    if (!realtime) {
-      throw new Error("Unable to locate gateway realtime Pinia store");
-    }
-    realtime.connected = true;
-    (window as any).__threadActivateRequests = [];
-    realtime.socket = {
-      readyState: WebSocket.OPEN,
-      send(raw: string) {
-        const message = JSON.parse(raw);
-        if (message.type !== "thread.activate") {
-          return;
-        }
-        (window as any).__threadActivateRequests.push(message);
-        const snapshot = input.snapshots[String(message.threadId)];
-        if (!snapshot) {
-          throw new Error(`Missing mocked thread snapshot for ${message.threadId}`);
-        }
-        window.setTimeout(() => {
-          realtime.receiveServerMessage({
-            type: "thread.snapshot",
-            requestId: message.requestId,
-            hostId: message.hostId ?? input.hostId ?? 1,
-            threadId: message.threadId,
-            thread: snapshot.thread ?? { id: message.threadId },
-            history: snapshot.history ?? { thread: { id: message.threadId, turns: [] } },
-            runtimeStatus: snapshot.runtimeStatus ?? null,
-            projectId: snapshot.projectId ?? null,
-            project: snapshot.project ?? null,
-            threadSettings: snapshot.threadSettings ?? {},
-            tokenUsage: snapshot.tokenUsage ?? null,
-            turnsPage: snapshot.turnsPage ?? { nextCursor: null, backwardsCursor: null },
-            recentEvents: snapshot.recentEvents ?? [],
-            lastEventId: snapshot.lastEventId ?? 0,
-          });
-        }, input.responseDelayMs ?? 0);
-      },
-    };
-  }, input);
+  await installRealtimeThreadSnapshotRoute(page, input);
 }
 
 export async function threadActivateRequests(page: Page) {
-  return page.evaluate(() => (window as any).__threadActivateRequests ?? []);
+  return realtimeThreadActivateRequests(page);
 }
 
 export async function appendAgentStreamLines(
@@ -151,17 +107,17 @@ export async function appendAgentStreamLines(
   input: { itemId: string; prefix: string; count: number },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const views = pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
-    const turns = views.history.thread.turns as Array<{ items?: any[] }>;
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
+    const history = views.history;
+    if (!history) throw new Error("Gateway thread history is unavailable");
+    const turns = history.thread.turns;
     const agent = turns
       .flatMap((turn) => turn.items ?? [])
-      .find((item: any) => item.id === input.itemId);
-    if (!agent) throw new Error(`Missing Agent stream item ${input.itemId}`);
+      .find((item) => item.id === input.itemId);
+    if (agent === undefined || typeof agent.text !== "string") {
+      throw new Error(`Missing Agent stream item ${input.itemId}`);
+    }
     agent.text +=
       "\n\n" +
       Array.from(
@@ -169,7 +125,7 @@ export async function appendAgentStreamLines(
         (_, index) => `${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n\n");
     views.history = {
-      thread: { ...views.history.thread, turns: [...views.history.thread.turns] },
+      thread: { ...history.thread, turns: [...history.thread.turns] },
     };
   }, input);
 }
@@ -179,15 +135,16 @@ export async function appendFileDiffLines(
   input: { itemId: string; path: string; prefix: string; count: number },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const views = pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
+    const history = views.history;
+    const turn = history?.thread.turns[0];
+    if (!history || !turn) throw new Error("Gateway thread history is unavailable");
+    const fileChange = (turn.items ?? []).find((item) => item.id === input.itemId);
+    const change = fileChange?.changes?.find((candidate) => candidate.path === input.path);
+    if (change === undefined || typeof change.diff !== "string") {
+      throw new Error(`Missing file change ${input.itemId}:${input.path}`);
     }
-    const turn = views.history.thread.turns[0];
-    const fileChange = turn.items.find((item: any) => item.id === input.itemId);
-    const change = fileChange.changes.find((candidate: any) => candidate.path === input.path);
     change.diff +=
       "\n" +
       Array.from(
@@ -195,7 +152,7 @@ export async function appendFileDiffLines(
         (_, index) => `+${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n");
     views.history = {
-      thread: { ...views.history.thread, turns: [...views.history.thread.turns] },
+      thread: { ...history.thread, turns: [...history.thread.turns] },
     };
   }, input);
 }
@@ -205,13 +162,15 @@ export async function appendCommandOutputLines(
   input: { itemId: string; prefix: string; count: number },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
+    const history = views.history;
+    const turn = history?.thread.turns[0];
+    if (!history || !turn) throw new Error("Gateway thread history is unavailable");
+    const command = (turn.items ?? []).find((item) => item.id === input.itemId);
+    if (command === undefined || typeof command.aggregatedOutput !== "string") {
+      throw new Error(`Missing command item ${input.itemId}`);
     }
-    const turn = views.history.thread.turns[0];
-    const command = turn.items.find((item: any) => item.id === input.itemId);
     command.aggregatedOutput +=
       "\n" +
       Array.from(
@@ -219,7 +178,7 @@ export async function appendCommandOutputLines(
         (_, index) => `${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n");
     views.history = {
-      thread: { ...views.history.thread, turns: [...views.history.thread.turns] },
+      thread: { ...history.thread, turns: [...history.thread.turns] },
     };
   }, input);
 }
@@ -233,46 +192,42 @@ export async function completeTurnWithFinalAgentMessage(
   },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
-    const turn = views.history.thread.turns[0];
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
+    const history = views.history;
+    const turn = history?.thread.turns[0];
+    if (!history || !turn) throw new Error("Gateway thread history is unavailable");
     turn.status = "completed";
-    const agent = turn.items.find((item: any) => item.id === input.agentItemId);
+    const items = turn.items ?? [];
+    const agent = items.find((item) => item.id === input.agentItemId);
+    if (agent === undefined) throw new Error(`Missing Agent item ${input.agentItemId}`);
     agent.status = "completed";
-    turn.items.push({
+    items.push({
       id: input.finalItemId,
       type: "agentMessage",
       phase: "final_answer",
       status: "completed",
       text: input.finalText,
     });
+    turn.items = items;
     views.history = {
-      thread: { ...views.history.thread, turns: [...views.history.thread.turns] },
+      thread: { ...history.thread, turns: [...history.thread.turns] },
     };
   }, input);
 }
 
 export async function applyGatewayLiveEvent(page: Page, event: GatewayEvent) {
   await page.evaluate((event) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
     views.applyLiveEvent(event);
   }, event);
 }
 
 export async function replayGatewayLiveEvents(page: Page, events: GatewayEvent[]) {
   await page.evaluate((events) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
     for (const event of events) {
       views.applyLiveEvent(event);
     }
@@ -281,11 +236,8 @@ export async function replayGatewayLiveEvents(page: Page, events: GatewayEvent[]
 
 export async function receiveRealtimeThreadEvent(page: Page, event: GatewayEvent) {
   await page.evaluate((event) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const realtime = app?.config?.globalProperties?.$pinia?._s?.get("gateway-realtime");
-    if (!realtime) {
-      throw new Error("Unable to locate gateway realtime Pinia store");
-    }
+    const realtime = window.__codexGatewayE2e?.realtime;
+    if (!realtime) throw new Error("Gateway E2E driver is unavailable");
     realtime.receiveServerMessage({
       type: "thread.event",
       event,
@@ -298,11 +250,8 @@ export async function openThreadInStore(
   input: { threadId: string; hostId: number; projectId?: number | null },
 ) {
   await page.evaluate(async (input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const views = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-view");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
     await views.openThread(input.threadId, {
       hostId: input.hostId,
       projectId: input.projectId ?? null,
@@ -312,14 +261,16 @@ export async function openThreadInStore(
 
 export async function selectedThreadStatusInStore(page: Page) {
   return page.evaluate(() => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const navigation = pinia?._s?.get("gateway-navigation");
-    const runtime = pinia?._s?.get("gateway-thread-runtime");
-    if (!navigation || !runtime) {
-      throw new Error("Unable to locate gateway navigation/runtime Pinia stores");
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { navigation, runtime } = driver;
+    if (
+      navigation.selectedHostId === null ||
+      navigation.selectedThreadId === null ||
+      navigation.selectedThreadId === ""
+    ) {
+      return "idle";
     }
-    if (!navigation.selectedHostId || !navigation.selectedThreadId) return "idle";
     return runtime.statusFor(navigation.selectedHostId, navigation.selectedThreadId);
   });
 }
@@ -335,13 +286,9 @@ export async function cacheSelectedThreadAndOpenThread(
   },
 ) {
   await page.evaluate(async (input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const navigation = pinia?._s?.get("gateway-navigation");
-    const views = pinia?._s?.get("gateway-thread-view");
-    if (!navigation || !views) {
-      throw new Error("Unable to locate gateway navigation/thread-view Pinia stores");
-    }
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { navigation, views } = driver;
     views.cacheSelectedThreadView();
     navigation.selectedThreadId = input.otherThreadId;
     views.currentThread = { id: input.otherThreadId, name: input.otherThreadName };
@@ -358,25 +305,29 @@ export async function setThreadViewHistoryAndStatus(
   input: {
     hostId: number;
     threadId: string;
-    history: unknown;
+    history: ThreadHistoryState;
     status?: "idle" | "running" | "completed" | "failed" | "interrupted";
     turnId?: string | null;
   },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const runtime = pinia?._s?.get("gateway-thread-runtime");
-    const views = pinia?._s?.get("gateway-thread-view");
-    if (!runtime || !views) {
-      throw new Error("Unable to locate gateway runtime/thread-view Pinia stores");
-    }
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { runtime, views } = driver;
     const key = `${input.hostId}:${input.threadId}`;
+    const previous = views.threadViews[key];
     views.threadViews[key] = {
-      ...views.threadViews[key],
       hostId: input.hostId,
+      projectId: previous?.projectId ?? null,
       threadId: input.threadId,
+      currentThread: previous?.currentThread ?? { id: input.threadId },
       history: input.history,
+      events: previous?.events ?? [],
+      olderTurnsCursor: previous?.olderTurnsCursor ?? null,
+      newerTurnsCursor: previous?.newerTurnsCursor ?? null,
+      lastEventId: previous?.lastEventId ?? 0,
+      loading: previous?.loading ?? false,
+      error: previous?.error ?? null,
     };
     if (input.status) {
       runtime.setThreadStatus(input.hostId, input.threadId, input.status, {
@@ -391,16 +342,9 @@ export function subAgentRuntimeFlags(
   input: { hostId: number; firstThreadId: string; secondThreadId: string },
 ) {
   return page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const pinia = app?.config?.globalProperties?.$pinia;
-    const views = pinia?._s?.get("gateway-thread-view");
-    const realtime = pinia?._s?.get("gateway-realtime");
-    if (!views) {
-      throw new Error("Unable to locate gateway thread-view Pinia store");
-    }
-    if (!realtime) {
-      throw new Error("Unable to locate gateway realtime Pinia store");
-    }
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { realtime, views } = driver;
     const firstKey = `${input.hostId}:${input.firstThreadId}`;
     const secondKey = `${input.hostId}:${input.secondThreadId}`;
     return {
@@ -417,11 +361,8 @@ export async function setThreadCollaborationMode(
   input: { hostId: number; threadId: string; mode: "default" | "plan" },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const composer = app?.config?.globalProperties?.$pinia?._s?.get("gateway-composer");
-    if (!composer) {
-      throw new Error("Unable to locate gateway composer Pinia store");
-    }
+    const composer = window.__codexGatewayE2e?.composer;
+    if (!composer) throw new Error("Gateway E2E driver is unavailable");
     composer.setThreadCollaborationMode(input.hostId, input.threadId, input.mode);
   }, input);
 }
@@ -431,27 +372,23 @@ export async function dismissPlanPrompt(
   input: { hostId: number; threadId: string; planItemId: string },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const composer = app?.config?.globalProperties?.$pinia?._s?.get("gateway-composer");
-    if (!composer) {
-      throw new Error("Unable to locate gateway composer Pinia store");
-    }
+    const composer = window.__codexGatewayE2e?.composer;
+    if (!composer) throw new Error("Gateway E2E driver is unavailable");
     composer.dismissPlanImplementationPrompt(input.hostId, input.threadId, input.planItemId);
   }, input);
 }
 
 export async function installSelectedThreadGoalSubmitMock(
   page: Page,
-  input: { hostId: number; threadId: string; windowKey: string },
+  input: { hostId: number; threadId: string },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const composer = app?.config?.globalProperties?.$pinia?._s?.get("gateway-composer");
-    if (!composer) {
-      throw new Error("Unable to locate gateway composer Pinia store");
-    }
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { composer, captures } = driver;
+    captures.goalObjective = null;
     composer.setSelectedThreadGoal = async (objective: string) => {
-      (window as any)[input.windowKey] = objective;
+      captures.goalObjective = objective;
       composer.upsertThreadGoal(
         input.hostId,
         input.threadId,
@@ -473,17 +410,15 @@ export async function installSelectedThreadGoalSubmitMock(
 
 export async function installSelectedThreadGoalControlMock(
   page: Page,
-  input: { hostId: number; threadId: string; windowKey: string },
+  input: { hostId: number; threadId: string },
 ) {
   await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const composer = app?.config?.globalProperties?.$pinia?._s?.get("gateway-composer");
-    if (!composer) {
-      throw new Error("Unable to locate gateway composer Pinia store");
-    }
-    (window as any)[input.windowKey] = [];
-    composer.setSelectedThreadGoalStatus = async (status: string) => {
-      (window as any)[input.windowKey].push({ type: "status", status });
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const { composer, captures } = driver;
+    captures.goalControls = [];
+    composer.setSelectedThreadGoalStatus = async (status: ThreadGoalStatus) => {
+      captures.goalControls.push({ type: "status", status });
       composer.upsertThreadGoal(input.hostId, input.threadId, {
         threadId: input.threadId,
         objective: composer.selectedThreadGoal?.objective ?? "existing goal",
@@ -496,7 +431,7 @@ export async function installSelectedThreadGoalControlMock(
       });
     };
     composer.clearSelectedThreadGoal = async () => {
-      (window as any)[input.windowKey].push({ type: "clear" });
+      captures.goalControls.push({ type: "clear" });
       composer.clearThreadGoalState(input.hostId, input.threadId);
     };
   }, input);
@@ -504,74 +439,33 @@ export async function installSelectedThreadGoalControlMock(
 
 export async function installServerRequestResponderMock(
   page: Page,
-  input: { mode: "capture"; windowKey: string } | { mode: "fail"; message: string },
+  input: { mode: "capture" } | { mode: "fail"; message: string },
 ) {
-  await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const store = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-turns");
-    if (!store) {
-      throw new Error("Unable to locate gateway thread-turns Pinia store");
-    }
-    if (input.mode === "capture") {
-      (window as any)[input.windowKey] = null;
-      store.respondToServerRequest = async (
-        hostId: number,
-        threadId: string,
-        requestId: string | number,
-        result: unknown,
-      ) => {
-        (window as any)[input.windowKey] = { hostId, threadId, requestId, result };
-      };
-      return;
-    }
-    store.respondToServerRequest = async () => {
-      throw new Error(input.message);
-    };
-  }, input);
+  installRealtimeServerRequestResponseRoute(page, input);
+}
+
+export function capturedServerRequestResponse(page: Page) {
+  return realtimeServerRequestResponse(page);
 }
 
 export async function installRealtimeInterruptMock(
   page: Page,
-  input: { windowKey: string; passThroughNonInterrupt?: boolean },
+  input: { passThroughNonInterrupt?: boolean } = {},
 ) {
-  await page.evaluate((input) => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const realtime = app?.config?.globalProperties?.$pinia?._s?.get("gateway-realtime");
-    if (!realtime) {
-      throw new Error("Unable to locate gateway realtime Pinia store");
-    }
-    realtime.connected = true;
-    (window as any)[input.windowKey] = null;
-    const previousSocket = realtime.socket;
-    realtime.socket = {
-      readyState: WebSocket.OPEN,
-      send(raw: string) {
-        const message = JSON.parse(raw);
-        if (input.passThroughNonInterrupt && message.type !== "turn.interrupt") {
-          previousSocket?.send(raw);
-          return;
-        }
-        (window as any)[input.windowKey] = message;
-        window.setTimeout(() => {
-          realtime.receiveServerMessage({
-            type: "turn.interrupt.accepted",
-            requestId: message.requestId,
-            hostId: message.hostId,
-            threadId: message.threadId,
-          });
-        }, 0);
-      },
-    };
-  }, input);
+  // The shared Playwright route already dispatches all supported protocol messages, so non-
+  // interrupt traffic remains available without forwarding through a replaced browser socket.
+  void input.passThroughNonInterrupt;
+  installRealtimeInterruptRoute(page);
+}
+
+export function capturedRealtimeInterrupt(page: Page) {
+  return realtimeInterruptRequest(page);
 }
 
 export async function interruptActiveTurnInStore(page: Page) {
   await page.evaluate(async () => {
-    const app = (document.querySelector("#__nuxt") as any)?.__vue_app__;
-    const store = app?.config?.globalProperties?.$pinia?._s?.get("gateway-thread-turns");
-    if (!store) {
-      throw new Error("Unable to locate gateway thread-turns Pinia store");
-    }
+    const store = window.__codexGatewayE2e?.turns;
+    if (!store) throw new Error("Gateway E2E driver is unavailable");
     await store.interruptActiveTurn();
   });
 }

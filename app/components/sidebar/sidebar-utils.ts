@@ -41,19 +41,19 @@ const hostConnectionLabelKeyByStatus: Record<string, string> = {
 };
 
 export function formatRelative(seconds?: number | null) {
-  if (!seconds) return "";
+  if (seconds === null || seconds === undefined || seconds <= 0) return "";
   const diff = Math.max(1, Math.floor(Date.now() / 1000 - seconds));
-  if (diff < 3600) return `${Math.floor(diff / 60) || 1}m`;
+  if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}m`;
   if (diff < 86_400) return `${Math.floor(diff / 3600)}h`;
   if (diff < 604_800) return `${Math.floor(diff / 86_400)}d`;
   return `${Math.floor(diff / 604_800)}w`;
 }
 
-export function pinnedThreadId(thread: any) {
-  return String(thread.threadId ?? thread.id ?? "");
+export function pinnedThreadId(thread: PinnedThreadRecord) {
+  return thread.threadId;
 }
 
-export function pinnedThreadKey(thread: any) {
+export function pinnedThreadKey(thread: PinnedThreadRecord) {
   return `${thread.hostId}:${pinnedThreadId(thread)}`;
 }
 
@@ -84,3 +84,4 @@ export function hostConnectionIsBusy(status: string) {
 export function hostConnectionLabelKey(status: string) {
   return hostConnectionLabelKeyByStatus[status] ?? "app.hostDisconnected";
 }
+import type { PinnedThreadRecord } from "./sidebar-types";

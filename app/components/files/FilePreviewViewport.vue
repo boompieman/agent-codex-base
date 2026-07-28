@@ -1,15 +1,5 @@
 <script setup lang="ts">
 import { FileWarningIcon, Loader2Icon } from "@lucide/vue";
-import {
-  fallbackPlugin,
-  imagePlugin,
-  officePlugin,
-  pdfPlugin,
-  type PreviewPlugin,
-} from "@open-file-viewer/core";
-import { OpenFileViewer } from "@open-file-viewer/vue";
-import "@open-file-viewer/core/style.css";
-import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { computed } from "vue";
 import type { FilePreviewDocument } from "~~/shared/types";
 import { Button } from "@/components/ui/button";
@@ -28,12 +18,6 @@ const { isDark } = useTerminalTheme();
 const file = computed(() => fileWorkspace.fileForDocument(props.document.key));
 const viewerTheme = computed(() => (isDark.value ? "dark" : "light"));
 const viewerLocale = computed(() => (locale.value === "en" ? "en-US" : "zh-CN"));
-const plugins: PreviewPlugin[] = [
-  imagePlugin(),
-  pdfPlugin({ workerSrc: pdfWorkerSrc }),
-  officePlugin({ pdf: { workerSrc: pdfWorkerSrc } }),
-  fallbackPlugin(),
-];
 </script>
 
 <template>
@@ -87,20 +71,18 @@ const plugins: PreviewPlugin[] = [
         </div>
       </div>
     </div>
-    <OpenFileViewer
+    <!-- Nuxt prefixes nested auto-imports with `Files`. Keep the Lazy name explicit: the old
+         unprefixed tag became a silent custom element, while a static import pulled the Office
+         dependency graph into Nitro SSR and exceeded the constrained production build heap. -->
+    <LazyFilesOpenFileViewerVendor
       v-else-if="document.previewKind === 'document' && file"
       :key="document.updatedAt"
       :file="file"
       :file-name="document.title"
       :mime-type="document.contentType"
-      width="100%"
-      height="100%"
-      fit="contain"
       :toolbar="{ download: true, fullscreen: true, print: true, search: true }"
       :theme="viewerTheme"
       :locale="viewerLocale"
-      :plugins="plugins"
-      class-name="h-full"
     />
   </div>
 </template>

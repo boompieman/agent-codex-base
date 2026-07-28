@@ -67,6 +67,8 @@ export function subscribeBrowserPreviewEvents(peer: RealtimePeer) {
 }
 
 function requireOwnerId(ownerId: string | undefined) {
-  if (!ownerId) throw new Error("Browser preview owner is unavailable");
+  if (ownerId === undefined || ownerId === "") {
+    throw new Error("Browser preview owner is unavailable");
+  }
   return ownerId;
 }

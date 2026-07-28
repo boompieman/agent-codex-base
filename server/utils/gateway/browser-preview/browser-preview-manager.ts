@@ -6,6 +6,7 @@ import type {
   BrowserPreviewTarget,
   HostRecord,
 } from "~~/shared/types";
+import { firstNonEmptyString, trimmedOrFallback } from "~~/shared/utils/strings";
 
 const TICKET_TTL_MS = 60_000;
 
@@ -59,16 +60,22 @@ export class BrowserPreviewManager {
   exchangeTicket(hostname: string, ticket: string) {
     const session = this.tickets.get(ticket);
     this.tickets.delete(ticket);
-    if (!session || session.status !== "open" || session.ticketExpiresAt < Date.now()) return null;
+    if (
+      session === undefined ||
+      session.status !== "open" ||
+      session.ticketExpiresAt < Date.now()
+    ) {
+      return null;
+    }
     if (new URL(session.previewOrigin).hostname !== hostname) return null;
     this.sessionsByCookie.set(session.cookieToken, session);
     return { cookieToken: session.cookieToken, path: initialPath(session.target) };
   }
 
   resolve(hostname: string, cookieToken: string | undefined) {
-    if (!cookieToken) return null;
+    if (cookieToken === undefined || cookieToken === "") return null;
     const session = this.sessionsByCookie.get(cookieToken);
-    if (!session || session.status !== "open") return null;
+    if (session === undefined || session.status !== "open") return null;
     return new URL(session.previewOrigin).hostname === hostname ? session : null;
   }
 
@@ -125,7 +132,7 @@ export class BrowserPreviewManager {
 
   private require(userId: number, sessionId: string) {
     const session = this.sessions.get(sessionId);
-    if (!session || session.userId !== userId || session.status !== "open") {
+    if (session === undefined || session.userId !== userId || session.status !== "open") {
       throw new Error("Browser preview session not found");
     }
     return session;
@@ -157,28 +164,29 @@ function normalizeTarget(value: string) {
 }
 
 function previewHostname(userId: number, hostId: number, target: URL) {
-  const secret =
-    process.env.BROWSER_PREVIEW_SECRET ||
-    process.env.CODEX_GATEWAY_CONFIG_SECRET ||
-    process.env.NUXT_SESSION_PASSWORD;
-  if (!secret) throw new Error("Browser preview secret is not configured");
+  const secret = firstNonEmptyString([
+    process.env.BROWSER_PREVIEW_SECRET,
+    process.env.CODEX_GATEWAY_CONFIG_SECRET,
+    process.env.NUXT_SESSION_PASSWORD,
+  ]);
+  if (secret === null) throw new Error("Browser preview secret is not configured");
   const digest = createHmac("sha256", secret)
     .update(`${userId}:${hostId}:${target.origin}`)
     .digest("hex")
     .slice(0, 32);
-  const domain = process.env.BROWSER_PREVIEW_DOMAIN || "cloudawn.top";
+  const domain = trimmedOrFallback(process.env.BROWSER_PREVIEW_DOMAIN, "cloudawn.top");
   return `p-${digest}.${domain}`;
 }
 
 export function isBrowserPreviewHostname(hostname: string) {
-  const domain = process.env.BROWSER_PREVIEW_DOMAIN || "cloudawn.top";
+  const domain = trimmedOrFallback(process.env.BROWSER_PREVIEW_DOMAIN, "cloudawn.top");
   return new RegExp(`^p-[0-9a-f]{32}\\.${escapeRegExp(domain)}$`, "i").test(hostname);
 }
 
 function previewOriginFor(userId: number, hostId: number, target: URL) {
-  const scheme = process.env.BROWSER_PREVIEW_SCHEME || "https";
+  const scheme = trimmedOrFallback(process.env.BROWSER_PREVIEW_SCHEME, "https");
   const port = process.env.BROWSER_PREVIEW_PUBLIC_PORT;
-  return `${scheme}://${previewHostname(userId, hostId, target)}${port ? `:${port}` : ""}`;
+  return `${scheme}://${previewHostname(userId, hostId, target)}${port === undefined || port === "" ? "" : `:${port}`}`;
 }
 
 function initialPath(target: URL) {

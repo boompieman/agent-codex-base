@@ -1,4 +1,4 @@
-import type { HostRecord } from "~~/shared/types";
+import type { HostRecord, RpcEnvelope } from "~~/shared/types";
 import { buildCurrentTimeReadResponse, isCurrentTimeReadRequest } from "~~/shared/server-requests";
 import { CodexRpcClient } from "../infra/rpc";
 import { bindGatewayUser } from "../state/memory";
@@ -8,11 +8,13 @@ import { threadRuntimeEvents } from "./thread-runtime-events";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 import { codexRuntime } from "../infra/host-services";
 import { runtimeLog } from "./runtime-log";
+import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
 
 export class HostRpcSession {
   readonly client: CodexRpcClient;
   private connected = false;
   private connectPromise: Promise<CodexRpcClient> | null = null;
+  private generation = 0;
 
   constructor(
     readonly host: HostRecord,
@@ -23,15 +25,15 @@ export class HostRpcSession {
     this.client = new CodexRpcClient(host);
     this.client.on(
       "notification",
-      bindGatewayUser((message: any) => this.routeNotification(message)),
+      bindGatewayUser((message: RpcEnvelope) => this.routeNotification(message)),
     );
     this.client.on(
       "request",
-      bindGatewayUser((message: any) => this.routeRequest(message)),
+      bindGatewayUser((message: RpcEnvelope) => this.routeRequest(message)),
     );
     this.client.on(
       "stderr",
-      bindGatewayUser((text) => this.routeStderr(text)),
+      bindGatewayUser((text: string) => this.routeStderr(text)),
     );
     this.client.on(
       "close",
@@ -46,26 +48,31 @@ export class HostRpcSession {
     if (this.connected) {
       return this.client;
     }
-    if (!this.connectPromise) {
-      this.connectPromise = this.client
+    if (this.connectPromise === null) {
+      const generation = this.generation;
+      const pending = this.client
         .connect()
         .then(() => {
+          if (generation !== this.generation) {
+            throw new Error("Host RPC session connection was superseded");
+          }
           this.connected = true;
           return this.client;
         })
         .finally(() => {
-          this.connectPromise = null;
+          if (this.connectPromise === pending) this.connectPromise = null;
         });
+      this.connectPromise = pending;
     }
     return this.connectPromise;
   }
 
-  private routeNotification(message: any) {
+  private routeNotification(message: RpcEnvelope) {
     activeMainThreadMonitor.handleNotification(
       {
         host: this.host,
         client: this.client,
-        hasController: (threadId) => Boolean(this.controllerForThread(this.host.id, threadId)),
+        hasController: (threadId) => this.controllerForThread(this.host.id, threadId) !== null,
       },
       message,
     );
@@ -73,7 +80,7 @@ export class HostRpcSession {
       void codexRuntime
         .completeDeferredUpgrade(this.host)
         .then((stopped) => {
-          if (stopped) this.client.resolveDeferredUpgrade();
+          if (stopped === true) this.client.resolveDeferredUpgrade();
         })
         .catch((error) => {
           runtimeLog("deferred Codex upgrade check failed", {
@@ -84,46 +91,47 @@ export class HostRpcSession {
         });
     }
     const threadId = threadIdFromNotification(message);
-    if (!threadId) {
+    if (threadId === null) {
       return;
     }
     const controller = this.controllerForThread(this.host.id, threadId);
-    if (controller) {
+    if (controller !== null) {
       controller.handleNotification(message);
     } else {
       threadRuntimeEvents.record(
         this.host.id,
         threadId,
-        message.method || "notification",
+        message.method ?? "notification",
         message,
-        {
-          resolveGoal: () => this.client.request("thread/goal/get", { threadId }),
-          resolveThread: () =>
-            this.client.request("thread/read", { threadId, includeTurns: false }),
-        },
+        createThreadNotificationResolvers(this.client, threadId),
       );
     }
   }
 
-  private routeRequest(message: any) {
+  private routeRequest(message: RpcEnvelope) {
     if (isCurrentTimeReadRequest(message)) {
-      this.client.respond(message.id!, buildCurrentTimeReadResponse());
+      if (message.id !== null && message.id !== undefined) {
+        this.client.respond(message.id, buildCurrentTimeReadResponse());
+      }
       return;
     }
 
     const threadId = threadIdFromNotification(message);
-    if (!threadId) {
-      threadRuntimeEvents.record(this.host.id, "gateway", message.method || "request", message);
+    if (threadId === null) {
+      threadRuntimeEvents.record(this.host.id, "gateway", message.method ?? "request", message);
       return;
     }
     const controller = this.controllerForThread(this.host.id, threadId);
-    if (controller) {
+    if (controller !== null) {
       controller.handleNotification(message);
     } else {
-      threadRuntimeEvents.record(this.host.id, threadId, message.method || "request", message, {
-        resolveGoal: () => this.client.request("thread/goal/get", { threadId }),
-        resolveThread: () => this.client.request("thread/read", { threadId, includeTurns: false }),
-      });
+      threadRuntimeEvents.record(
+        this.host.id,
+        threadId,
+        message.method ?? "request",
+        message,
+        createThreadNotificationResolvers(this.client, threadId),
+      );
     }
   }
 
@@ -134,7 +142,9 @@ export class HostRpcSession {
   }
 
   close() {
+    this.generation += 1;
     this.connected = false;
+    this.connectPromise = null;
     this.client.close();
   }
 }

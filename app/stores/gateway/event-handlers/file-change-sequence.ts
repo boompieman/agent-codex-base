@@ -1,12 +1,13 @@
+import { recordFromUnknown } from "~~/shared/utils/records";
+
 let fileChangeSequence = 0;
 
-export function tagFileChanges(changes: unknown) {
+export function tagFileChanges(changes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(changes)) {
     return [];
   }
-  return changes.map((change) =>
-    change && typeof change === "object"
-      ? { ...(change as Record<string, unknown>), sequence: ++fileChangeSequence }
-      : change,
-  );
+  return changes.flatMap((change) => {
+    const record = recordFromUnknown(change);
+    return record === null ? [] : [{ ...record, sequence: ++fileChangeSequence }];
+  });
 }

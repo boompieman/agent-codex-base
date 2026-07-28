@@ -7,7 +7,7 @@ import {
   ShieldAlertIcon,
   ShieldCheckIcon,
 } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, type Component } from "vue";
 import type { ApprovalPolicy } from "~~/shared/types";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const approvalOptions: Array<{
   value: ApprovalPolicy | "custom";
-  icon: any;
+  icon: Component;
   labelKey: string;
   shortLabelKey: string;
   descriptionKey: string;

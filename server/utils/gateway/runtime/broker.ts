@@ -29,7 +29,7 @@ class ThreadBroker {
 
   async startThread(host: HostRecord, params: Record<string, unknown>, projectId: number | null) {
     const client = await this.registry.getHostClient(host);
-    const result = await client.request<any>("thread/start", params);
+    const result = await client.request("thread/start", params);
     const started = this.openService.startedThreadResult(host, projectId, result, params.cwd);
     const controller = await this.registry.attachStartedThread(host, started.threadId, client);
     controller.setOpenSnapshot(started.snapshot);
@@ -125,6 +125,10 @@ class ThreadBroker {
     if (!controller.isSubscribed()) {
       await controller.ensureSubscribed();
     }
+  }
+
+  retainUpstreamSubscription(host: HostRecord, threadId: string) {
+    return this.registry.retainSubscription(host, threadId);
   }
 
   close(hostId: number, threadId: string) {

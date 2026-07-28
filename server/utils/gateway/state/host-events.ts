@@ -22,7 +22,7 @@ class HostLifecycleBus {
 
   emit(event: Omit<HostLifecycleEvent, "createdAt">) {
     const userId = currentGatewayUserId();
-    if (!userId) {
+    if (userId === null) {
       return;
     }
     const payload = {
@@ -36,18 +36,18 @@ class HostLifecycleBus {
 
   subscribe(subscriber: HostLifecycleSubscriber) {
     const userId = currentGatewayUserId();
-    if (!userId) {
+    if (userId === null) {
       throw new Error("Host lifecycle subscription requires an authenticated user scope");
     }
     let subscribers = this.subscribers.get(userId);
-    if (!subscribers) {
+    if (subscribers === undefined) {
       subscribers = new Set();
       this.subscribers.set(userId, subscribers);
     }
     subscribers.add(subscriber);
     return () => {
       subscribers.delete(subscriber);
-      if (!subscribers.size) {
+      if (subscribers.size === 0) {
         this.subscribers.delete(userId);
       }
     };

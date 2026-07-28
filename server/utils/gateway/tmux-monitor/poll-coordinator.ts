@@ -12,7 +12,7 @@ export class TmuxMonitorPollCoordinator {
     if (this.running) return { skipped: true, checkedHosts: 0 };
     this.running = true;
     try {
-      const groups = tmuxMonitorService.repository.activeGroups();
+      const groups = tmuxMonitorService.activePollGroups();
       const limit = pLimit(HOST_POLL_CONCURRENCY);
       await Promise.all(
         groups.map((group) =>
@@ -22,7 +22,7 @@ export class TmuxMonitorPollCoordinator {
                 .loadConfig(group.userId)
                 .hosts.find((candidate) => candidate.id === group.hostId);
               if (!host) {
-                tmuxMonitorService.repository.deleteHost(group.userId, group.hostId);
+                tmuxMonitorService.removeHost(group.userId, group.hostId);
                 return;
               }
               await tmuxMonitorService

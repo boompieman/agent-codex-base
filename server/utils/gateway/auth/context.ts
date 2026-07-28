@@ -1,11 +1,12 @@
 import { createError, getHeader, type H3Event } from "h3";
 import type { AuthenticatedUser } from "./users";
 import { userStore } from "./users";
+import { trimmedOrFallback } from "~~/shared/utils/strings";
 
 export function tokenFromEvent(event: H3Event) {
-  const authorization = getHeader(event, "authorization") || "";
+  const authorization = trimmedOrFallback(getHeader(event, "authorization"), "");
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (match?.[1]) {
+  if (match?.[1] !== undefined) {
     return match[1].trim();
   }
   return "";
@@ -14,7 +15,7 @@ export function tokenFromEvent(event: H3Event) {
 export function authenticateEvent(event: H3Event) {
   const token = tokenFromEvent(event);
   const user = userStore.authenticateToken(token);
-  if (!user) {
+  if (user === null) {
     throw createError({
       statusCode: 401,
       statusMessage: "Unauthorized",
@@ -27,11 +28,11 @@ export function authenticateEvent(event: H3Event) {
 
 export function optionalAuthenticatedUser(event: H3Event) {
   const token = tokenFromEvent(event);
-  if (!token) {
+  if (token === "") {
     return null;
   }
   const user = userStore.authenticateToken(token);
-  if (user) {
+  if (user !== null) {
     event.context.auth = { user, token };
   }
   return user;

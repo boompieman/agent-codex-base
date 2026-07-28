@@ -64,7 +64,7 @@ export interface RpcEnvelope {
 }
 
 export function rpcEnvelopeCreatedAt(payload: unknown, fallback = new Date()): string {
-  const emittedAtMs = (payload as RpcEnvelope | null)?.emittedAtMs;
+  const emittedAtMs = recordFromUnknown(payload)?.emittedAtMs;
   if (typeof emittedAtMs !== "number" || !Number.isFinite(emittedAtMs)) {
     return fallback.toISOString();
   }
@@ -80,3 +80,4 @@ export interface GatewayEvent {
   payload: RpcEnvelope;
   createdAt: string;
 }
+import { recordFromUnknown } from "../utils/records";

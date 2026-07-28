@@ -179,7 +179,7 @@ export class SshConnectionPool {
   disconnect(hostId: number) {
     const scopedHostKeys = this.scopedHostKeys();
     const key = scopedHostKeys.get(hostId);
-    if (key) {
+    if (key !== undefined) {
       scopedHostKeys.delete(hostId);
       if (!this.isReferenced(key)) {
         this.disconnectKey(key);
@@ -262,11 +262,14 @@ export class SshConnectionPool {
           port: sock ? undefined : (host.port ?? resolved.port),
           agent: host.authMode === "agent" ? process.env.SSH_AUTH_SOCK : undefined,
           password: host.authMode === "password" ? (host.password ?? undefined) : undefined,
-          privateKey: host.privateKey
-            ? Buffer.from(host.privateKey)
-            : resolved.privateKeyPath
-              ? readFileSync(expandHome(resolved.privateKeyPath))
-              : undefined,
+          privateKey:
+            host.privateKey !== null && host.privateKey !== undefined && host.privateKey !== ""
+              ? Buffer.from(host.privateKey)
+              : resolved.privateKeyPath !== null &&
+                  resolved.privateKeyPath !== undefined &&
+                  resolved.privateKeyPath !== ""
+                ? readFileSync(expandHome(resolved.privateKeyPath))
+                : undefined,
           readyTimeout: SSH_READY_TIMEOUT_MS,
           keepaliveInterval: SSH_KEEPALIVE_INTERVAL_MS,
           keepaliveCountMax: SSH_KEEPALIVE_COUNT_MAX,

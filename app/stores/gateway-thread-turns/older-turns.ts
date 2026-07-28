@@ -1,7 +1,7 @@
 import { OLDER_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import { mergeThreadTurns } from "~~/shared/thread-history/turns";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { cacheSelectedThreadView } from "@/stores/gateway/thread-open/view-state";
@@ -11,13 +11,13 @@ import { requestThreadTurnsPage } from "./transport";
 import type { Translate } from "./types";
 
 export async function loadOlderTurns(t: Translate, options: { limit?: number } = {}) {
-  const gateway = useGatewayStore();
+  const gateway = useGatewayBootstrapStore();
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   if (
-    !navigation.selectedHostId ||
-    !navigation.selectedThreadId ||
-    !views.olderTurnsCursor ||
+    navigation.selectedHostId === null ||
+    navigation.selectedThreadId === null ||
+    views.olderTurnsCursor === null ||
     views.loadingOlderTurns
   ) {
     return;

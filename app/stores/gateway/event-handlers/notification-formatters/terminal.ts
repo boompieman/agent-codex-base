@@ -1,6 +1,8 @@
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "../../thread-utils/identity";
+import type { ThreadHistoryState } from "~~/shared/types";
+import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import {
   simpleNotification,
   text,
@@ -9,10 +11,11 @@ import {
   type NotificationFormatContext,
   type TranslationFunction,
 } from "./common";
+import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 export function terminalInteractionNotification(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   context?: NotificationFormatContext,
 ): FormattedNotification {
   const stdin = text(params.stdin);
@@ -31,7 +34,7 @@ export function terminalInteractionNotification(
 
 function commandForTerminalInteraction(
   t: TranslationFunction,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   context?: NotificationFormatContext,
 ) {
   const navigation = useGatewayNavigationStore();
@@ -39,7 +42,7 @@ function commandForTerminalInteraction(
   const processId = text(params.processId);
   const lookup = context ?? {
     hostId: navigation.selectedHostId ?? 0,
-    threadId: text(params.threadId) || navigation.selectedThreadId || "",
+    threadId: firstNonEmptyString([text(params.threadId), navigation.selectedThreadId]) ?? "",
   };
   const histories = [
     lookup.hostId === navigation.selectedHostId && lookup.threadId === navigation.selectedThreadId
@@ -47,21 +50,24 @@ function commandForTerminalInteraction(
       : null,
     views.threadViews[pinnedKey(lookup.hostId, lookup.threadId)]?.history,
   ];
-  let command: unknown;
+  let command = "";
   for (const history of histories) {
-    command = findCommandItemInHistory(history, text(params.itemId), processId)?.command;
-    if (command) break;
+    command = text(findCommandItemInHistory(history, text(params.itemId), processId)?.command);
+    if (command !== "") break;
   }
   return truncate(
-    text(command) || t("app.notifications.terminalProcessFallback", { processId }),
+    command === "" ? t("app.notifications.terminalProcessFallback", { processId }) : command,
     140,
   );
 }
 
-function findCommandItemInHistory(history: unknown, itemId: string, processId: string) {
-  const turns = (history as any)?.thread?.turns ?? (history as any)?.turns ?? [];
-  for (const turn of Array.isArray(turns) ? turns : []) {
-    for (const item of Array.isArray(turn?.items) ? turn.items : []) {
+function findCommandItemInHistory(
+  history: ThreadHistoryState | null | undefined,
+  itemId: string,
+  processId: string,
+) {
+  for (const turn of threadTurnsFromHistory(history ?? null)) {
+    for (const item of turn.items ?? []) {
       if (
         item?.type === "commandExecution" &&
         ((itemId && String(item.id) === itemId) ||

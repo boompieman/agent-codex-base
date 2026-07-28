@@ -91,7 +91,7 @@ export class CodexUpgrader {
   private async installOnce(host: HostWithSecret, version: string, artifacts: CodexArtifactBundle) {
     const stagePath = await this.createRemoteStage(host);
     try {
-      if (artifacts.nodeArchive) {
+      if (artifacts.nodeArchive !== null) {
         await this.ssh.uploadFileResumable(
           host,
           artifacts.nodeArchive.localPath,
@@ -165,8 +165,8 @@ export class CodexUpgrader {
       let totalTimer: NodeJS.Timeout | null = null;
 
       const cleanup = () => {
-        if (idleTimer) clearTimeout(idleTimer);
-        if (totalTimer) clearTimeout(totalTimer);
+        if (idleTimer !== null) clearTimeout(idleTimer);
+        if (totalTimer !== null) clearTimeout(totalTimer);
       };
       const settle = (callback: () => void) => {
         if (settled) return;
@@ -175,7 +175,7 @@ export class CodexUpgrader {
         callback();
       };
       const resetIdleTimer = () => {
-        if (idleTimer) clearTimeout(idleTimer);
+        if (idleTimer !== null) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           this.ssh.disconnectHost(host);
           channel.close();
@@ -265,9 +265,10 @@ function upgradeExitSummary(result: UpgradeCommandResult) {
   if (result.closedBeforeExitStatus) {
     return "Failed to install remote Codex: SSH channel closed before remote exit status";
   }
-  const signal = result.exitSignal ? `, signal ${result.exitSignal}` : "";
-  const coreDumped = result.exitCoreDumped ? ", core dumped" : "";
-  const description = result.exitDescription ? `, description: ${result.exitDescription}` : "";
+  const signal = result.exitSignal !== null ? `, signal ${result.exitSignal}` : "";
+  const coreDumped = result.exitCoreDumped === true ? ", core dumped" : "";
+  const description =
+    result.exitDescription !== null ? `, description: ${result.exitDescription}` : "";
   return `Failed to install remote Codex (exit ${result.code ?? "null"}${signal}${coreDumped}${description})`;
 }
 

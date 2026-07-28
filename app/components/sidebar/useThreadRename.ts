@@ -1,13 +1,13 @@
 import { storeToRefs } from "pinia";
 import { computed, nextTick, ref } from "vue";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
+import type { SidebarThreadRow } from "./sidebar-types";
 
 export function useThreadRename() {
-  const store = useGatewayStore();
   const navigation = useGatewayNavigationStore();
-  const { pinnedThreads } = storeToRefs(store);
+  const pinnedThreads = useGatewayPinnedThreads();
   const { threads } = storeToRefs(navigation);
   const renameTarget = ref<{ hostId: number; threadId: string } | null>(null);
   const renameValue = ref("");
@@ -22,9 +22,16 @@ export function useThreadRename() {
     },
   };
 
-  function startInlineRename(thread: any) {
-    const hostId = Number(thread.hostId);
-    const threadId = String(thread.threadId || thread.id || "");
+  function startInlineRename(thread: SidebarThreadRow) {
+    const hostId = "hostId" in thread ? Number(thread.hostId) : Number(navigation.selectedHostId);
+    const threadIdValue =
+      "threadId" in thread &&
+      (typeof thread.threadId === "string" || typeof thread.threadId === "number")
+        ? thread.threadId
+        : "id" in thread
+          ? thread.id
+          : null;
+    const threadId = threadIdValue === null ? "" : String(threadIdValue);
     if (!hostId || !threadId) return;
     renameTarget.value = { hostId, threadId };
     renameValue.value = titleForThread(thread);

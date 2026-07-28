@@ -1,18 +1,21 @@
 import { paramsTurnId } from "./item-identity";
+import { ensureHistoryThread } from "./shape";
 import { updateItemInTurnById } from "./turn-item-mutations";
-import type { ThreadHistoryItem } from "./types";
+import type { AppServerThread } from "../types/thread";
+import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
+import { stringFromUnknown } from "../utils/records";
 
 export function appendAgentDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
-) {
+): ThreadHistoryState {
   const itemIdValue = stringParam(params, "itemId");
   const turnIdValue = paramsTurnId(params);
   const delta = typeof params.delta === "string" ? params.delta : "";
   if (!itemIdValue || !turnIdValue || !delta) {
-    return history;
+    return ensureHistoryThread(history, currentThread, threadId);
   }
 
   return updateItemInTurnById(
@@ -34,11 +37,11 @@ export function appendAgentDelta(
 }
 
 export function appendPlanDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
-) {
+): ThreadHistoryState {
   return appendTextDelta(history, currentThread, threadId, params, "plan", (item, delta) => ({
     ...item,
     text: `${stringItemField(item, "text")}${delta}`,
@@ -46,46 +49,46 @@ export function appendPlanDelta(
 }
 
 export function appendReasoningSummaryDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
-) {
+): ThreadHistoryState {
   return appendTextDelta(history, currentThread, threadId, params, "reasoning", (item, delta) => {
     const summary = Array.isArray(item.summary) ? [...item.summary] : [];
     const index = typeof params.summaryIndex === "number" ? params.summaryIndex : summary.length;
-    summary[index] = `${summary[index] || ""}${delta}`;
+    summary[index] = `${stringFromUnknown(summary[index]) ?? ""}${delta}`;
     return { ...item, summary };
   });
 }
 
 export function appendReasoningTextDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
-) {
+): ThreadHistoryState {
   return appendTextDelta(history, currentThread, threadId, params, "reasoning", (item, delta) => {
     const content = Array.isArray(item.content) ? [...item.content] : [];
     const index = typeof params.contentIndex === "number" ? params.contentIndex : content.length;
-    content[index] = `${content[index] || ""}${delta}`;
+    content[index] = `${stringFromUnknown(content[index]) ?? ""}${delta}`;
     return { ...item, content };
   });
 }
 
 function appendTextDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
   itemType: string,
   update: (item: ThreadHistoryItem, delta: string) => ThreadHistoryItem,
-) {
+): ThreadHistoryState {
   const itemIdValue = stringParam(params, "itemId");
   const turnIdValue = paramsTurnId(params);
   const delta = typeof params.delta === "string" ? params.delta : "";
   if (!itemIdValue || !turnIdValue || !delta) {
-    return history;
+    return ensureHistoryThread(history, currentThread, threadId);
   }
 
   return updateItemInTurnById(
@@ -101,16 +104,16 @@ function appendTextDelta(
 }
 
 export function appendCommandOutputDelta(
-  history: unknown,
-  currentThread: unknown,
+  history: ThreadHistoryState | null,
+  currentThread: AppServerThread | null,
   threadId: string,
   params: Record<string, unknown>,
-) {
+): ThreadHistoryState {
   const itemIdValue = stringParam(params, "itemId");
   const turnIdValue = paramsTurnId(params);
   const delta = typeof params.delta === "string" ? params.delta : "";
   if (!itemIdValue || !turnIdValue || !delta) {
-    return history;
+    return ensureHistoryThread(history, currentThread, threadId);
   }
 
   return updateItemInTurnById(

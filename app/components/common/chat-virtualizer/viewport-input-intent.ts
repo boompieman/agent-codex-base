@@ -1,6 +1,9 @@
+import { useEventListener, type Fn } from "@vueuse/core";
+
 type ViewportInputIntentOptions = {
   getViewport: () => HTMLElement | null;
   onKeydown: (event: KeyboardEvent) => void;
+  onPointerDown: (event: PointerEvent) => void;
   onScroll: (event: Event) => void;
   onTouchMove: (event: TouchEvent) => void;
   onTouchStart: (event: TouchEvent) => void;
@@ -10,6 +13,7 @@ type ViewportInputIntentOptions = {
 
 export function createViewportInputIntent(options: ViewportInputIntentOptions) {
   let boundViewport: HTMLElement | null = null;
+  let stopListeners: Fn[] = [];
 
   function bind() {
     const viewport = options.getViewport();
@@ -22,22 +26,22 @@ export function createViewportInputIntent(options: ViewportInputIntentOptions) {
       viewport.tabIndex = 0;
     }
     options.onBound?.(viewport);
-    viewport.addEventListener("scroll", options.onScroll, { passive: true });
-    viewport.addEventListener("wheel", options.onWheel, { passive: true });
-    viewport.addEventListener("touchstart", options.onTouchStart, { passive: true });
-    viewport.addEventListener("touchmove", options.onTouchMove, { passive: true });
-    viewport.addEventListener("keydown", options.onKeydown);
+    stopListeners = [
+      useEventListener(viewport, "scroll", options.onScroll, { passive: true }),
+      useEventListener(viewport, "wheel", options.onWheel, { passive: true }),
+      useEventListener(viewport, "touchstart", options.onTouchStart, { passive: true }),
+      useEventListener(viewport, "touchmove", options.onTouchMove, { passive: true }),
+      useEventListener(viewport, "keydown", options.onKeydown),
+      useEventListener(viewport, "pointerdown", options.onPointerDown, { passive: true }),
+    ];
   }
 
   function unbind() {
     if (!boundViewport) {
       return;
     }
-    boundViewport.removeEventListener("scroll", options.onScroll);
-    boundViewport.removeEventListener("wheel", options.onWheel);
-    boundViewport.removeEventListener("touchstart", options.onTouchStart);
-    boundViewport.removeEventListener("touchmove", options.onTouchMove);
-    boundViewport.removeEventListener("keydown", options.onKeydown);
+    stopListeners.forEach((stop) => stop());
+    stopListeners = [];
     boundViewport = null;
   }
 

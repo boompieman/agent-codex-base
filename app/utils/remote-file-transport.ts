@@ -1,6 +1,18 @@
 import type { RemoteDirectoryResult, RemoteFileWriteResult } from "~~/shared/types";
 import { useAuthStore } from "@/stores/auth";
 import { gatewayApi } from "@/utils/gateway-api";
+import { z } from "zod";
+
+const remoteFileWriteResultSchema = z.object({
+  etag: z.string(),
+  lastModified: z.string(),
+  size: z.number(),
+});
+
+const remoteFileErrorSchema = z.object({
+  message: z.string().optional(),
+  statusMessage: z.string().optional(),
+});
 
 export type RemoteFileResponse =
   | { changed: false }
@@ -28,7 +40,7 @@ export function deleteRemoteFile(hostId: number, path: string) {
 
 export async function downloadRemoteFile(hostId: number, path: string) {
   const response = await fetchRemoteFile(hostId, path, null);
-  if (!response.changed) {
+  if (response.changed === false) {
     throw new Error("Remote file download returned no content");
   }
   return response.blob;
@@ -38,14 +50,16 @@ export async function fetchRemoteFile(
   hostId: number,
   path: string,
   etag: string | null,
+  signal?: AbortSignal,
 ): Promise<RemoteFileResponse> {
   const headers = authorizationHeaders();
-  if (etag) {
+  if (etag !== null) {
     headers.set("if-none-match", etag);
   }
   const query = new URLSearchParams({ hostId: String(hostId), path });
   const response = await fetch(`/api/remote/files?${query.toString()}`, {
     headers,
+    signal,
     // ETag validation is explicit; the browser cache must not issue a second unauthenticated fetch.
     cache: "no-store",
   });
@@ -58,7 +72,7 @@ export async function fetchRemoteFile(
   return {
     changed: true,
     blob: await response.blob(),
-    contentType: response.headers.get("content-type") || "",
+    contentType: response.headers.get("content-type") ?? "",
     previewKind: responsePreviewKind(response),
     etag: response.headers.get("etag"),
     lastModified: response.headers.get("last-modified"),
@@ -81,7 +95,7 @@ export async function writeRemoteTextFile(
 ) {
   const headers = authorizationHeaders();
   headers.set("content-type", "text/plain; charset=utf-8");
-  if (etag) headers.set("if-match", etag);
+  if (etag !== null) headers.set("if-match", etag);
   if (force) headers.set("x-codex-force-overwrite", "true");
   const query = new URLSearchParams({ hostId: String(hostId), path });
   const response = await fetch(`/api/remote/files?${query.toString()}`, {
@@ -91,7 +105,7 @@ export async function writeRemoteTextFile(
   });
   if (response.status === 409) throw new RemoteFileConflictError();
   if (!response.ok) throw new Error(await responseErrorMessage(response));
-  return (await response.json()) as RemoteFileWriteResult;
+  return remoteFileWriteResultSchema.parse(await response.json()) satisfies RemoteFileWriteResult;
 }
 
 function responsePreviewKind(response: Response): "text" | "binary" | "document" {
@@ -105,7 +119,7 @@ function responsePreviewKind(response: Response): "text" | "binary" | "document"
 function authorizationHeaders() {
   const auth = useAuthStore();
   auth.hydrate();
-  if (!auth.token) {
+  if (auth.token === null || auth.token === "") {
     throw new Error("Authentication is required to read remote files");
   }
   const headers = new Headers();
@@ -115,14 +129,15 @@ function authorizationHeaders() {
 
 async function responseErrorMessage(response: Response) {
   const text = await response.text().catch(() => "");
-  if (text) {
+  if (text !== "") {
     try {
-      const body = JSON.parse(text) as { message?: unknown; statusMessage?: unknown };
+      const body = remoteFileErrorSchema.parse(JSON.parse(text));
       const message = body.message ?? body.statusMessage;
-      if (typeof message === "string") return message;
+      if (message !== undefined) return message;
     } catch {
       return text;
     }
   }
-  return text || response.statusText || `HTTP ${response.status}`;
+  if (text !== "") return text;
+  return response.statusText !== "" ? response.statusText : `HTTP ${response.status}`;
 }

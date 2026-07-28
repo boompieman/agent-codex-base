@@ -1,16 +1,19 @@
-import type { ThreadTimelineTurn } from "@/components/thread/timeline-rows";
+import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
+import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
+import type { AppServerThread, ThreadHistoryState, ThreadTimelineTurn } from "~~/shared/types";
 
 export function subAgentOwnedTurns(
-  thread: Record<string, unknown> | null,
-  history: unknown,
+  thread: AppServerThread | null,
+  history: ThreadHistoryState | null,
 ): ThreadTimelineTurn[] {
-  const turns = ((history as any)?.thread?.turns ??
-    (history as any)?.turns ??
-    []) as ThreadTimelineTurn[];
+  const turns = threadTurnsFromHistory(history).flatMap((turn) => {
+    const timelineTurn = asThreadTimelineTurn(turn);
+    return timelineTurn ? [timelineTurn] : [];
+  });
   const threadCreatedAt = timestampMs(thread?.createdAt);
   if (threadCreatedAt === null) return turns;
   return turns.filter((turn) => {
-    const startedAt = timestampMs((turn as any).startedAt);
+    const startedAt = timestampMs(turn.startedAt);
     // Forked app-server histories include the parent's pre-fork turns. Official
     // Thread.createdAt is the fork boundary; untimestamped turns are retained
     // because the active turn may be emitted before startedAt is populated.

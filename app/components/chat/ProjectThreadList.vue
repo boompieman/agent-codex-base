@@ -17,18 +17,21 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
-import { useGatewayStore } from "@/stores/gateway";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
+import type { AppServerThread } from "~~/shared/types";
 
-const store = useGatewayStore();
+const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
 const threadView = useGatewayThreadViewStore();
 const { t } = useI18n();
-const { selectedProject } = storeToRefs(store);
+const { projects } = storeToRefs(catalog);
 const { selectedHostId, selectedProjectId, selectedThreadId, threads } = storeToRefs(navigation);
 const { currentThread, loading } = storeToRefs(threadView);
+const selectedProject = computed(() => projectById(projects.value, selectedProjectId.value));
 const { longPressTriggered, longPressContextMenuHandlers } = useLongPressContextMenu();
 
 const sortedThreads = computed(() => {
@@ -37,7 +40,7 @@ const sortedThreads = computed(() => {
   );
 });
 
-function titleFor(thread: any) {
+function titleFor(thread: AppServerThread) {
   if (String(thread.id) === String(selectedThreadId.value) && currentThread.value) {
     return titleForThread({ ...thread, ...(currentThread.value as Record<string, unknown>) });
   }

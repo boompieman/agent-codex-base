@@ -18,7 +18,7 @@ export const hostBaseSchema = z
   .strict();
 
 export function validateHostProxy(host: z.infer<typeof hostBaseSchema>, ctx: z.RefinementCtx) {
-  if (!host.proxyUrl) {
+  if (host.proxyUrl === null || host.proxyUrl === undefined || host.proxyUrl === "") {
     return;
   }
   try {
@@ -26,7 +26,7 @@ export function validateHostProxy(host: z.infer<typeof hostBaseSchema>, ctx: z.R
     if (url.protocol !== "socks5:" && url.protocol !== "socks5h:") {
       throw new Error("Unsupported proxy protocol");
     }
-    if (!url.hostname || !url.port) {
+    if (url.hostname === "" || url.port === "") {
       throw new Error("Proxy host and port are required");
     }
   } catch {

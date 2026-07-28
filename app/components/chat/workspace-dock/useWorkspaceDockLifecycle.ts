@@ -203,7 +203,7 @@ export function useWorkspaceDockLifecycle(options: {
 }
 
 function dockedLayout(layout: SerializedDockview): SerializedDockview {
-  if (!layout.popoutGroups?.length) return layout;
+  if (layout.popoutGroups === undefined || layout.popoutGroups.length === 0) return layout;
   const { popoutGroups: _runtimeWindows, ...docked } = layout;
   return docked;
 }

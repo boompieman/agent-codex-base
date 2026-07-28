@@ -1,8 +1,8 @@
 import type { HostRecord } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
-import type { TurnsPage } from "./types";
 import { DEFAULT_TURN_PAGE_LIMIT } from "./types";
+import { parseTurnsPage } from "~~/shared/runtime/app-server";
 
 export interface ThreadTurnsListInput {
   cursor?: string | null;
@@ -15,13 +15,18 @@ export class ThreadHistoryReader {
 
   async listThreadTurns(host: HostRecord, threadId: string, input: ThreadTurnsListInput) {
     const client = await this.registry.getHostClient(host);
-    const page = await client.request<TurnsPage>("thread/turns/list", {
-      threadId,
-      cursor: input.cursor ?? null,
-      limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
-      sortDirection: input.sortDirection ?? "desc",
-      itemsView: "full",
-    });
+    const page = await client.request(
+      "thread/turns/list",
+      {
+        threadId,
+        cursor: input.cursor ?? null,
+        limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
+        sortDirection: input.sortDirection ?? "desc",
+        itemsView: "full",
+      },
+      120_000,
+      parseTurnsPage,
+    );
 
     return {
       history: pageToFullHistory({ id: threadId }, page),

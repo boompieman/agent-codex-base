@@ -19,8 +19,9 @@ export async function subscribeThread(
   message: Extract<RealtimeClientMessage, { type: "thread.subscribe" }>,
 ) {
   const hostId = Number(message.hostId);
-  const threadId = String(message.threadId || "");
-  if (!Number.isInteger(hostId) || hostId <= 0 || !threadId) {
+  const threadId =
+    message.threadId === null || message.threadId === undefined ? "" : String(message.threadId);
+  if (!Number.isInteger(hostId) || hostId <= 0 || threadId === "") {
     throw new Error("Invalid thread subscription");
   }
 
@@ -29,7 +30,7 @@ export async function subscribeThread(
   state.threadUnsubscribers.get(key)?.();
 
   const host = requireRecord(hostStore.getWithSecret(hostId), "Host not found");
-  const afterId = Number(message.afterId || 0);
+  const afterId = Number(message.afterId ?? 0);
   subscribeThreadEvents(peer, host, threadId, afterId);
 }
 
@@ -67,10 +68,10 @@ export async function startThread(
   const result = await threadBroker.startThread(
     host,
     {
-      cwd: input.cwd || undefined,
-      model: input.model || undefined,
-      effort: input.effort || undefined,
-      approvalPolicy: input.approvalPolicy || undefined,
+      cwd: input.cwd === "" ? undefined : input.cwd,
+      model: input.model === "" ? undefined : input.model,
+      effort: input.effort === "" ? undefined : input.effort,
+      approvalPolicy: input.approvalPolicy ?? undefined,
     },
     input.projectId ?? null,
   );
@@ -92,8 +93,9 @@ export function unsubscribeThread(
   message: Extract<RealtimeClientMessage, { type: "thread.unsubscribe" }>,
 ) {
   const hostId = Number(message.hostId);
-  const threadId = String(message.threadId || "");
-  if (!Number.isInteger(hostId) || hostId <= 0 || !threadId) {
+  const threadId =
+    message.threadId === null || message.threadId === undefined ? "" : String(message.threadId);
+  if (!Number.isInteger(hostId) || hostId <= 0 || threadId === "") {
     return;
   }
   const state = stateFor(peer);
@@ -112,12 +114,13 @@ function subscribeThreadEvents(
   const state = stateFor(peer);
   const key = threadTopicKey(hostId, threadId);
   state.threadUnsubscribers.get(key)?.();
-  const sentEventIds = new Set<number>();
+  let sentThroughId = afterId;
   const sendOnce = (event: GatewayEvent) => {
-    if (event.id <= afterId || sentEventIds.has(event.id)) {
-      return;
-    }
-    sentEventIds.add(event.id);
+    if (event.id <= sentThroughId) return;
+    // Gateway event ids are monotonic within a user's in-memory event store. A high-water cursor
+    // provides the same replay/live de-duplication as an ever-growing Set without retaining one
+    // allocation for every token emitted during a long-running turn.
+    sentThroughId = event.id;
     sendRealtimePeerMessage(peer, { type: "thread.event", event });
   };
 
@@ -134,21 +137,43 @@ function subscribeThreadEvents(
       sendOnce(event);
     }),
   );
-  state.threadUnsubscribers.set(key, unsubscribe);
+  const upstreamLease = threadBroker.retainUpstreamSubscription(host, threadId);
+  state.threadUnsubscribers.set(key, () => {
+    unsubscribe();
+    upstreamLease.release();
+  });
+
+  const replayGap = gatewayEventStore.hasReplayGap(hostId, threadId, afterId);
+  if (replayGap) {
+    // A bounded event cache cannot reconstruct a cursor older than its pruned prefix. Explicitly
+    // request one authoritative snapshot instead of applying a plausible-looking partial replay.
+    sendRealtimePeerMessage(peer, {
+      type: "thread.events.gap",
+      hostId,
+      threadId,
+      afterId,
+      lastEventId: gatewayEventStore.latestId(hostId, threadId),
+    });
+  }
 
   void runPeerScoped(peer, () =>
-    threadBroker.ensureUpstreamSubscribed(host, threadId).catch((error: any) => {
+    upstreamLease.ready.catch((error: unknown) => {
       threadRuntimeEvents.record(hostId, threadId, "gateway/error", {
         method: "gateway/error",
         params: {
-          message: error?.message || "Failed to subscribe thread upstream",
+          message: error instanceof Error ? error.message : "Failed to subscribe thread upstream",
         },
       });
     }),
   );
 
-  for (const event of gatewayEventStore.list(hostId, threadId, afterId, 200)) {
-    sendOnce(event);
+  // Each thread cache is bounded to 500 events. Replay the complete retained window rather than
+  // silently stopping at an arbitrary first 200; selected views refresh their authoritative
+  // snapshot on reconnect and cached views refresh when activated if an older gap was pruned.
+  if (!replayGap) {
+    for (const event of gatewayEventStore.list(hostId, threadId, afterId, 500)) {
+      sendOnce(event);
+    }
   }
   replaying = false;
   for (const event of liveQueue) {

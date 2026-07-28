@@ -18,7 +18,12 @@ const dedicatedDocumentExtensions: ReadonlySet<string> = new Set([
 ]);
 
 export function extensionFromPath(path: string) {
-  return path.split("?")[0]?.split("#")[0]?.split(".").pop()?.toLowerCase() || "";
+  const queryIndex = path.indexOf("?");
+  const pathWithoutQuery = queryIndex >= 0 ? path.slice(0, queryIndex) : path;
+  const hashIndex = pathWithoutQuery.indexOf("#");
+  const pathWithoutFragment =
+    hashIndex >= 0 ? pathWithoutQuery.slice(0, hashIndex) : pathWithoutQuery;
+  return pathWithoutFragment.split(".").pop()?.toLowerCase() ?? "";
 }
 
 export function isDedicatedDocumentPreviewPath(path: string) {
@@ -28,7 +33,7 @@ export function isDedicatedDocumentPreviewPath(path: string) {
 export function isMarkdownPreviewPath(path: string, contentType = "") {
   const extension = extensionFromPath(path);
   return (
-    markdownExtensions.includes(extension as (typeof markdownExtensions)[number]) ||
+    markdownExtensions.some((markdownExtension) => markdownExtension === extension) ||
     contentType.includes("markdown")
   );
 }

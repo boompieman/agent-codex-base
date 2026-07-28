@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
 import { authenticatedFetch, openApp } from "./helpers/app";
 
 test("requires bearer auth for protected HTTP APIs", async ({ page }) => {
@@ -8,15 +9,15 @@ test("requires bearer auth for protected HTTP APIs", async ({ page }) => {
     return {
       ok: response.ok,
       status: response.status,
-      body: await response.json().catch(() => null),
+      body: await response.text().catch(() => ""),
     };
   });
   expect(unauthorized.ok).toBe(false);
   expect(unauthorized.status).toBe(401);
 
-  const config = await authenticatedFetch<{ version: number }>(page, {
-    url: "/api/config/export",
-  });
+  const config = await authenticatedFetch(page, { url: "/api/config/export" }, (value) =>
+    z.object({ version: z.number().int() }).loose().parse(value),
+  );
   expect(config.version).toBe(1);
 });
 
@@ -109,7 +110,21 @@ test("Bark notification settings are saved to server config", async ({ page }) =
   await page.getByRole("button", { name: "保存通知设置" }).click();
   await expect(page.getByText("通知设置已保存")).toBeVisible();
 
-  const config = await authenticatedFetch<any>(page, { url: "/api/config/export" });
+  const config = await authenticatedFetch(page, { url: "/api/config/export" }, (value) =>
+    z
+      .object({
+        notifications: z.object({
+          bark: z.object({
+            enabled: z.boolean(),
+            serverUrl: z.string(),
+            deviceKey: z.string(),
+            group: z.string(),
+          }),
+        }),
+      })
+      .loose()
+      .parse(value),
+  );
   expect(config.notifications).toEqual({
     bark: {
       enabled: true,
