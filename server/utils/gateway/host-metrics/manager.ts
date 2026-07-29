@@ -1,0 +1,114 @@
+import type {
+  HostMetricsCollectorStatus,
+  HostMetricsSample,
+  HostMetricsSnapshot,
+  HostRecord,
+} from "~~/shared/types";
+import type { SshConnectionPool } from "../infra/ssh/ssh-connection";
+import { HostMetricsCollector } from "./collector";
+import { HostMetricsEventBus } from "./events";
+
+const MAX_SAMPLES = 300;
+
+interface HostMetricsRuntime {
+  collector: HostMetricsCollector;
+  host: HostRecord;
+  status: HostMetricsCollectorStatus;
+  message: string | null;
+  samples: HostMetricsSample[];
+}
+
+export class HostMetricsManager {
+  readonly events = new HostMetricsEventBus();
+  private runtimes = new Map<string, HostMetricsRuntime>();
+
+  constructor(private readonly ssh: SshConnectionPool) {
+    ssh.on("ready", ({ userId, host }) => this.ensureCollector(userId, host));
+  }
+
+  snapshot(userId: number, hostId: number): HostMetricsSnapshot {
+    const runtime = this.runtimes.get(runtimeKey(userId, hostId));
+    return {
+      hostId,
+      status: runtime?.status ?? "waiting",
+      message: runtime?.message ?? null,
+      samples: runtime?.samples.slice() ?? [],
+    };
+  }
+
+  removeHost(userId: number, hostId: number) {
+    const key = runtimeKey(userId, hostId);
+    this.runtimes.get(key)?.collector.stop();
+    this.runtimes.delete(key);
+  }
+
+  private ensureCollector(userId: number, host: HostRecord) {
+    const key = runtimeKey(userId, host.id);
+    const existing = this.runtimes.get(key);
+    if (existing !== undefined) {
+      if (sameRemoteIdentity(existing.host, host)) existing.collector.start();
+      else {
+        this.removeHost(userId, host.id);
+        this.ensureCollector(userId, host);
+      }
+      return;
+    }
+
+    const collector = new HostMetricsCollector(this.ssh, host, {
+      sample: (sample) => this.acceptSample(userId, host.id, sample),
+      disconnected: (message) => this.setStatus(userId, host.id, "disconnected", message),
+      unsupported: (message) => this.setStatus(userId, host.id, "unsupported", message),
+      error: (message) => this.setStatus(userId, host.id, "error", message),
+    });
+    const runtime: HostMetricsRuntime = {
+      host,
+      status: "waiting",
+      message: null,
+      samples: [],
+      collector,
+    };
+    this.runtimes.set(key, runtime);
+    runtime.collector.start();
+  }
+
+  private acceptSample(userId: number, hostId: number, sample: HostMetricsSample) {
+    const runtime = this.runtimes.get(runtimeKey(userId, hostId));
+    if (runtime === undefined) return;
+    runtime.samples.push(sample);
+    if (runtime.samples.length > MAX_SAMPLES)
+      runtime.samples.splice(0, runtime.samples.length - MAX_SAMPLES);
+    runtime.status = "collecting";
+    runtime.message = null;
+    this.events.publish(userId, runtime.host.id, {
+      type: "sample",
+      hostId: runtime.host.id,
+      sample,
+    });
+  }
+
+  private setStatus(
+    userId: number,
+    hostId: number,
+    status: HostMetricsCollectorStatus,
+    message: string | null,
+  ) {
+    const runtime = this.runtimes.get(runtimeKey(userId, hostId));
+    if (runtime === undefined) return;
+    runtime.status = status;
+    runtime.message = message;
+    this.events.publish(userId, runtime.host.id, {
+      type: "status",
+      snapshot: this.snapshot(userId, runtime.host.id),
+    });
+  }
+}
+
+function runtimeKey(userId: number, hostId: number) {
+  return `${userId}:${hostId}`;
+}
+
+function sameRemoteIdentity(left: HostRecord, right: HostRecord) {
+  return (
+    left.sshHost === right.sshHost && left.username === right.username && left.port === right.port
+  );
+}

@@ -10,6 +10,9 @@ const asyncPanels = {
   WorkspaceDockFilesPanel: defineAsyncComponent(
     () => import("@/components/chat/workspace-dock/WorkspaceDockFilesPanel.vue"),
   ),
+  WorkspaceDockHostMetricsPanel: defineAsyncComponent(
+    () => import("@/components/chat/workspace-dock/WorkspaceDockHostMetricsPanel.vue"),
+  ),
   WorkspaceDockSubAgentPanel: defineAsyncComponent(
     () => import("@/components/chat/workspace-dock/WorkspaceDockSubAgentPanel.vue"),
   ),

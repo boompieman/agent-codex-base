@@ -3,10 +3,20 @@ import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
+import { useGatewayHostMetricsDataStore } from "@/stores/gateway-host-metrics/data";
 import { gatewayDomainEvents } from "../domain-events";
 import { notificationAction, projectPublishedNotification } from "../notifications/actions";
 
 export function registerRealtimeResourceSubscribers() {
+  gatewayDomainEvents.on("realtime-host-metrics-snapshot", (snapshot) => {
+    useGatewayHostMetricsDataStore().applySnapshot(snapshot);
+  });
+  gatewayDomainEvents.on("realtime-host-metrics-sample", ({ hostId, sample }) => {
+    useGatewayHostMetricsDataStore().appendSample(hostId, sample);
+  });
+  gatewayDomainEvents.on("realtime-host-metrics-status", ({ hostId, status, message }) => {
+    useGatewayHostMetricsDataStore().setStatus(hostId, status, message);
+  });
   gatewayDomainEvents.on("realtime-thread-goal-updated", (message) => {
     useGatewayComposerStore().upsertThreadGoal(message.hostId, message.threadId, message.goal);
   });

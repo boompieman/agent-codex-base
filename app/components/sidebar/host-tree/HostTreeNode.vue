@@ -5,6 +5,7 @@ import {
   FolderIcon,
   FolderXIcon,
   ServerIcon,
+  ChartNoAxesCombinedIcon,
   Trash2Icon,
 } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,10 @@ const controller = requireHostTreeController();
         </Button>
       </ContextMenuTrigger>
       <ContextMenuContent :collision-padding="12" prioritize-position class="w-44">
+        <ContextMenuItem @select="controller.monitorHost(host.id)">
+          <ChartNoAxesCombinedIcon class="mr-2 size-4" />
+          {{ $t("app.openHostMonitor") }}
+        </ContextMenuItem>
         <ContextMenuItem @select="controller.addProject(host)">
           <FolderIcon class="mr-2 size-4" />
           {{ $t("app.addProject") }}

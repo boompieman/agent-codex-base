@@ -16,6 +16,9 @@ import {
   TMUX_WORKSPACE_PANEL_ID,
 } from "@/stores/gateway/workspace-panels";
 import type { WorkspacePanelSelection } from "./types";
+import { useGatewayHostMetricsPanelStore } from "@/stores/gateway-host-metrics/panels";
+import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
+import { HOST_METRICS_WORKSPACE_PANEL_ID } from "@/stores/gateway/workspace-panels";
 
 export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   const { t } = useI18n();
@@ -24,6 +27,7 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   const terminalStore = useGatewayTerminalStore();
   const browserStore = useGatewayBrowserStore();
   const tmuxStore = useGatewayTmuxStore();
+  const hostMetricsPanels = useGatewayHostMetricsPanelStore();
   const { terminalSessions } = storeToRefs(terminalStore);
   const { threadViews, currentThread, visibleSubAgentPanels } = storeToRefs(threadView);
 
@@ -79,6 +83,18 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
     if (!tmuxStore.panelOpen) return [];
     return [{ id: TMUX_WORKSPACE_PANEL_ID }];
   });
+  const hostMetricsPanel = computed(() => {
+    const hostId = selection.selectedHostId.value;
+    if (hostId === null) return [];
+    const scopeKey = workspaceLayoutScopeKey(
+      hostId,
+      selection.selectedProjectId.value,
+      selection.selectedThreadId.value,
+    );
+    return hostMetricsPanels.isOpen(scopeKey)
+      ? [{ id: HOST_METRICS_WORKSPACE_PANEL_ID, hostId }]
+      : [];
+  });
 
   const fileWorkspaceRoot = computed(() => {
     const cwd = currentThread.value?.cwd ?? "";
@@ -86,5 +102,12 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
     return projectById(catalog.projects, selection.selectedProjectId.value)?.remotePath ?? "";
   });
 
-  return { terminalPanels, subAgentPanels, browserPanels, tmuxPanels, fileWorkspaceRoot };
+  return {
+    terminalPanels,
+    subAgentPanels,
+    browserPanels,
+    tmuxPanels,
+    hostMetricsPanel,
+    fileWorkspaceRoot,
+  };
 }

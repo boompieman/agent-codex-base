@@ -9,6 +9,8 @@ import type {
   ThreadTokenUsageState,
   TerminalSessionSnapshot,
   GatewayConfig,
+  HostMetricsCollectorStatus,
+  HostMetricsSample,
 } from "~~/shared/types";
 import type { AppServerEventParams } from "~~/shared/thread-history/app-server-event-handlers/types";
 import type { ThreadRuntimeStatus } from "./types";
@@ -51,6 +53,18 @@ export type GatewayDomainEventMap = {
     actionLabel: string;
   };
   "realtime-host-lifecycle": RealtimeMessage<"host.lifecycle">;
+  "realtime-host-metrics-snapshot": {
+    hostId: number;
+    status: HostMetricsCollectorStatus;
+    message: string | null;
+    samples: HostMetricsSample[];
+  };
+  "realtime-host-metrics-sample": { hostId: number; sample: HostMetricsSample };
+  "realtime-host-metrics-status": {
+    hostId: number;
+    status: HostMetricsCollectorStatus;
+    message: string | null;
+  };
   "thread-summary-detected": {
     hostId: number;
     thread: AppServerThread;

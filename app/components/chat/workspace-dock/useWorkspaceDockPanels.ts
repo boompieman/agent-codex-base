@@ -14,6 +14,7 @@ import {
 } from "@/stores/gateway/workspace-panels";
 import { workspaceDockPanelParamsFromUnknown, type WorkspaceDockPanelParams } from "./types";
 import { workspacePanelPolicy } from "./panel-registry";
+import { useGatewayHostMetricsPanelStore } from "@/stores/gateway-host-metrics/panels";
 
 interface PanelDefinition {
   id: string;
@@ -32,6 +33,8 @@ export function useWorkspaceDockPanels(options: {
   >;
   browserPanels: ComputedRef<Array<{ id: string; panel: { panelId: string; title: string } }>>;
   tmuxPanels: ComputedRef<Array<{ id: string }>>;
+  hostMetricsPanel: ComputedRef<Array<{ id: string; hostId: number }>>;
+  scopeKey: ComputedRef<string>;
 }) {
   const { t } = useI18n();
   const threadView = useGatewayThreadViewStore();
@@ -39,6 +42,7 @@ export function useWorkspaceDockPanels(options: {
   const terminalTransport = useGatewayTerminalTransport();
   const browserStore = useGatewayBrowserStore();
   const tmuxStore = useGatewayTmuxStore();
+  const hostMetricsPanels = useGatewayHostMetricsPanelStore();
 
   function definitions(): PanelDefinition[] {
     const panels: PanelDefinition[] = [
@@ -81,6 +85,12 @@ export function useWorkspaceDockPanels(options: {
         title: t("app.tmuxMonitors"),
         component: workspacePanelPolicy("tmux").component,
         params: { kind: "tmux" as const },
+      })),
+      ...options.hostMetricsPanel.value.map(({ id, hostId }) => ({
+        id,
+        title: t("app.hostMonitor"),
+        component: workspacePanelPolicy("hostMetrics").component,
+        params: { kind: "hostMetrics" as const, hostId },
       })),
     );
     return panels;
@@ -186,6 +196,9 @@ export function useWorkspaceDockPanels(options: {
       }
       case "tmux":
         tmuxStore.closePanel();
+        break;
+      case "hostMetrics":
+        hostMetricsPanels.close(options.scopeKey.value);
         break;
       case "agent":
       case "files":

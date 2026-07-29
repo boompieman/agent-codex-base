@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { SettingsIcon } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -71,6 +71,7 @@ const hostTreeController = computed<HostTreeController>(() => ({
   selectHost: sidebarTree.selectHost,
   addProject: openAddProject,
   deleteHost: catalog.deleteHost,
+  monitorHost: openHostMonitor,
   selectProject: sidebarTree.selectProject,
   toggleMissingProjects: sidebarTree.toggleMissingProjects,
   editProject: openEditProject,
@@ -98,6 +99,12 @@ function openEditProject(project: ProjectRecord) {
   }
   projectEditor.value = { host, project };
 }
+
+async function openHostMonitor(hostId: number) {
+  if (selectedHostId.value !== hostId) await catalog.selectHost(hostId);
+  await nextTick();
+  workspaceActions.openHostMonitor();
+}
 </script>
 
 <template>
@@ -113,6 +120,7 @@ function openEditProject(project: ProjectRecord) {
       @open-tmux="tmuxLauncher.open"
       @open-terminal="workspaceActions.openTerminal"
       @open-browser="showBrowserDialog = true"
+      @open-host-monitor="workspaceActions.openHostMonitor"
     />
     <div class="flex min-h-0 flex-1 overflow-hidden px-3 py-3">
       <SidebarScrollArea>

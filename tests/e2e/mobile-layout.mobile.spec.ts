@@ -453,6 +453,10 @@ test("opens sidebar context actions with long press on mobile", async ({
   await page.getByTestId(`project-button-${project.id}`).click();
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
   await expect(page.getByTestId("open-tmux-mobile-button")).toBeVisible();
+  await expect(page.getByTestId("open-host-monitor-mobile-button")).toBeVisible();
+  await page.getByTestId("open-host-monitor-mobile-button").click();
+  await expect(page.getByTestId("host-metrics-panel")).toBeVisible();
+  await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByTestId("open-terminal-mobile-button").click();
   await expect(page.getByTestId("terminal-panel")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("tab", { name: /Agent/ }).click();

@@ -18,6 +18,7 @@ export interface HostTreeController {
   selectHost: (hostId: number) => void;
   addProject: (host: HostRecord) => void;
   deleteHost: (hostId: number) => void;
+  monitorHost: (hostId: number) => void;
   selectProject: (projectId: number, event: MouseEvent) => void;
   toggleMissingProjects: (hostId: number) => void;
   editProject: (project: ProjectRecord) => void;

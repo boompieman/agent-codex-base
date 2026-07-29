@@ -12,16 +12,25 @@ import { isConnectionLevelSshError } from "./ssh-errors";
 import { SftpChannelPool } from "./ssh-sftp";
 import { uploadFile, uploadFileResumable } from "./ssh-transfer";
 import { currentGatewayUserId } from "../../state/memory";
+import { EventEmitter } from "@posva/event-emitter";
 
 const SSH_READY_TIMEOUT_MS = 30_000;
 const SSH_KEEPALIVE_INTERVAL_MS = 30_000;
 const SSH_KEEPALIVE_COUNT_MAX = 10;
 
-export class SshConnectionPool {
+type SshConnectionPoolEvents = {
+  ready: { userId: number; host: HostWithSecret };
+};
+
+export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
   private clients = new Map<string, Promise<Client>>();
   private clientTokens = new Map<string, symbol>();
   private sftpChannels = new SftpChannelPool();
   private hostKeysByUser = new Map<string, Map<number, string>>();
+
+  constructor() {
+    super();
+  }
 
   connect(host: HostWithSecret): Promise<Client> {
     const resolved = resolveSshConfig(host);
@@ -29,9 +38,7 @@ export class SshConnectionPool {
     this.scopedHostKeys().set(host.id, key);
 
     const existing = this.clients.get(key);
-    if (existing) {
-      return existing;
-    }
+    if (existing) return this.notifyReady(existing, host);
 
     const token = Symbol(key);
     this.clientTokens.set(key, token);
@@ -43,7 +50,17 @@ export class SshConnectionPool {
     });
 
     this.clients.set(key, promise);
-    return promise;
+    return this.notifyReady(promise, host);
+  }
+
+  async execChannelIfConnected(host: HostWithSecret, command: string) {
+    const key = sshConnectionKey(host, resolveSshConfig(host));
+    const connection = this.clients.get(key);
+    if (connection === undefined) return null;
+    const client = await connection;
+    return await new Promise<ClientChannel>((resolve, reject) => {
+      client.exec(command, (error, channel) => (error ? reject(error) : resolve(channel)));
+    });
   }
 
   async exec(
@@ -304,6 +321,13 @@ export class SshConnectionPool {
           keepaliveCountMax: SSH_KEEPALIVE_COUNT_MAX,
         });
     });
+  }
+
+  private async notifyReady(connection: Promise<Client>, host: HostWithSecret) {
+    const client = await connection;
+    const userId = currentGatewayUserId();
+    if (userId !== null) this.emit("ready", { userId, host });
+    return client;
   }
 
   private deleteClientIfCurrent(key: string, token: symbol) {

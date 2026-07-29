@@ -7,6 +7,7 @@ import { createNotificationRealtimeHandlers } from "./handlers/notifications";
 import { createBrowserRealtimeHandlers } from "./handlers/browser";
 import { createTerminalRealtimeHandlers } from "./handlers/terminal";
 import { createThreadRealtimeHandlers } from "./handlers/thread";
+import { createHostMetricsRealtimeHandlers } from "./handlers/host-metrics";
 import type {
   RealtimeServerMessageHandlerContext,
   RealtimeServerMessageMap,
@@ -24,6 +25,7 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
   const terminal = createTerminalRealtimeHandlers(ctx);
   const browser = createBrowserRealtimeHandlers(ctx);
   const notifications = createNotificationRealtimeHandlers(ctx);
+  const hostMetrics = createHostMetricsRealtimeHandlers(ctx);
 
   return (message: RealtimeServerMessage) =>
     match(message)
@@ -45,6 +47,9 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "browser.framePolicyWarning" }, browser["browser.framePolicyWarning"])
       .with({ type: "notification.published" }, notifications["notification.published"])
       .with({ type: "host.lifecycle" }, notifications["host.lifecycle"])
+      .with({ type: "host.metrics.snapshot" }, hostMetrics["host.metrics.snapshot"])
+      .with({ type: "host.metrics.sample" }, hostMetrics["host.metrics.sample"])
+      .with({ type: "host.metrics.status" }, hostMetrics["host.metrics.status"])
       .with({ type: "ready" }, () => handleReady(ctx))
       .with({ type: "config.pinnedThreads.changed" }, () =>
         gatewayDomainEvents.emit("pinned-threads-invalidated", {}),

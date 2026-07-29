@@ -7,6 +7,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import { setRealtimeRequestContextResolver } from "@/stores/gateway-realtime/request-context";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
+import { useGatewayHostMetricsDataStore } from "@/stores/gateway-host-metrics/data";
 import { gatewayDomainEvents } from "../domain-events";
 import { sortThreads } from "../thread-utils/identity";
 
@@ -21,7 +22,10 @@ export function registerGatewayLifecycleSubscribers() {
     return hostName === undefined || hostName === "" ? {} : { hostName };
   });
 
-  gatewayDomainEvents.on("gateway-session-reset", () => lifecycleNotificationKeys.clear());
+  gatewayDomainEvents.on("gateway-session-reset", () => {
+    lifecycleNotificationKeys.clear();
+    useGatewayHostMetricsDataStore().reset();
+  });
   gatewayDomainEvents.on("gateway-config-applied", ({ config }) => {
     const catalog = useGatewayCatalogStore();
     const navigation = useGatewayNavigationStore();
@@ -31,6 +35,7 @@ export function registerGatewayLifecycleSubscribers() {
   });
   gatewayDomainEvents.on("host-removed", ({ hostId }) => {
     useGatewayRealtimeStore().closeHostThreadEvents(hostId);
+    useGatewayHostMetricsDataStore().clearHost(hostId);
   });
   gatewayDomainEvents.on("pinned-threads-invalidated", () => {
     void useGatewayConfigStore()

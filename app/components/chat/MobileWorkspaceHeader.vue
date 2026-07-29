@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ActivityIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
+import { ActivityIcon, ChartNoAxesCombinedIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 
 defineProps<{
@@ -11,6 +11,7 @@ const emit = defineEmits<{
   openTerminal: [];
   openBrowser: [];
   openTmux: [];
+  openHostMonitor: [];
 }>();
 </script>
 
@@ -38,6 +39,17 @@ const emit = defineEmits<{
         >
           {{ tmuxActiveCount }}
         </span>
+      </Button>
+      <Button
+        data-testid="open-host-monitor-mobile-button"
+        variant="ghost"
+        size="sm"
+        class="h-8 shrink-0 rounded-md px-2 text-ink-muted hover:bg-canvas-soft hover:text-ink"
+        :disabled="!canOpenTerminal"
+        :aria-label="$t('app.openHostMonitor')"
+        @click="emit('openHostMonitor')"
+      >
+        <ChartNoAxesCombinedIcon class="size-4" />
       </Button>
       <Button
         data-testid="open-browser-mobile-button"

@@ -58,6 +58,12 @@ export class RealtimeMessageDispatcher {
       .with({ type: "host.lifecycle.unsubscribe" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
+      .with({ type: "host.metrics.subscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "host.metrics.unsubscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "ping" }, (value) => this.dispatchEntry(peer, value, this.handlers[value.type]))
       .with({ type: "serverRequest.respond" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),

@@ -10,6 +10,7 @@ import type { ApprovalPolicy, ReasoningEffort } from "./thread";
 import type { TerminalOpenTarget, TerminalSessionSnapshot } from "./terminal";
 import type { BrowserPreviewSessionSnapshot, BrowserPreviewTarget } from "./browser";
 import type { ServerNotification } from "./notifications";
+import type { HostMetricsCollectorStatus, HostMetricsSample } from "./host-metrics";
 
 export type RealtimeClientMessage =
   | {
@@ -21,6 +22,15 @@ export type RealtimeClientMessage =
     }
   | {
       type: "host.lifecycle.unsubscribe";
+    }
+  | {
+      type: "host.metrics.subscribe";
+      requestId: string;
+      hostId: number;
+    }
+  | {
+      type: "host.metrics.unsubscribe";
+      hostId: number;
     }
   | {
       type: "thread.activate";
@@ -190,6 +200,25 @@ export type RealtimeServerMessage =
         message: string;
         createdAt?: string;
       };
+    }
+  | {
+      type: "host.metrics.snapshot";
+      requestId: string;
+      hostId: number;
+      status: HostMetricsCollectorStatus;
+      message: string | null;
+      samples: HostMetricsSample[];
+    }
+  | {
+      type: "host.metrics.sample";
+      hostId: number;
+      sample: HostMetricsSample;
+    }
+  | {
+      type: "host.metrics.status";
+      hostId: number;
+      status: HostMetricsCollectorStatus;
+      message: string | null;
     }
   | {
       type: "thread.event";
