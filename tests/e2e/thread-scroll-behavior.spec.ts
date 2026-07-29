@@ -4,6 +4,7 @@ import type { ThreadViewState } from "../../app/stores/gateway/types";
 import { openApp } from "./helpers/app";
 import {
   appendAgentStreamLines,
+  appendAgentTimelineItem,
   appendCommandOutputLines,
   appendFileDiffLines,
   completeTurnWithFinalAgentMessage,
@@ -24,8 +25,10 @@ import {
   scrollChatViewportBy,
   scrollChatViewportToBottom,
   scrollChatViewportToTop,
+  startChatWheelScrollUp,
   visibleAgentLineTop,
   visibleTextTop,
+  waitForChatScrollToSettle,
   waitForScrollableChatViewportAtBottom,
 } from "./helpers/scroll";
 import {
@@ -199,6 +202,9 @@ test("streaming output stays pinned when the user is already at the latest conte
       prefix: `pinned appended batch ${batch + 1}`,
       count: 8,
     });
+    await expect(
+      page.getByText(`pinned appended batch ${batch + 1} 008`, { exact: true }),
+    ).toBeVisible();
     await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
   }
 });
@@ -254,6 +260,7 @@ test("streaming Agent output keeps a manually detached reader in place", async (
   });
 
   await page.waitForTimeout(300);
+  await expect(page.getByText("detached incoming line 040", { exact: true })).toBeAttached();
   await expect.poll(() => chatViewportScrollTop(page)).toBeGreaterThanOrEqual(scrollTop - 2);
   await expect.poll(() => chatViewportScrollTop(page)).toBeLessThanOrEqual(scrollTop + 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
@@ -368,19 +375,31 @@ test("streaming output does not drift the viewport during upward wheel scrolling
 
   await expect(page.getByText("wheel stream initial output")).toBeVisible();
   await waitForScrollableChatViewportAtBottom(page);
+  // Let the initial overscan window replace estimates before beginning the gesture. The product
+  // contract starts with user movement; an estimate correction that consumes a same-frame
+  // synthetic scrollTop write is browser setup noise, not an active-scroll scenario.
+  await waitForAnimationFrames(page, 4);
 
-  // The setup guarantees at least 400px of upward range. Keep the full gesture sequence inside
-  // that range so every batch models active scrolling rather than asking a viewport already at
-  // its top boundary to move farther.
+  // One browser wheel gesture owns a short active-scroll window. Stream several deltas inside that
+  // window instead of repeatedly assigning scrollTop: a later synthetic assignment can be exactly
+  // cancelled when TanStack replaces newly overscanned estimates, even though a real wheel gesture
+  // already happened. Touch continuation and momentum are covered separately on mobile.
+  await startChatWheelScrollUp(page);
+  const anchor = await captureVisibleTextAnchor(page, "wheel scroll history");
   for (let batch = 0; batch < 3; batch += 1) {
-    await scrollChatViewportBy(page, -100);
-    const anchor = await captureVisibleTextAnchor(page, "wheel scroll history");
     await appendAgentStreamLines(page, {
       itemId: "agent-wheel-streaming",
       prefix: `wheel stream batch ${batch + 1}`,
       count: 8,
     });
-    await waitForAnimationFrames(page, 2);
+    await waitForAnimationFrames(page, 1);
+
+    // The store already contains this delta, but a detached reader's mounted timeline snapshot
+    // must stay unchanged until TanStack reports scroll end. This assertion is intentionally about
+    // DOM presence rather than visibility: the streaming row remains inside overscan here.
+    await expect(
+      page.getByText(`wheel stream batch ${batch + 1} 008`, { exact: true }),
+    ).toHaveCount(0);
 
     await expect
       .poll(() => visibleTextTop(page, anchor.text))
@@ -391,6 +410,64 @@ test("streaming output does not drift the viewport during upward wheel scrolling
       "false",
     );
   }
+
+  await waitForChatScrollToSettle(page);
+  await expect(page.getByText("wheel stream batch 3 008", { exact: true })).toBeAttached();
+});
+
+test("new timeline rows commit once after active scrolling stops", async ({ page }) => {
+  await openApp(page);
+  const threadId = "e2e-scroll-buffered-structural-row";
+  const activeTurnId = "turn-buffered-structural-row";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Buffered Structural Row" },
+    status: "running",
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          ...buildVariableHeightTurns(threadId, 36, "buffered row history"),
+          {
+            id: activeTurnId,
+            status: "running",
+            items: [
+              {
+                id: "agent-buffered-existing",
+                type: "agentMessage",
+                status: "inProgress",
+                text: "existing active output",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByText("existing active output")).toBeVisible();
+  await waitForScrollableChatViewportAtBottom(page);
+  await waitForAnimationFrames(page, 4);
+  await startChatWheelScrollUp(page);
+  const anchor = await captureVisibleTextAnchor(page, "buffered row history");
+
+  await appendAgentTimelineItem(page, {
+    turnId: activeTurnId,
+    itemId: "agent-buffered-new-row",
+    text: "new row buffered during scroll",
+  });
+  await waitForAnimationFrames(page, 2);
+
+  await expect(page.getByText("new row buffered during scroll", { exact: true })).toHaveCount(0);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+
+  await waitForChatScrollToSettle(page);
+  await expect(page.getByText("new row buffered during scroll", { exact: true })).toBeAttached();
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
+  await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
+  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
 });
 
 test("downward wheel scrolling stays detached until the reader reaches latest", async ({

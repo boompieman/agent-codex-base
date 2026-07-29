@@ -244,6 +244,31 @@ export async function scrollChatViewportBy(page: Page, deltaY: number) {
   return { before, after: await chatViewportScrollTop(page) };
 }
 
+export async function startChatWheelScrollUp(page: Page, distance = 240) {
+  const viewport = page
+    .getByTestId(chatScrollAreaTestId)
+    .locator('[data-slot="scroll-area-viewport"]');
+  const before = await captureVisibleTimelineRowAnchor(page);
+
+  // Use Playwright's trusted wheel input for the active-scroll contract. TanStack may compensate
+  // `scrollTop` while replacing estimates even though the visible virtual window moved, so raw
+  // offsets are not a valid movement oracle here; compare the user-visible keyed row instead.
+  await viewport.hover();
+  await page.mouse.wheel(0, -distance);
+  await expect(page.getByTestId(chatScrollAreaTestId)).toHaveAttribute(
+    "data-follow-latest",
+    "false",
+  );
+  await expect
+    .poll(async () => {
+      const after = await captureVisibleTimelineRowAnchor(page);
+      return after.key !== before.key || Math.abs(after.top - before.top) > 2;
+    })
+    .toBe(true);
+
+  return { before, after: await captureVisibleTimelineRowAnchor(page) };
+}
+
 export async function startChatTouchScrollUp(page: Page, distance: number) {
   return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, distance) => {
     const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');

@@ -7,8 +7,12 @@ import {
   useResizeObserver,
 } from "@vueuse/core";
 import type { ComponentPublicInstance } from "vue";
-import { computed, onMounted, ref, watch } from "vue";
-import { ChatVirtualScrollFrame, useChatVirtualizer } from "@/components/common/chat-virtualizer";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
+import {
+  ChatVirtualScrollFrame,
+  useChatVirtualizer,
+  useScrollBufferedPresentation,
+} from "@/components/common/chat-virtualizer";
 
 interface TimelineViewportRow {
   key: string;
@@ -30,13 +34,15 @@ const emit = defineEmits<{
 const scrollFrameRef = ref<InstanceType<typeof ChatVirtualScrollFrame> | null>(null);
 const threshold = 80;
 const startControlsVisible = ref(false);
+const presentedRows = shallowRef<TimelineViewportRow[]>([...props.rows]);
+const presentationRevision = shallowRef(0);
 
 const chatVirtualizer = useChatVirtualizer({
-  count: () => props.rows.length,
+  count: () => presentedRows.value.length,
   threshold,
   getViewport: scrollViewport,
-  getItemKey: (index: number) => props.rows[index]?.key ?? index,
-  estimateSize: (index: number) => props.estimateSize(props.rows[index], index),
+  getItemKey: (index: number) => presentedRows.value[index]?.key ?? index,
+  estimateSize: (index: number) => props.estimateSize(presentedRows.value[index], index),
   overscan: 6,
   onViewportScroll: (viewport) => {
     // A short chat is simultaneously at the top and bottom. Only interpret
@@ -63,6 +69,15 @@ const chatVirtualizer = useChatVirtualizer({
   },
 });
 const virtualizer = chatVirtualizer.virtualizer;
+
+useScrollBufferedPresentation({
+  source: () => props.rows,
+  sourceRevision: () => props.followKey,
+  frozen: () => chatVirtualizer.userDetached.value && chatVirtualizer.isScrolling.value,
+  presented: presentedRows,
+  presentationRevision,
+  commitPreservingViewport: chatVirtualizer.commitPreservingViewport,
+});
 
 const virtualRows = chatVirtualizer.virtualItems;
 const viewportElement = computed(() => scrollViewport());
@@ -133,7 +148,7 @@ useResizeObserver(chatVirtualizer.containerElement, () => {
 });
 
 watch(
-  () => props.rows.map((row) => row.key).join("\0"),
+  () => presentedRows.value.map((row) => row.key).join("\0"),
   () => {
     if (chatVirtualizer.followLatest.value) {
       // Prepending measured history is not an append, so followOnAppend does
@@ -155,14 +170,12 @@ watch(documentVisibility, (visibility, previous) => {
 });
 
 watch(
-  () => props.followKey,
+  presentationRevision,
   () => {
     startControlsVisible.value = false;
-    // `followKey` changes for every streamed token. It is a content-invalidating
-    // signal, not an instruction to resume following: a reader who explicitly
-    // scrolled upward must keep the exact viewport while the Agent keeps writing.
-    // Reflow/measurement for detached readers is handled by the keyed-anchor
-    // paths above, so only the already-pinned state may advance to the latest row.
+    // Presentation revision changes immediately for a pinned reader and once at scroll end for a
+    // detached moving reader. Watching the committed revision rather than live `followKey` keeps
+    // stream data reactive in Pinia without letting unpresented updates trigger DOM measurement.
     if (chatVirtualizer.followLatest.value) {
       chatVirtualizer.followContentChange();
     }
@@ -219,13 +232,18 @@ defineExpose({ resetFollowLatest });
           :key="String(virtualRow.key)"
           :ref="setRowRef"
           :data-index="virtualRow.index"
-          :data-row-key="rows[virtualRow.index]?.key"
-          :data-row-type="rows[virtualRow.index]?.type"
-          :data-row-section="rows[virtualRow.index]?.section"
+          :data-row-key="presentedRows[virtualRow.index]?.key"
+          :data-row-type="presentedRows[virtualRow.index]?.type"
+          :data-row-section="presentedRows[virtualRow.index]?.section"
           class="pb-5 md:pb-8"
           :style="rowStyle(virtualRow)"
+          v-memo="[presentationRevision, virtualRow.key]"
         >
-          <slot :row="rows[virtualRow.index]" :index="virtualRow.index" />
+          <slot
+            :row="presentedRows[virtualRow.index]"
+            :index="virtualRow.index"
+            :revision="presentationRevision"
+          />
         </div>
       </div>
     </div>

@@ -132,6 +132,32 @@ export async function appendAgentStreamLines(
   }, input);
 }
 
+export async function appendAgentTimelineItem(
+  page: Page,
+  input: { turnId: string; itemId: string; text: string },
+) {
+  await page.evaluate((input) => {
+    const views = window.__codexGatewayE2e?.views;
+    if (!views) throw new Error("Gateway E2E driver is unavailable");
+    const history = views.history;
+    if (!history) throw new Error("Gateway thread history is unavailable");
+    const turn = history.thread.turns.find((candidate) => candidate.id === input.turnId);
+    if (!turn) throw new Error(`Missing turn ${input.turnId}`);
+    turn.items = [
+      ...(turn.items ?? []),
+      {
+        id: input.itemId,
+        type: "agentMessage",
+        status: "inProgress",
+        text: input.text,
+      },
+    ];
+    views.history = {
+      thread: { ...history.thread, turns: [...history.thread.turns] },
+    };
+  }, input);
+}
+
 export async function appendFileDiffLines(
   page: Page,
   input: { itemId: string; path: string; prefix: string; count: number },
