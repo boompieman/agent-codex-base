@@ -1,6 +1,7 @@
 export const AGENT_WORKSPACE_PANEL_ID = "agent";
 export const FILES_WORKSPACE_PANEL_ID = "files";
 export const TMUX_WORKSPACE_PANEL_ID = "tmux";
+export const HOST_METRICS_WORKSPACE_PANEL_ID = "host-metrics";
 
 export function terminalWorkspacePanelId(sessionId: string) {
   return `terminal:${sessionId}`;

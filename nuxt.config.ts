@@ -16,10 +16,23 @@ export default defineNuxtConfig({
     watcher: "builder",
   },
   css: ["~/assets/css/tailwind.css"],
-  modules: ["@pinia/nuxt", "@nuxtjs/device", "@nuxtjs/i18n", "shadcn-nuxt"],
+  modules: ["@pinia/nuxt", "@nuxtjs/device", "@nuxtjs/i18n", "shadcn-nuxt", "nuxt-echarts"],
+  echarts: {
+    renderer: "canvas",
+    charts: ["LineChart"],
+    components: ["GridComponent", "TooltipComponent", "LegendComponent"],
+  },
   shadcn: {
     prefix: "",
-    componentDir: "./app/components/ui",
+    // shadcn-nuxt must own both source registries so Nuxt does not also auto-import them and emit
+    // duplicate component warnings. AI Elements remains source-owned and is imported explicitly.
+    componentDir: [
+      "@/components/ui",
+      {
+        path: "@/components/ai-elements",
+        prefix: "",
+      },
+    ],
   },
   vite: {
     resolve: {

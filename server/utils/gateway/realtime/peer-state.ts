@@ -19,6 +19,7 @@ export interface RealtimePeerState {
   browserOwnerId?: string;
   sessionRevocationUnsubscribe?: () => void;
   threadUnsubscribers: Map<string, () => void>;
+  hostMetricsUnsubscribers: Map<number, () => void>;
 }
 
 const peerStates = new WeakMap<RealtimePeer, RealtimePeerState>();
@@ -30,7 +31,12 @@ export function sendRealtimePeerMessage(peer: RealtimePeer, message: RealtimeSer
 export function stateFor(peer: RealtimePeer) {
   let state = peerStates.get(peer);
   if (state === undefined) {
-    state = { authenticated: false, userId: null, threadUnsubscribers: new Map() };
+    state = {
+      authenticated: false,
+      userId: null,
+      threadUnsubscribers: new Map(),
+      hostMetricsUnsubscribers: new Map(),
+    };
     peerStates.set(peer, state);
   }
   return state;

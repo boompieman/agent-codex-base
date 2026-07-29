@@ -11,6 +11,7 @@ import { hostRuntimeFingerprint } from "./host-runtime-fingerprint";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 import { threadProjectDiscovery } from "./thread-project-discovery";
 import { pendingServerRequests } from "./pending-server-requests";
+import { hostMetricsManager } from "../infra/host-services";
 
 export const hostResourceLifecycle = {
   changed(userId: number, previous: StoredHostRecord, next: StoredHostRecord) {
@@ -20,6 +21,7 @@ export const hostResourceLifecycle = {
       threadProjectDiscovery.invalidateHost(userId, previous.id);
       clearThreadRuntime(previous.id);
       tmuxMonitorService.removeHost(userId, previous.id);
+      hostMetricsManager.removeHost(userId, previous.id);
     }
   },
 
@@ -31,6 +33,7 @@ export const hostResourceLifecycle = {
     clearThreadRuntime(hostId);
     closeEphemeralResources(userId, hostId);
     tmuxMonitorService.removeHost(userId, hostId);
+    hostMetricsManager.removeHost(userId, hostId);
   },
 };
 

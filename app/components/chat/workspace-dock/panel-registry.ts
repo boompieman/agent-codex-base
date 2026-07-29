@@ -48,6 +48,12 @@ export const workspacePanelRegistry = {
     closable: true,
     dynamic: true,
   },
+  hostMetrics: {
+    component: "WorkspaceDockHostMetricsPanel",
+    icon: ActivityIcon,
+    closable: true,
+    dynamic: true,
+  },
 } satisfies Record<WorkspacePanelKind, WorkspacePanelPolicy>;
 
 export function workspacePanelPolicy(kind: WorkspacePanelKind): WorkspacePanelPolicy {

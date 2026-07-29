@@ -10,6 +10,9 @@ import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import { browserWorkspacePanelId } from "@/stores/gateway/workspace-panels";
+import { HOST_METRICS_WORKSPACE_PANEL_ID } from "@/stores/gateway/workspace-panels";
+import { useGatewayHostMetricsPanelStore } from "@/stores/gateway-host-metrics/panels";
+import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
 
 export function useWorkspaceLaunchActions() {
   const gateway = useGatewayCatalogStore();
@@ -18,6 +21,7 @@ export function useWorkspaceLaunchActions() {
   const browser = useGatewayBrowserStore();
   const layout = useGatewayWorkspaceLayoutStore();
   const terminal = useGatewayTerminalTransport();
+  const hostMetricsPanels = useGatewayHostMetricsPanelStore();
   const { hosts, projects } = storeToRefs(gateway);
   const { selectedHostId, selectedProjectId, selectedThreadId } = storeToRefs(navigation);
   const selectedHost = computed(() => hostById(hosts.value, selectedHostId.value));
@@ -68,11 +72,23 @@ export function useWorkspaceLaunchActions() {
     layout.requestPanelActivation(browserWorkspacePanelId(panelId));
   }
 
+  function openHostMonitor() {
+    if (selectedHostId.value === null) return;
+    const scopeKey = workspaceLayoutScopeKey(
+      selectedHostId.value,
+      selectedProjectId.value,
+      selectedThreadId.value,
+    );
+    hostMetricsPanels.open(scopeKey);
+    layout.requestPanelActivation(HOST_METRICS_WORKSPACE_PANEL_ID);
+  }
+
   return {
     canLaunch: computed(() => selectedHostId.value !== null),
     selectedHostTitle: computed(() => selectedHost.value?.name ?? "Codex Gateway"),
     openTerminal,
     openBrowser,
+    openHostMonitor,
   };
 }
 

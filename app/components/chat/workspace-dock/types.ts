@@ -1,7 +1,14 @@
 import type { ComputedRef, Ref } from "vue";
 import { z } from "zod";
 
-export type WorkspacePanelKind = "agent" | "files" | "terminal" | "subagent" | "browser" | "tmux";
+export type WorkspacePanelKind =
+  | "agent"
+  | "files"
+  | "terminal"
+  | "subagent"
+  | "browser"
+  | "tmux"
+  | "hostMetrics";
 
 export const workspaceDockPanelParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("agent") }),
@@ -14,6 +21,7 @@ export const workspaceDockPanelParamsSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("browser"), browserPanelId: z.string().min(1) }),
   z.object({ kind: z.literal("tmux") }),
+  z.object({ kind: z.literal("hostMetrics"), hostId: z.number().int().positive() }),
 ]);
 
 export type WorkspaceDockPanelParams = z.infer<typeof workspaceDockPanelParamsSchema>;

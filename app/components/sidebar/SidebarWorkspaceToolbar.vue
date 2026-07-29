@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ActivityIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
+import { ActivityIcon, ChartNoAxesCombinedIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 defineProps<{ title: string; canLaunch: boolean; tmuxActiveCount: number }>();
-const emit = defineEmits<{ openTerminal: []; openBrowser: []; openTmux: [] }>();
+const emit = defineEmits<{
+  openTerminal: [];
+  openBrowser: [];
+  openTmux: [];
+  openHostMonitor: [];
+}>();
 </script>
 
 <template>
@@ -27,6 +32,18 @@ const emit = defineEmits<{ openTerminal: []; openBrowser: []; openTmux: [] }>();
       >
         {{ tmuxActiveCount }}
       </span>
+    </Button>
+    <Button
+      data-testid="open-host-monitor-button"
+      variant="ghost"
+      size="icon"
+      class="size-8 shrink-0"
+      :disabled="!canLaunch"
+      :title="$t('app.openHostMonitor')"
+      :aria-label="$t('app.openHostMonitor')"
+      @click="emit('openHostMonitor')"
+    >
+      <ChartNoAxesCombinedIcon class="size-4" />
     </Button>
     <Button
       data-testid="open-terminal-button"

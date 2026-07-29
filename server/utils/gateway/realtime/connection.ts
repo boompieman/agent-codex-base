@@ -73,6 +73,8 @@ export function cleanupRealtimePeer(peer: RealtimePeer) {
     unsubscribe();
   }
   state.threadUnsubscribers.clear();
+  for (const unsubscribe of state.hostMetricsUnsubscribers.values()) unsubscribe();
+  state.hostMetricsUnsubscribers.clear();
 }
 
 function rejectUnauthenticatedPeer(peer: RealtimePeer, request: RealtimeClientMessage | undefined) {

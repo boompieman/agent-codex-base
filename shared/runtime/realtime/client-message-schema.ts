@@ -51,6 +51,10 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
     z.object({ type: z.literal("host.lifecycle.subscribe") }).strict(),
     z.object({ type: z.literal("host.lifecycle.unsubscribe") }).strict(),
     z
+      .object({ type: z.literal("host.metrics.subscribe"), ...requestIdField, hostId: positiveId })
+      .strict(),
+    z.object({ type: z.literal("host.metrics.unsubscribe"), hostId: positiveId }).strict(),
+    z
       .object({
         type: z.literal("thread.activate"),
         ...requestIdField,

@@ -147,6 +147,72 @@ const notificationSchema = z
     target: notificationTargetSchema,
   })
   .strict();
+const hostMetricsStatusSchema = z.enum([
+  "waiting",
+  "collecting",
+  "disconnected",
+  "unsupported",
+  "error",
+]);
+const nullableMetric = z.number().nullable();
+const filesystemMetricsSchema = z
+  .object({
+    device: z.string(),
+    filesystemType: z.string(),
+    mountPoint: z.string(),
+    totalBytes: z.number().nonnegative(),
+    usedBytes: z.number().nonnegative(),
+    availableBytes: z.number().nonnegative(),
+    usagePercent: z.number(),
+  })
+  .strict();
+const hostMetricsSampleSchema = z
+  .object({
+    sampledAt: nonEmptyString,
+    cpu: z
+      .object({
+        usagePercent: nullableMetric,
+        loadAverage: z.tuple([z.number(), z.number(), z.number()]),
+      })
+      .strict(),
+    memory: z
+      .object({
+        totalBytes: z.number().nonnegative(),
+        usedBytes: z.number().nonnegative(),
+        availableBytes: z.number().nonnegative(),
+        usagePercent: z.number(),
+      })
+      .strict(),
+    network: z
+      .object({
+        receiveBytesPerSecond: nullableMetric,
+        transmitBytesPerSecond: nullableMetric,
+        interfaces: z.array(z.string()),
+      })
+      .strict(),
+    disk: z
+      .object({
+        readBytesPerSecond: nullableMetric,
+        writeBytesPerSecond: nullableMetric,
+        filesystems: z.array(filesystemMetricsSchema),
+      })
+      .strict(),
+    gpus: z.array(
+      z
+        .object({
+          index: z.number().int().nonnegative(),
+          uuid: z.string(),
+          name: z.string(),
+          utilizationPercent: nullableMetric,
+          memoryUsedBytes: z.number().nonnegative(),
+          memoryTotalBytes: z.number().nonnegative(),
+          memoryUsagePercent: z.number(),
+          temperatureCelsius: nullableMetric,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 
 // Top-level Gateway messages are closed protocol objects. Nested app-server thread/envelope
 // records intentionally remain extensible because upstream adds fields between releases; their
@@ -177,6 +243,31 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
             createdAt: z.string().optional(),
           })
           .strict(),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("host.metrics.snapshot"),
+        ...requestIdField,
+        hostId: positiveId,
+        status: hostMetricsStatusSchema,
+        message: z.string().nullable(),
+        samples: z.array(hostMetricsSampleSchema),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("host.metrics.sample"),
+        hostId: positiveId,
+        sample: hostMetricsSampleSchema,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("host.metrics.status"),
+        hostId: positiveId,
+        status: hostMetricsStatusSchema,
+        message: z.string().nullable(),
       })
       .strict(),
     z.object({ type: z.literal("thread.event"), event: gatewayEventSchema }).strict(),

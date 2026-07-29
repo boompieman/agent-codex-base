@@ -28,11 +28,14 @@ import {
   closeBrowserPreview,
   openBrowserPreview,
 } from "./handlers/browser-preview";
+import { subscribeHostMetrics, unsubscribeHostMetrics } from "./handlers/host-metrics";
 
 export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "auth.authenticate": { auth: "public", handler: authenticatePeer },
   "host.lifecycle.subscribe": subscribeHostLifecycle,
   "host.lifecycle.unsubscribe": unsubscribeHostLifecycle,
+  "host.metrics.subscribe": subscribeHostMetrics,
+  "host.metrics.unsubscribe": unsubscribeHostMetrics,
   "thread.activate": activateThread,
   "thread.start": startThread,
   "thread.subscribe": subscribeThread,

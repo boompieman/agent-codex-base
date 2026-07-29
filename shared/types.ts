@@ -40,6 +40,17 @@ export type {
   TmuxMonitorThreadBinding,
 } from "./types/tmux";
 export type { RealtimeClientMessage, RealtimeServerMessage } from "./types/realtime";
+export type {
+  HostCpuMetrics,
+  HostDiskMetrics,
+  HostFilesystemMetrics,
+  HostGpuMetrics,
+  HostMemoryMetrics,
+  HostMetricsCollectorStatus,
+  HostMetricsSample,
+  HostMetricsSnapshot,
+  HostNetworkMetrics,
+} from "./types/host-metrics";
 export type { ServerNotification, ServerNotificationTarget } from "./types/notifications";
 export type {
   BarkNotificationSettings,

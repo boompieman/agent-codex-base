@@ -23,19 +23,6 @@ const refs = toRefs(props);
 const workspace = useChatWorkspaceState();
 const { t } = useI18n();
 const { isDark } = useTerminalTheme();
-const { terminalPanels, subAgentPanels, browserPanels, tmuxPanels, fileWorkspaceRoot } =
-  useWorkspacePanels({
-    selectedHostId: workspace.selectedHostId,
-    selectedProjectId: workspace.selectedProjectId,
-    selectedThreadId: workspace.selectedThreadId,
-  });
-const panels = useWorkspaceDockPanels({
-  selectedThreadId: workspace.selectedThreadId,
-  terminalPanels,
-  subAgentPanels,
-  browserPanels,
-  tmuxPanels,
-});
 const scopeKey = computed(() =>
   workspaceLayoutScopeKey(
     workspace.selectedHostId.value,
@@ -43,6 +30,27 @@ const scopeKey = computed(() =>
     workspace.selectedThreadId.value,
   ),
 );
+const {
+  terminalPanels,
+  subAgentPanels,
+  browserPanels,
+  tmuxPanels,
+  hostMetricsPanel,
+  fileWorkspaceRoot,
+} = useWorkspacePanels({
+  selectedHostId: workspace.selectedHostId,
+  selectedProjectId: workspace.selectedProjectId,
+  selectedThreadId: workspace.selectedThreadId,
+});
+const panels = useWorkspaceDockPanels({
+  selectedThreadId: workspace.selectedThreadId,
+  terminalPanels,
+  subAgentPanels,
+  browserPanels,
+  tmuxPanels,
+  hostMetricsPanel,
+  scopeKey,
+});
 const fileRequestScopeKey = computed(() =>
   workspace.selectedHostId.value && workspace.selectedThreadId.value
     ? fileWorkspaceScopeKey(workspace.selectedHostId.value, workspace.selectedThreadId.value)
@@ -53,6 +61,7 @@ const panelIds = computed(() => [
   subAgentPanels.value.map(({ id }) => id),
   browserPanels.value.map(({ id }) => id),
   tmuxPanels.value.map(({ id }) => id),
+  hostMetricsPanel.value.map(({ id }) => id),
 ]);
 const browserDialogOpen = ref(false);
 const workspaceActions = useWorkspaceLaunchActions();
@@ -105,6 +114,7 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
       @open-tmux="tmuxLauncher.open"
       @open-terminal="workspaceActions.openTerminal"
       @open-browser="browserDialogOpen = true"
+      @open-host-monitor="workspaceActions.openHostMonitor"
     >
       <template #start><slot name="mobile-header-start" /></template>
     </MobileWorkspaceHeader>
