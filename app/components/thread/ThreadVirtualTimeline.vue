@@ -135,9 +135,10 @@ watch(
       </div>
     </template>
 
-    <template #default="{ row }">
+    <template #default="{ row, revision }">
       <ThreadTimelineRowView
         :row="timelineRow(row)"
+        :presentation-revision="revision"
         :host-id="hostId"
         :thread-id="threadId"
         @intermediate-toggle="setIntermediateOpen"

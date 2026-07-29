@@ -318,6 +318,10 @@ test("mobile touch scrolling stays anchored while Agent output streams", async (
     });
     await waitForAnimationFrames(page, 2);
 
+    await expect(
+      page.getByText(`touch stream batch ${batch + 1} 008`, { exact: true }),
+    ).toHaveCount(0);
+
     // Do not assert an exact anchor while the finger is down. WebKit owns the viewport during
     // this phase and TanStack deliberately queues measurement compensation so it does not cancel
     // native scrolling. The critical contract during the gesture is that streaming never takes
@@ -329,6 +333,7 @@ test("mobile touch scrolling stays anchored while Agent output streams", async (
   }
   await endChatTouchScroll(page);
   await waitForChatScrollToSettle(page);
+  await expect(page.getByText("touch stream batch 3 008", { exact: true })).toBeAttached();
   expect(finalAnchor).not.toBeNull();
   if (testInfo.project.name === "mobile-webkit-core-scroll") {
     await expectSyntheticWebKitTouchToRemainReadable(page);
@@ -396,6 +401,10 @@ test("mobile momentum scrolling stays anchored after touchend while output strea
     });
     await waitForAnimationFrames(page, 2);
 
+    await expect(
+      page.getByText(`momentum stream frame ${frame + 1} 008`, { exact: true }),
+    ).toHaveCount(0);
+
     // Momentum is still browser-owned scrolling. Exact compensation is expected only once the
     // scroll-end debounce fires; forcing it per frame would hide the iOS regression by replacing
     // native behavior with a test-only scroll state machine.
@@ -405,6 +414,7 @@ test("mobile momentum scrolling stays anchored after touchend while output strea
     );
   }
   await waitForChatScrollToSettle(page);
+  await expect(page.getByText("momentum stream frame 3 008", { exact: true })).toBeAttached();
   expect(finalAnchor).not.toBeNull();
   if (testInfo.project.name === "mobile-webkit-core-scroll") {
     // Playwright cannot synthesize a native WebKit swipe/momentum gesture. This test models the

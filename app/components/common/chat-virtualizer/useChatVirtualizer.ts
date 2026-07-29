@@ -49,6 +49,13 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
   const virtualizer = directVirtualizer.virtualizer;
   virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) =>
     shouldAdjustChatScrollForSizeChange(item, delta, instance, sticky.followLatest.value);
+  const isScrolling = computed(() => {
+    // `useDirectDomVirtualizer` triggers its shallow ref when TanStack's range or scrolling flag
+    // changes. Reading the ref before the mutable instance field makes this official Virtualizer
+    // state reactive without installing a second scroll listener or idle timer.
+    const instance = virtualizer.value;
+    return instance.isScrolling;
+  });
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());
 
   function bottomOffset(viewport: HTMLElement) {
@@ -98,6 +105,35 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
     directVirtualizer.refresh();
   }
 
+  async function commitPreservingViewport(commit: () => void) {
+    const generation = ++reflowGeneration;
+    const viewport = options.getViewport();
+    const anchor = captureViewportRowAnchor(viewport);
+    const scrollTop = viewport?.scrollTop ?? 0;
+
+    commit();
+    await nextTick();
+    const currentViewport = options.getViewport();
+    if (!currentViewport || generation !== reflowGeneration) return;
+
+    // The buffered commit happens only after TanStack reports scroll end, so mounted rows can be
+    // synchronously measured in this post-flush phase. Restore one keyed anchor before paint; do
+    // not replay every buffered token or add a RAF compensation loop.
+    directVirtualizer.refresh({ forceStyles: true, remeasure: false });
+    measureVisibleItems();
+    if (sticky.followLatest.value) {
+      scrollToBottom(currentViewport);
+      return;
+    }
+    const anchorElement = anchor ? findViewportRowByKey(currentViewport, anchor.key) : null;
+    if (anchorElement && anchor) {
+      currentViewport.scrollTop += anchorElement.getBoundingClientRect().top - anchor.top;
+    } else {
+      currentViewport.scrollTop = scrollTop;
+    }
+    directVirtualizer.refresh({ forceStyles: true, remeasure: false });
+  }
+
   async function reflow(reflowOptions: { preserveViewport?: boolean } = {}) {
     const generation = ++reflowGeneration;
     const viewport = options.getViewport();
@@ -134,11 +170,13 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
 
   return {
     bindInputListeners: sticky.bindInputListeners,
+    commitPreservingViewport,
     containerElement: directVirtualizer.containerElement,
     containerRef: directVirtualizer.containerRef,
     followLatest: sticky.followLatest,
     followContentChange: sticky.followContentChange,
     initialBottomAligned: sticky.initialBottomAligned,
+    isScrolling,
     isNearBottom: sticky.isNearBottom,
     measureElement,
     measureVisibleItems,

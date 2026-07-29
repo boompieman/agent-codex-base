@@ -1,4 +1,5 @@
 import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
+import { markRaw, toRaw } from "vue";
 import { itemKey, userMessageVariant, type ThreadTurnSections } from "./thread-turn-sections";
 
 export type { ThreadTimelineTurn } from "~~/shared/types";
@@ -88,6 +89,26 @@ export function estimateThreadTimelineRow(row: ThreadTimelineRow | undefined) {
   if (row === undefined) return 96;
   if (row.type === "intermediateHeader") return 48;
   return estimatedItemHeights[row.item.type] ?? 96;
+}
+
+export function createThreadTimelinePresentationRow(row: ThreadTimelineRow) {
+  if (row.type === "intermediateHeader") return row;
+
+  // App-server deltas mutate the reactive item retained by the history store. Passing that proxy
+  // directly into a row component lets it update independently of the virtual viewport, so an
+  // outer `v-memo` cannot freeze presentation during native scrolling. A shallow immutable view
+  // model snapshots scalar stream fields (notably Agent text and command output) without copying
+  // their potentially large string payloads. Nested values come from Vue's raw target and remain
+  // non-reactive; the next committed presentation revision creates the next view model.
+  //
+  // Keep this conversion beside the timeline row model rather than in the generic virtualizer:
+  // only this layer knows which field is the app-server proxy, while file trees and other virtual
+  // lists must not pay for chat-specific snapshots.
+  const rawItem = toRaw(row.item);
+  return markRaw({
+    ...row,
+    item: markRaw({ ...rawItem }) as ThreadTimelineItem,
+  }) satisfies ThreadTimelineRow;
 }
 
 function appendItemRows(
