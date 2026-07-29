@@ -1,18 +1,9 @@
 <script setup lang="ts">
 import type { VirtualItem } from "@tanstack/virtual-core";
-import {
-  useDocumentVisibility,
-  useElementVisibility,
-  useEventListener,
-  useResizeObserver,
-} from "@vueuse/core";
+import { useDocumentVisibility, useElementVisibility, useEventListener } from "@vueuse/core";
 import type { ComponentPublicInstance } from "vue";
-import { computed, onMounted, ref, shallowRef, watch } from "vue";
-import {
-  ChatVirtualScrollFrame,
-  useChatVirtualizer,
-  useScrollBufferedPresentation,
-} from "@/components/common/chat-virtualizer";
+import { computed, ref, watch } from "vue";
+import { ChatVirtualScrollFrame, useChatVirtualizer } from "@/components/common/chat-virtualizer";
 
 interface TimelineViewportRow {
   key: string;
@@ -22,7 +13,6 @@ interface TimelineViewportRow {
 
 const props = defineProps<{
   rows: TimelineViewportRow[];
-  followKey: unknown;
   estimateSize: (row: unknown, index: number) => number;
 }>();
 
@@ -32,57 +22,55 @@ const emit = defineEmits<{
 }>();
 
 const scrollFrameRef = ref<InstanceType<typeof ChatVirtualScrollFrame> | null>(null);
-const threshold = 80;
+// Keep end following strict like TanStack's Chat default: a reader who moves even slightly away
+// from latest owns that position. The larger top threshold is only an ergonomic history trigger;
+// sharing it with end detection previously made a 48px upward scroll continue following output.
+const latestThreshold = 2;
+const historyStartThreshold = 80;
 const startControlsVisible = ref(false);
-const presentedRows = shallowRef<TimelineViewportRow[]>([...props.rows]);
-const presentationRevision = shallowRef(0);
 
 const chatVirtualizer = useChatVirtualizer({
-  count: () => presentedRows.value.length,
-  threshold,
+  count: () => props.rows.length,
+  threshold: latestThreshold,
   getViewport: scrollViewport,
-  getItemKey: (index: number) => presentedRows.value[index]?.key ?? index,
-  estimateSize: (index: number) => props.estimateSize(presentedRows.value[index], index),
+  getItemKey: (index: number) => props.rows[index]?.key ?? index,
+  estimateSize: (index: number) => props.estimateSize(props.rows[index], index),
   overscan: 6,
   onViewportScroll: (viewport) => {
     // A short chat is simultaneously at the top and bottom. Only interpret
     // top proximity as history intent after explicit upward input detached the
     // outer timeline. Do not infer intent from an underfilled initial page: the
     // initial activation is atomic, and older history is loaded only on explicit input.
-    const reachedStart = chatVirtualizer.userDetached.value && viewport.scrollTop <= threshold;
+    const reachedStart =
+      chatVirtualizer.userDetached.value && viewport.scrollTop <= historyStartThreshold;
     startControlsVisible.value = reachedStart;
     if (reachedStart) {
       emit("reachStart");
     }
   },
-  scrollToBottom: () => {
-    // Keep bottom alignment in TanStack's coordinate system. A history prepend
-    // first expands the DOM sizer with estimated rows and then replaces those
-    // estimates with mobile-width measurements. Writing viewport.scrollTop from
-    // the intermediate DOM scrollHeight loses the keyed end anchor and moves the
-    // previously visible latest row. Do not replace this with direct scrollHeight
-    // arithmetic; scrollToEnd lets virtual-core apply the prepend and measurement
-    // deltas as one end-anchored transaction.
-    if (props.rows.length) {
-      virtualizer.value.scrollToEnd({ behavior: "auto" });
-    }
-  },
-});
-const virtualizer = chatVirtualizer.virtualizer;
-
-useScrollBufferedPresentation({
-  source: () => props.rows,
-  sourceRevision: () => props.followKey,
-  frozen: () => chatVirtualizer.userDetached.value && chatVirtualizer.isScrolling.value,
-  presented: presentedRows,
-  presentationRevision,
-  commitPreservingViewport: chatVirtualizer.commitPreservingViewport,
 });
 
 const virtualRows = chatVirtualizer.virtualItems;
 const viewportElement = computed(() => scrollViewport());
 const viewportVisible = useElementVisibility(viewportElement);
 const documentVisibility = useDocumentVisibility();
+
+// An underfilled first page is both at the start and at the end, so Chat mode correctly remains
+// bottom-following and cannot infer that an upward wheel means "load history" from scrollOffset.
+// Keep this VueUse listener strictly at the pagination boundary: it may request an older page, but
+// must never change followLatest, isScrolling, anchors, or scrollTop.
+useEventListener(
+  viewportElement,
+  "wheel",
+  (event) => {
+    const viewport = viewportElement.value;
+    if (event.deltaY >= 0 || viewport === null || viewport.scrollTop > historyStartThreshold)
+      return;
+    startControlsVisible.value = true;
+    emit("reachStart");
+  },
+  { passive: true },
+);
 
 function scrollViewport() {
   return scrollFrameRef.value?.getViewport() ?? null;
@@ -95,7 +83,6 @@ function setRowRef(refValue: Element | ComponentPublicInstance | null) {
   }
   const index = Number((element as HTMLElement).dataset.index);
   if (Number.isFinite(index)) chatVirtualizer.measureElement(element);
-  chatVirtualizer.bindInputListeners();
 }
 
 function rowStyle(_virtualRow: VirtualItem) {
@@ -108,80 +95,20 @@ function rowStyle(_virtualRow: VirtualItem) {
 }
 
 function resetFollowLatest() {
-  chatVirtualizer.refresh();
-  chatVirtualizer.reset();
+  void chatVirtualizer.scrollToLatest();
 }
 
-function reflowPreservingViewport() {
-  if (chatVirtualizer.followLatest.value) {
-    // Mobile browsers resize 100dvh as their toolbar settles. Waiting for the
-    // detached-reader two-frame reflow lets the new viewport paint off-bottom
-    // and then snap back. Pinned readers only need the synchronous chat follow
-    // path; detached readers still require the keyed anchor flow below.
-    chatVirtualizer.followContentChange();
-    return;
-  }
-  void chatVirtualizer.reflow({ preserveViewport: true });
-}
-
-useResizeObserver(viewportElement, reflowPreservingViewport);
-useEventListener(
-  () => (import.meta.client ? window.visualViewport : null),
-  "resize",
-  reflowPreservingViewport,
-);
-// Do not also subscribe to window.resize. visualViewport reports mobile toolbar
-// geometry first, while the element observer owns the final layout; a third
-// duplicate source can follow an unrelated later content transaction.
-useResizeObserver(chatVirtualizer.containerElement, () => {
-  if (!chatVirtualizer.followLatest.value) return;
-
-  // TanStack updates the direct-DOM sizer only after estimated row heights
-  // become real measurements. Following that notification keeps pinned
-  // prepend/viewport reflow correction in the same pre-paint layout phase.
-  //
-  // Do not synchronously remeasure rows here: that bypasses virtual-core's
-  // keyed transaction. Detached intent is retained by the input state machine,
-  // so this callback can trust followLatest without a second transaction flag.
-  // Do not defer with RAF; the stale bottom would already have painted.
-  chatVirtualizer.followContentChange();
-});
-
-watch(
-  () => presentedRows.value.map((row) => row.key).join("\0"),
-  () => {
-    if (chatVirtualizer.followLatest.value) {
-      // Prepending measured history is not an append, so followOnAppend does
-      // not own this transaction. Run one post-flush follow after Vue has
-      // mounted and measured the new rows; this prevents narrow mobile rows
-      // from painting at estimated offsets before TanStack's later correction.
-      chatVirtualizer.followContentChange();
-    }
-  },
-  { flush: "post" },
-);
-
+// TanStack's ResizeObserver owns actual viewport changes and dynamic row measurements. These
+// watchers only reconnect the direct Vue adapter after Dockview or the browser hid a still-mounted
+// panel. They intentionally do not add another resize listener, restore a DOM anchor, or write
+// scrollTop; any of those would race the core Chat transaction when the panel becomes visible.
 watch(viewportVisible, (visible, previous) => {
-  if (visible && previous === false) reflowPreservingViewport();
+  if (visible && previous === false) chatVirtualizer.refresh();
 });
 
 watch(documentVisibility, (visibility, previous) => {
-  if (visibility === "visible" && previous !== "visible") reflowPreservingViewport();
+  if (visibility === "visible" && previous !== "visible") chatVirtualizer.refresh();
 });
-
-watch(
-  presentationRevision,
-  () => {
-    startControlsVisible.value = false;
-    // Presentation revision changes immediately for a pinned reader and once at scroll end for a
-    // detached moving reader. Watching the committed revision rather than live `followKey` keeps
-    // stream data reactive in Pinia without letting unpresented updates trigger DOM measurement.
-    if (chatVirtualizer.followLatest.value) {
-      chatVirtualizer.followContentChange();
-    }
-  },
-  { flush: "post" },
-);
 
 watch(
   () => chatVirtualizer.userDetached.value,
@@ -192,17 +119,9 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  chatVirtualizer.bindInputListeners();
-  resetFollowLatest();
-  void chatVirtualizer.reflow({ preserveViewport: false });
-});
-
 function handleViewportReady() {
   chatVirtualizer.refresh();
-  chatVirtualizer.bindInputListeners();
   resetFollowLatest();
-  void chatVirtualizer.reflow({ preserveViewport: false });
 }
 
 defineExpose({ resetFollowLatest });
@@ -213,6 +132,7 @@ defineExpose({ resetFollowLatest });
     ref="scrollFrameRef"
     data-testid="chat-scroll-area"
     :data-follow-latest="chatVirtualizer.followLatest.value ? 'true' : 'false'"
+    :data-is-scrolling="chatVirtualizer.isScrolling.value ? 'true' : 'false'"
     class="h-full min-h-0 flex-1 overflow-hidden"
     @viewport-ready="handleViewportReady"
   >
@@ -232,18 +152,13 @@ defineExpose({ resetFollowLatest });
           :key="String(virtualRow.key)"
           :ref="setRowRef"
           :data-index="virtualRow.index"
-          :data-row-key="presentedRows[virtualRow.index]?.key"
-          :data-row-type="presentedRows[virtualRow.index]?.type"
-          :data-row-section="presentedRows[virtualRow.index]?.section"
+          :data-row-key="rows[virtualRow.index]?.key"
+          :data-row-type="rows[virtualRow.index]?.type"
+          :data-row-section="rows[virtualRow.index]?.section"
           class="pb-5 md:pb-8"
           :style="rowStyle(virtualRow)"
-          v-memo="[presentationRevision, virtualRow.key]"
         >
-          <slot
-            :row="presentedRows[virtualRow.index]"
-            :index="virtualRow.index"
-            :revision="presentationRevision"
-          />
+          <slot :row="rows[virtualRow.index]" :index="virtualRow.index" />
         </div>
       </div>
     </div>

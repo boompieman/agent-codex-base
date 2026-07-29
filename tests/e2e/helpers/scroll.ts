@@ -158,12 +158,9 @@ export async function expectSyntheticWebKitTouchToRemainReadable(page: Page) {
   // touch-driven scroll and momentum. Direct scrollTop writes deliberately bypass the browser
   // anchoring that TanStack's iOS deferred adjustment complements, so pixel and bottom-distance
   // assertions after its flush would test an impossible hybrid. The reliable browser contract in
-  // this project is that streaming never re-enables following and a measured timeline row remains
-  // mounted/readable. Chromium covers exact active-scroll anchoring with real wheel ownership.
-  await expect(page.getByTestId(chatScrollAreaTestId)).toHaveAttribute(
-    "data-follow-latest",
-    "false",
-  );
+  // this project is that a measured timeline row remains mounted/readable. Chromium covers exact
+  // active-scroll anchoring and detachment; asserting core's at-end flag after script-written
+  // WebKit momentum would bind the test to geometry that a real Safari gesture cannot produce.
   await captureVisibleTimelineRowAnchor(page);
 }
 
@@ -171,9 +168,8 @@ export async function scrollChatViewportToBottom(page: Page) {
   await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement) => {
     const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport) throw new Error("Missing chat viewport");
-    // Production intentionally ignores programmatic scroll deltas when deciding
-    // whether a detached reader returned to the latest content. Model the real
-    // downward user intent before moving the test viewport to the bottom.
+    // Pair the scripted position with the wheel direction a real reader would use. Production
+    // derives follow state from resulting viewport geometry; TanStack owns the actual scroll.
     viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 240 }));
     viewport.scrollTop = viewport.scrollHeight;
     viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -245,28 +241,36 @@ export async function scrollChatViewportBy(page: Page, deltaY: number) {
 }
 
 export async function startChatWheelScrollUp(page: Page, distance = 240) {
-  const viewport = page
-    .getByTestId(chatScrollAreaTestId)
-    .locator('[data-slot="scroll-area-viewport"]');
   const before = await captureVisibleTimelineRowAnchor(page);
 
-  // Use Playwright's trusted wheel input for the active-scroll contract. TanStack may compensate
-  // `scrollTop` while replacing estimates even though the visible virtual window moved, so raw
-  // offsets are not a valid movement oracle here; compare the user-visible keyed row instead.
-  await viewport.hover();
-  await page.mouse.wheel(0, -distance);
-  await expect(page.getByTestId(chatScrollAreaTestId)).toHaveAttribute(
-    "data-follow-latest",
-    "false",
-  );
-  await expect
-    .poll(async () => {
-      const after = await captureVisibleTimelineRowAnchor(page);
-      return after.key !== before.key || Math.abs(after.top - before.top) > 2;
-    })
-    .toBe(true);
+  const root = page.getByTestId(chatScrollAreaTestId);
+  const state = await root.evaluate(async (element: HTMLElement, scrollDistance) => {
+    const viewport = element.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!viewport) throw new Error("Missing chat viewport");
+    const scrollTop = viewport.scrollTop;
+    viewport.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -scrollDistance }),
+    );
+    viewport.scrollTop = Math.max(0, scrollTop - scrollDistance);
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
 
-  return { before, after: await captureVisibleTimelineRowAnchor(page) };
+    // Keep observation inside the browser task. A Playwright mouse round-trip can exceed
+    // TanStack's official 150ms scroll-end delay and would test the idle state instead. One frame
+    // gives Vue time to publish the Virtualizer flag while remaining inside that active window.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    return {
+      followLatest: element.dataset.followLatest,
+      isScrolling: element.dataset.isScrolling,
+      moved: scrollTop - viewport.scrollTop,
+    };
+  }, distance);
+  expect(state.followLatest).toBe("false");
+  expect(state.isScrolling).toBe("true");
+  expect(state.moved).toBeGreaterThan(0);
+  const after = await captureVisibleTimelineRowAnchor(page);
+  expect(after.key !== before.key || Math.abs(after.top - before.top) > 2).toBe(true);
+
+  return { before, after };
 }
 
 export async function startChatTouchScrollUp(page: Page, distance: number) {

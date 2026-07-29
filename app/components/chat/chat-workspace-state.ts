@@ -53,11 +53,6 @@ export function useChatWorkspaceState() {
     }),
     selectedThreadViewReady,
     visibleError,
-    followKey: computed(() => [
-      viewRefs.scrollToLatestToken.value,
-      navigationRefs.selectedHostId.value,
-      navigationRefs.selectedThreadId.value,
-    ]),
     canOpenTerminal: computed(() => navigationRefs.selectedHostId.value !== null),
   };
 }

@@ -21,7 +21,6 @@ const {
   loadingOlderTurns,
   olderTurnsCursor,
   visibleError,
-  followKey,
   selectedThreadViewReady,
 } = useChatWorkspaceState();
 const threadTurns = useGatewayThreadTurnsStore();
@@ -64,7 +63,6 @@ const showThreadLoading = computed(
         :loading="loading"
         :loading-older="loadingOlderTurns"
         :older-turns-cursor="olderTurnsCursor"
-        :follow-key="followKey"
         @load-older="threadTurns.loadOlderTurns"
       />
 

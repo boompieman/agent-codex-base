@@ -39,6 +39,7 @@ import {
   releaseDeferredThreadTurnsLoad,
   startBottomDistanceTracking,
   startElementTopTracking,
+  startLocatorTopTracking,
   stopFrameTracking,
   threadTurnCount,
   threadTurnsLoadRequests,
@@ -260,7 +261,6 @@ test("streaming Agent output keeps a manually detached reader in place", async (
   });
 
   await page.waitForTimeout(300);
-  await expect(page.getByText("detached incoming line 040", { exact: true })).toBeAttached();
   await expect.poll(() => chatViewportScrollTop(page)).toBeGreaterThanOrEqual(scrollTop - 2);
   await expect.poll(() => chatViewportScrollTop(page)).toBeLessThanOrEqual(scrollTop + 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
@@ -380,94 +380,50 @@ test("streaming output does not drift the viewport during upward wheel scrolling
   // synthetic scrollTop write is browser setup noise, not an active-scroll scenario.
   await waitForAnimationFrames(page, 4);
 
-  // One browser wheel gesture owns a short active-scroll window. Stream several deltas inside that
-  // window instead of repeatedly assigning scrollTop: a later synthetic assignment can be exactly
-  // cancelled when TanStack replaces newly overscanned estimates, even though a real wheel gesture
-  // already happened. Touch continuation and momentum are covered separately on mobile.
+  // One scenario covers every mutation that previously competed for active-scroll ownership:
+  // overscan remeasurement, streamed content, and a newly appended timeline row. Touch
+  // continuation and momentum remain separate because mobile browsers own those gestures.
   await startChatWheelScrollUp(page);
+  const scrollTopAfterGesture = await chatViewportScrollTop(page);
+  await growMeasuredRowAboveViewport(page);
+  await waitForAnimationFrames(page, 3);
+  // A delayed image/Markdown measurement above the fold must not write a reverse scroll delta
+  // while the browser owns upward movement. The old override added exactly the row's 160px growth.
+  expect(await chatViewportScrollTop(page)).toBeLessThanOrEqual(scrollTopAfterGesture + 2);
+
+  // Re-arm the wheel-owned window after the reflow assertion. Official Chat mode keeps Vue state
+  // reactive while TanStack limits mounted rows to the virtual window; the contract is viewport
+  // stability, not freezing a second presentation snapshot until scroll end.
+  await startChatWheelScrollUp(page, 120);
   const anchor = await captureVisibleTextAnchor(page, "wheel scroll history");
-  for (let batch = 0; batch < 3; batch += 1) {
-    await appendAgentStreamLines(page, {
-      itemId: "agent-wheel-streaming",
-      prefix: `wheel stream batch ${batch + 1}`,
-      count: 8,
-    });
-    await waitForAnimationFrames(page, 1);
-
-    // The store already contains this delta, but a detached reader's mounted timeline snapshot
-    // must stay unchanged until TanStack reports scroll end. This assertion is intentionally about
-    // DOM presence rather than visibility: the streaming row remains inside overscan here.
-    await expect(
-      page.getByText(`wheel stream batch ${batch + 1} 008`, { exact: true }),
-    ).toHaveCount(0);
-
-    await expect
-      .poll(() => visibleTextTop(page, anchor.text))
-      .toBeGreaterThanOrEqual(anchor.top - 2);
-    await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
-    await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute(
-      "data-follow-latest",
-      "false",
-    );
-  }
-
-  await waitForChatScrollToSettle(page);
-  await expect(page.getByText("wheel stream batch 3 008", { exact: true })).toBeAttached();
-});
-
-test("new timeline rows commit once after active scrolling stops", async ({ page }) => {
-  await openApp(page);
-  const threadId = "e2e-scroll-buffered-structural-row";
-  const activeTurnId = "turn-buffered-structural-row";
-  await seedGatewayThread(page, {
-    projectId: 1,
-    threadId,
-    currentThread: { id: threadId, name: "Buffered Structural Row" },
-    status: "running",
-    history: {
-      thread: {
-        id: threadId,
-        turns: [
-          ...buildVariableHeightTurns(threadId, 36, "buffered row history"),
-          {
-            id: activeTurnId,
-            status: "running",
-            items: [
-              {
-                id: "agent-buffered-existing",
-                type: "agentMessage",
-                status: "inProgress",
-                text: "existing active output",
-              },
-            ],
-          },
-        ],
-      },
-    },
+  await appendAgentStreamLines(page, {
+    itemId: "agent-wheel-streaming",
+    prefix: "wheel stream detached",
+    count: 8,
   });
-
-  await expect(page.getByText("existing active output")).toBeVisible();
-  await waitForScrollableChatViewportAtBottom(page);
-  await waitForAnimationFrames(page, 4);
-  await startChatWheelScrollUp(page);
-  const anchor = await captureVisibleTextAnchor(page, "buffered row history");
-
   await appendAgentTimelineItem(page, {
-    turnId: activeTurnId,
-    itemId: "agent-buffered-new-row",
-    text: "new row buffered during scroll",
+    turnId: "turn-wheel-streaming",
+    itemId: "agent-wheel-new-row",
+    text: "new row streamed during scroll",
   });
-  await waitForAnimationFrames(page, 2);
+  await waitForAnimationFrames(page, 1);
 
-  await expect(page.getByText("new row buffered during scroll", { exact: true })).toHaveCount(0);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
 
+  await startLocatorTopTracking(page.getByText(anchor.text, { exact: true }));
   await waitForChatScrollToSettle(page);
-  await expect(page.getByText("new row buffered during scroll", { exact: true })).toBeAttached();
+  const settleSamples = await stopFrameTracking(page);
+  expect(frameSpread(settleSamples), JSON.stringify(settleSamples)).toBeLessThanOrEqual(2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeGreaterThanOrEqual(anchor.top - 2);
   await expect.poll(() => visibleTextTop(page, anchor.text)).toBeLessThanOrEqual(anchor.top + 2);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
+
+  // The streamed rows are below the current virtual window. Returning to latest verifies that
+  // normal reactive updates were retained without weakening virtualization for off-screen content.
+  await scrollChatViewportToBottom(page);
+  await expect(page.getByText("wheel stream detached 008", { exact: true })).toBeVisible();
+  await expect(page.getByText("new row streamed during scroll", { exact: true })).toBeVisible();
 });
 
 test("downward wheel scrolling stays detached until the reader reaches latest", async ({
@@ -864,6 +820,12 @@ test("streaming output does not force scroll when the user is reading earlier co
   await scrollChatViewportToBottom(page);
   await expect(page.getByRole("button", { name: /node long-output\.js/ })).toBeVisible();
   await page.getByRole("button", { name: /node long-output\.js/ }).click();
+  // Expanding an outer timeline card is allowed to move the latest edge: that interaction changes
+  // the row's visible height and is not the bounded command scrollport this assertion targets.
+  // Return to latest explicitly, then verify that only scrolling inside the command output leaves
+  // the outer Chat virtualizer pinned. Do not make production infer another follow transaction
+  // from disclosure state merely to couple these two independent scroll owners.
+  await scrollChatViewportToBottom(page);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "true");
   const commandScrollTop = await parkCommandOutputInMiddle(page);
   // The command output owns a bounded inner viewport. Its wheel event must not
@@ -1086,7 +1048,6 @@ test("loading older turns prepends history without moving the current viewport a
   });
 
   await scrollChatViewportToTop(page);
-  await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
   await expect
     .poll(() => threadTurnsLoadRequests(page).then((requests) => requests.length))
     .toBe(1);

@@ -87,6 +87,8 @@ minimumReleaseAgeExclude:
   - "@oxlint/binding-win32-ia32-msvc@1.76.0"
   - "@oxlint/binding-win32-x64-msvc@1.76.0"
   - "oxlint@1.76.0"
+  - "@tanstack/virtual-core@3.17.7"
+  - "@tanstack/vue-virtual@3.13.35"
 
 overrides:
   crossws: 0.4.7

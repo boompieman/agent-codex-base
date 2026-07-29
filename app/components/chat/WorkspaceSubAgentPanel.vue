@@ -8,7 +8,6 @@ defineProps<{
   panel: SubAgentPanelState;
   preview: ThreadViewState | null;
   turns: ThreadTimelineTurn[];
-  followKey: unknown;
   status: ThreadRuntimeStatus;
 }>();
 
@@ -40,6 +39,6 @@ const emit = defineEmits<{
         {{ $t("app.interruptSubAgent") }}
       </button>
     </div>
-    <SubAgentPanelBody :panel="panel" :preview="preview" :turns="turns" :follow-key="followKey" />
+    <SubAgentPanelBody :panel="panel" :preview="preview" :turns="turns" />
   </div>
 </template>

@@ -10,7 +10,6 @@ const props = defineProps<{
   panel: SubAgentPanelState;
   preview: ThreadViewState | null;
   turns: ThreadTimelineTurn[];
-  followKey: unknown;
 }>();
 
 const { t } = useI18n();
@@ -34,7 +33,6 @@ const threadStatus = computed(
       v-else-if="turns.length"
       :thread-id="panel.threadId"
       :thread-status="threadStatus"
-      :follow-key="followKey"
       :turns="turns"
       :host-id="panel.hostId"
       :project-id="null"

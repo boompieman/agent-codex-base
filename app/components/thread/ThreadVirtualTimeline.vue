@@ -24,7 +24,6 @@ const props = defineProps<{
   loading: boolean;
   loadingOlder: boolean;
   olderTurnsCursor: string | null;
-  followKey: unknown;
 }>();
 
 const emit = defineEmits<{
@@ -116,7 +115,6 @@ watch(
     ref="viewportRef"
     :key="threadId ?? 'empty-thread'"
     :rows="rows"
-    :follow-key="followKey"
     :estimate-size="estimateRowSize"
     @reach-start="handleReachStart"
     @user-detached-change="handleUserDetachedChange"
@@ -135,10 +133,9 @@ watch(
       </div>
     </template>
 
-    <template #default="{ row, revision }">
+    <template #default="{ row }">
       <ThreadTimelineRowView
         :row="timelineRow(row)"
-        :presentation-revision="revision"
         :host-id="hostId"
         :thread-id="threadId"
         @intermediate-toggle="setIntermediateOpen"
