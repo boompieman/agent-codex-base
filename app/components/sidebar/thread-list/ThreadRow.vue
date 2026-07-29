@@ -8,7 +8,6 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Input } from "@/components/ui/input";
 import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import { selectedRowClass } from "../sidebar-utils";
@@ -23,8 +22,6 @@ const props = defineProps<{
   status: ThreadRuntimeStatus;
   completionAttention?: boolean;
   subtitle?: string;
-  renameActive?: boolean;
-  renameValue?: string;
   pinLabel: string;
   showPinnedIcon?: boolean;
   longPressHandlers?: Record<string, unknown>;
@@ -34,27 +31,13 @@ const emit = defineEmits<{
   open: [];
   togglePin: [];
   rename: [];
-  submitRename: [];
-  renameKeydown: [event: KeyboardEvent];
-  "update:renameValue": [value: string];
 }>();
 
 const pressHandlers = computed(() => props.longPressHandlers ?? {});
 </script>
 
 <template>
-  <div v-if="renameActive" class="rounded-lg px-3 py-1">
-    <Input
-      :model-value="renameValue"
-      data-testid="rename-thread-input"
-      class="h-7 min-w-0 bg-surface/80"
-      @update:model-value="emit('update:renameValue', String($event))"
-      @keydown="emit('renameKeydown', $event)"
-      @keydown.enter.prevent="emit('submitRename')"
-      @blur="emit('submitRename')"
-    />
-  </div>
-  <ContextMenu v-else>
+  <ContextMenu>
     <ContextMenuTrigger as-child>
       <Button
         :data-testid="testId"

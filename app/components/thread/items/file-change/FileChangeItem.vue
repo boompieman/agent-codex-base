@@ -18,6 +18,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const fileChanges = computed(() => (Array.isArray(props.item.changes) ? props.item.changes : []));
 const openChangeKeys = ref(new Set<string>());
+const initializedChangeKeys = new Set<string>();
 const output = computed(() => props.item.aggregatedOutput || threadItemResultText(props.item));
 const itemStatus = computed(() =>
   typeof props.item.status === "string" ? props.item.status : props.item.status?.type,
@@ -60,13 +61,22 @@ function setChangeOpen(change: ThreadFileChange, open: boolean) {
 watch(
   () => fileChanges.value.map((change) => fileChangeKey(change)),
   (changes) => {
-    // Diff parsing and syntax highlighting are intentionally mounted only after an explicit
-    // user expansion. Streaming updates may add many files at once; auto-opening those cards
-    // defeats outer timeline virtualization because every mounted row would build every diff.
-    openChangeKeys.value = new Set(
-      [...openChangeKeys.value].filter((key) => changes.includes(key)),
-    );
+    const currentKeys = new Set(changes);
+    const nextOpenKeys = new Set([...openChangeKeys.value].filter((key) => currentKeys.has(key)));
+    for (const key of initializedChangeKeys) {
+      if (!currentKeys.has(key)) initializedChangeKeys.delete(key);
+    }
+    for (const key of changes) {
+      if (initializedChangeKeys.has(key)) continue;
+      initializedChangeKeys.add(key);
+      nextOpenKeys.add(key);
+    }
+    // A visible file change starts expanded, matching the Agent timeline's historical behavior.
+    // Once the user closes it, keep the expensive diff renderer unmounted and remember that choice
+    // while streaming updates mutate the same change. New files still open on first appearance.
+    openChangeKeys.value = nextOpenKeys;
   },
+  { immediate: true },
 );
 </script>
 

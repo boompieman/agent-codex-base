@@ -55,10 +55,6 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await openIntermediateSteps(page);
   const toggle = page.getByRole("button", { name: /src\/example\.py/ });
   const diffText = page.getByText("new_value =");
-  await expect(toggle).toHaveAttribute("data-state", "closed");
-  await expect(diffText).toHaveCount(0);
-
-  await toggle.click();
   await expect(toggle).toHaveAttribute("data-state", "open");
   await expect(diffText).toBeVisible();
   await expect
@@ -69,9 +65,19 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await expect(toggle).toHaveAttribute("data-state", "closed");
   await expect(diffText).toBeHidden();
 
+  await appendFileDiffLines(page, {
+    itemId: "file-change-1",
+    path: "src/example.py",
+    prefix: "streamed while manually collapsed",
+    count: 2,
+  });
+  await expect(toggle).toHaveAttribute("data-state", "closed");
+  await expect(page.getByText("streamed while manually collapsed 001")).toHaveCount(0);
+
   await toggle.click();
   await expect(toggle).toHaveAttribute("data-state", "open");
   await expect(diffText).toBeVisible();
+  await expect(page.getByText("streamed while manually collapsed 001")).toBeVisible();
 });
 
 test("short command output uses natural height instead of a fixed minimum", async ({ page }) => {
@@ -160,7 +166,10 @@ test("streaming diff keeps user-selected horizontal scroll position", async ({ p
   });
 
   await openIntermediateSteps(page);
-  await page.getByRole("button", { name: /src\/wide\.py/ }).click();
+  await expect(page.getByRole("button", { name: /src\/wide\.py/ })).toHaveAttribute(
+    "data-state",
+    "open",
+  );
   await expect(page.getByText("wide_line_001")).toBeVisible();
   const chosenScrollLeft = await setDiffScrollLeft(page, "wide_line_001", 96);
   expect(chosenScrollLeft).toBeGreaterThan(0);
@@ -258,7 +267,10 @@ test("switching threads keeps asynchronously rendered diff content in normal flo
   await page.getByTestId(`thread-button-${shortThreadId}`).click();
   await expect(page.getByText("short thread content")).toBeVisible();
   await page.getByTestId(`thread-button-${diffThreadId}`).click();
-  await page.getByRole("button", { name: /src\/async\.py/ }).click();
+  await expect(page.getByRole("button", { name: /src\/async\.py/ })).toHaveAttribute(
+    "data-state",
+    "open",
+  );
   await expect(page.getByText("async_diff_line_120")).toBeVisible();
   await expect(page.getByText(finalMarker)).toBeVisible();
   await expect.poll(() => diffEndsBeforeText(page, finalMarker)).toBe(true);

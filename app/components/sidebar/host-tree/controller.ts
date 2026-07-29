@@ -14,8 +14,6 @@ export interface HostTreeController {
   selectedProjectId: number | null;
   selectedThreadId: string | null;
   hostConnectionStatuses: Record<number, { status: string; message?: string | null }>;
-  renamingThreadKey: string | null;
-  renameValue: string;
   longPressHandlers?: Record<string, unknown>;
   selectHost: (hostId: number) => void;
   addProject: (host: HostRecord) => void;
@@ -28,9 +26,6 @@ export interface HostTreeController {
   openThread: (threadId: string, context: { hostId: number; projectId: number }) => void;
   toggleThreadPin: (threadId: string, pinned: boolean) => void;
   rename: (thread: SidebarThread & { hostId: number }) => void;
-  submitRename: () => void;
-  renameKeydown: (event: KeyboardEvent) => void;
-  updateRenameValue: (value: string) => void;
   threadRuntimeStatus: (hostId: number, threadId: string) => ThreadRuntimeStatus;
   threadCompletionAttention: (hostId: number, threadId: string) => boolean;
 }

@@ -9,8 +9,6 @@ const props = defineProps<{
   hosts: HostRecord[];
   selectedHostId: number | null;
   selectedThreadId: string | null;
-  renamingThreadKey: string | null;
-  renameValue: string;
   longPressHandlers?: Record<string, unknown>;
   runtimeStatus: (thread: PinnedThreadRecord) => ThreadRuntimeStatus;
   completionAttention: (thread: PinnedThreadRecord) => boolean;
@@ -20,9 +18,6 @@ const emit = defineEmits<{
   open: [thread: PinnedThreadRecord];
   unpin: [thread: PinnedThreadRecord];
   rename: [thread: PinnedThreadRecord];
-  submitRename: [];
-  renameKeydown: [event: KeyboardEvent];
-  "update:renameValue": [value: string];
 }>();
 
 function subtitleForPinnedThread(thread: PinnedThreadRecord) {
@@ -54,17 +49,12 @@ function isSelectedPinnedThread(thread: PinnedThreadRecord) {
         :status="runtimeStatus(thread)"
         :completion-attention="completionAttention(thread)"
         :subtitle="subtitleForPinnedThread(thread) || formatRelative(thread.updatedAt)"
-        :rename-active="renamingThreadKey === pinnedThreadKey(thread)"
-        :rename-value="renameValue"
         :pin-label="$t('app.unpinThread')"
         :long-press-handlers="longPressHandlers"
         show-pinned-icon
         @open="emit('open', thread)"
         @toggle-pin="emit('unpin', thread)"
         @rename="emit('rename', thread)"
-        @submit-rename="emit('submitRename')"
-        @rename-keydown="emit('renameKeydown', $event)"
-        @update:rename-value="emit('update:renameValue', $event)"
       />
     </div>
   </section>

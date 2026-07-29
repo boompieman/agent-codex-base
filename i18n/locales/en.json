@@ -163,6 +163,7 @@
     "pinThread": "Pin thread",
     "unpinThread": "Unpin thread",
     "renameThread": "Rename thread",
+    "renameThreadDescription": "Change the name shown for this thread in Codex and the sidebar.",
     "threadName": "Thread name",
     "save": "Save",
     "cancel": "Cancel",
