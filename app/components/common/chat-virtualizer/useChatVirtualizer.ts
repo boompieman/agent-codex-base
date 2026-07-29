@@ -1,38 +1,33 @@
+import { useEventListener } from "@vueuse/core";
 import {
   computed,
   nextTick,
+  ref,
   toValue,
   type ComponentPublicInstance,
   type MaybeRefOrGetter,
 } from "vue";
-import { createChatVirtualizerBehavior, shouldAdjustChatScrollForSizeChange } from "./anchoring";
+import { createChatVirtualizerBehavior } from "./anchoring";
 import { useDirectDomVirtualizer } from "./direct-dom-virtualizer";
-import { useStickToBottom } from "./stick-to-bottom";
-import type { ThresholdSource } from "./stick-to-bottom-state";
-import { captureViewportRowAnchor, findViewportRowByKey } from "./viewport-anchor";
-import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 interface ChatVirtualizerOptions {
   count: MaybeRefOrGetter<number>;
   getViewport: () => HTMLElement | null;
   getItemKey: (index: number) => string | number;
   estimateSize: (index: number) => number;
-  threshold?: ThresholdSource;
+  threshold?: MaybeRefOrGetter<number>;
   overscan?: MaybeRefOrGetter<number>;
   onViewportScroll?: (viewport: HTMLElement) => void;
-  scrollToBottom?: (viewport: HTMLElement) => void;
 }
 
 export function useChatVirtualizer(options: ChatVirtualizerOptions) {
-  let reflowGeneration = 0;
   const threshold = () => toValue(options.threshold) ?? 120;
-  const sticky = useStickToBottom({
-    threshold,
-    getViewport: options.getViewport,
-    measure: measureVisibleItems,
-    onViewportScroll: options.onViewportScroll,
-    scrollToBottom,
-  });
+  // Mirror core's at-end result only from real scroll transactions. Reading isAtEnd from a
+  // computed during setOptions can observe core's eagerly resolved anchor against Vue's previous
+  // DOM height; that transient geometry must not drive UI policy such as intermediate collapse.
+  // This ref does not infer input intent or write scrollTop: TanStack remains the sole authority.
+  const followLatest = ref(true);
+  const viewportElement = computed(options.getViewport);
   const directVirtualizer = useDirectDomVirtualizer(
     computed(() => ({
       count: toValue(options.count),
@@ -40,36 +35,33 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
       getItemKey: options.getItemKey,
       estimateSize: options.estimateSize,
       overscan: toValue(options.overscan) ?? 0,
-      ...createChatVirtualizerBehavior({
-        followLatest: sticky.followLatest.value,
-        scrollEndThreshold: threshold(),
-      }),
+      ...createChatVirtualizerBehavior(threshold()),
     })),
   );
   const virtualizer = directVirtualizer.virtualizer;
-  virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) =>
-    shouldAdjustChatScrollForSizeChange(item, delta, instance, sticky.followLatest.value);
-  const isScrolling = computed(() => {
-    // `useDirectDomVirtualizer` triggers its shallow ref when TanStack's range or scrolling flag
-    // changes. Reading the ref before the mutable instance field makes this official Virtualizer
-    // state reactive without installing a second scroll listener or idle timer.
-    const instance = virtualizer.value;
-    return instance.isScrolling;
-  });
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());
+  const isScrolling = computed(() => virtualizer.value.isScrolling);
+  const userDetached = computed(() => !followLatest.value);
 
-  function bottomOffset(viewport: HTMLElement) {
-    return Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-  }
-
-  function scrollToBottom(viewport: HTMLElement) {
-    if (options.scrollToBottom) {
-      options.scrollToBottom(viewport);
-      return;
-    }
-    virtualizer.value.scrollToOffset(bottomOffset(viewport), { behavior: "auto" });
-    viewport.scrollTop = bottomOffset(viewport);
-  }
+  // Virtual Core intentionally coalesces onChange by range/isScrolling. A single very tall Agent
+  // row can scroll without changing either value, so onChange is not an offset event stream. Use
+  // VueUse's passive native listener only to project actual viewport geometry into UI state; core
+  // still owns measurements, end following, iOS deferral, prepend anchors, and every scroll write.
+  useEventListener(
+    viewportElement,
+    "scroll",
+    (event) => {
+      const viewport = event.currentTarget;
+      if (!(viewport instanceof HTMLElement)) return;
+      const distanceFromEnd = Math.max(
+        0,
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
+      );
+      followLatest.value = distanceFromEnd <= threshold();
+      options.onViewportScroll?.(viewport);
+    },
+    { passive: true },
+  );
 
   function elementFromRef(refValue: Element | ComponentPublicInstance | null) {
     return refValue instanceof Element ? refValue : null;
@@ -77,115 +69,39 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
 
   function measureElement(refValue: Element | ComponentPublicInstance | null) {
     const element = elementFromRef(refValue);
-    if (element === null) {
-      return null;
-    }
+    if (element === null) return null;
+
     const index = element instanceof HTMLElement ? Number(element.dataset.index) : Number.NaN;
-    if (Number.isFinite(index)) {
-      directVirtualizer.measureElement(element);
-    } else {
-      virtualizer.value.measure();
-      directVirtualizer.applyDirectStyles();
-    }
-    sticky.bindInputListeners();
+    if (Number.isFinite(index)) directVirtualizer.measureElement(element);
     return element;
   }
 
-  function measureVisibleItems() {
-    for (const virtualItem of virtualItems.value) {
-      const element = virtualizer.value.elementsCache.get(virtualItem.key);
-      if (element?.isConnected === true) {
-        virtualizer.value.measureElement(element);
-      }
-    }
-    directVirtualizer.applyDirectStyles();
-  }
-
   function refresh() {
-    directVirtualizer.refresh();
-  }
-
-  async function commitPreservingViewport(commit: () => void) {
-    const generation = ++reflowGeneration;
-    const viewport = options.getViewport();
-    const anchor = captureViewportRowAnchor(viewport);
-    const scrollTop = viewport?.scrollTop ?? 0;
-
-    commit();
-    await nextTick();
-    const currentViewport = options.getViewport();
-    if (!currentViewport || generation !== reflowGeneration) return;
-
-    // The buffered commit happens only after TanStack reports scroll end, so mounted rows can be
-    // synchronously measured in this post-flush phase. Restore one keyed anchor before paint; do
-    // not replay every buffered token or add a RAF compensation loop.
-    directVirtualizer.refresh({ forceStyles: true, remeasure: false });
-    measureVisibleItems();
-    if (sticky.followLatest.value) {
-      scrollToBottom(currentViewport);
-      return;
-    }
-    const anchorElement = anchor ? findViewportRowByKey(currentViewport, anchor.key) : null;
-    if (anchorElement && anchor) {
-      currentViewport.scrollTop += anchorElement.getBoundingClientRect().top - anchor.top;
-    } else {
-      currentViewport.scrollTop = scrollTop;
-    }
+    // Dockview can keep a panel mounted while its viewport is temporarily hidden. Reconnect the
+    // official observer and reapply core-computed transforms when it becomes visible again, but do
+    // not restore a DOM anchor or write scrollTop here. TanStack's measurement cache and Chat
+    // anchoring remain the only source of scroll geometry.
     directVirtualizer.refresh({ forceStyles: true, remeasure: false });
   }
 
-  async function reflow(reflowOptions: { preserveViewport?: boolean } = {}) {
-    const generation = ++reflowGeneration;
-    const viewport = options.getViewport();
-    const anchor =
-      reflowOptions.preserveViewport === false ? null : captureViewportRowAnchor(viewport);
-    const scrollTop = viewport?.scrollTop ?? 0;
-
+  async function scrollToLatest() {
     await nextTick();
-    for (let frame = 0; frame < 2; frame += 1) {
-      await nextAnimationFrame();
-      if (generation !== reflowGeneration) return;
-      // Visibility restoration only invalidates DOM placement. Preserve the
-      // size cache and explicitly remeasure mounted rows below; clearing every
-      // row here would start a second anchor-compensation cascade.
-      directVirtualizer.refresh({ forceStyles: frame === 0, remeasure: false });
-      measureVisibleItems();
-    }
-
-    const currentViewport = options.getViewport();
-    if (!currentViewport || generation !== reflowGeneration) return;
-    if (sticky.followLatest.value) {
-      scrollToBottom(currentViewport);
-      return;
-    }
-    const anchorElement = anchor ? findViewportRowByKey(currentViewport, anchor.key) : null;
-    if (anchorElement && anchor) {
-      currentViewport.scrollTop += anchorElement.getBoundingClientRect().top - anchor.top;
-    } else {
-      currentViewport.scrollTop = scrollTop;
-    }
-    directVirtualizer.refresh({ forceStyles: true, remeasure: false });
-    measureVisibleItems();
+    refresh();
+    // The official Chat guide recommends an imperative initial scroll after the viewport mounts.
+    // Later appends and streaming growth are owned by followOnAppend/end anchoring; repeatedly
+    // calling this method for content updates would override a reader who intentionally scrolled up.
+    virtualizer.value.scrollToEnd({ behavior: "auto" });
+    followLatest.value = true;
   }
 
   return {
-    bindInputListeners: sticky.bindInputListeners,
-    commitPreservingViewport,
-    containerElement: directVirtualizer.containerElement,
     containerRef: directVirtualizer.containerRef,
-    followLatest: sticky.followLatest,
-    followContentChange: sticky.followContentChange,
-    initialBottomAligned: sticky.initialBottomAligned,
+    followLatest,
     isScrolling,
-    isNearBottom: sticky.isNearBottom,
     measureElement,
-    measureVisibleItems,
     refresh,
-    reflow,
-    reset: sticky.reset,
-    settleAndStick: sticky.settleAndStick,
-    stickIfFollowing: sticky.stickIfFollowing,
-    userDetached: sticky.userDetached,
+    scrollToLatest,
+    userDetached,
     virtualItems,
     virtualizer,
   };

@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import IntermediateStepsToggle from "@/components/thread/IntermediateStepsToggle.vue";
 import ThreadItemView from "@/components/thread/ThreadItemView.vue";
-import {
-  createThreadTimelinePresentationRow,
-  type ThreadTimelineRow,
-} from "@/components/thread/timeline-rows";
+import type { ThreadTimelineRow } from "@/components/thread/timeline-rows";
 
 const props = defineProps<{
   row: ThreadTimelineRow;
-  presentationRevision: number;
   hostId: number | null;
   threadId: string | null;
 }>();
@@ -18,30 +13,23 @@ const emit = defineEmits<{
   intermediateToggle: [turnId: string, open: boolean];
 }>();
 
-// The revision is the explicit render clock owned by VirtualTimelineViewport. Keeping it in the
-// computed input replaces implicit subscriptions to mutable Pinia item proxies and therefore lets
-// active scrolling hold the current DOM snapshot even when the row identity itself is unchanged.
-const presentationSource = computed(() => ({
-  row: props.row,
-  revision: props.presentationRevision,
-}));
-const presentationRow = computed(() =>
-  createThreadTimelinePresentationRow(presentationSource.value.row),
-);
+// Read the reactive row directly. App-server stream reducers update nested item proxies in place;
+// cloning them into a presentation snapshot hides those deltas from Vue and prevents TanStack's
+// ResizeObserver from seeing the new height. TanStack owns mounting and position, not data flow.
 </script>
 
 <template>
   <IntermediateStepsToggle
-    v-if="presentationRow.type === 'intermediateHeader'"
-    :open="presentationRow.open"
-    :count="presentationRow.count"
-    @toggle="emit('intermediateToggle', presentationRow.turnId, $event)"
+    v-if="props.row.type === 'intermediateHeader'"
+    :open="props.row.open"
+    :count="props.row.count"
+    @toggle="emit('intermediateToggle', props.row.turnId, $event)"
   />
   <ThreadItemView
     v-else
-    :item="presentationRow.item"
+    :item="props.row.item"
     :host-id="hostId"
     :thread-id="threadId"
-    :user-message-variant="presentationRow.userMessageVariant"
+    :user-message-variant="props.row.userMessageVariant"
   />
 </template>

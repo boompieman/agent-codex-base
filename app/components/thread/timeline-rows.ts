@@ -1,5 +1,4 @@
 import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
-import { markRaw, toRaw } from "vue";
 import { itemKey, userMessageVariant, type ThreadTurnSections } from "./thread-turn-sections";
 
 export type { ThreadTimelineTurn } from "~~/shared/types";
@@ -91,26 +90,6 @@ export function estimateThreadTimelineRow(row: ThreadTimelineRow | undefined) {
   return estimatedItemHeights[row.item.type] ?? 96;
 }
 
-export function createThreadTimelinePresentationRow(row: ThreadTimelineRow) {
-  if (row.type === "intermediateHeader") return row;
-
-  // App-server deltas mutate the reactive item retained by the history store. Passing that proxy
-  // directly into a row component lets it update independently of the virtual viewport, so an
-  // outer `v-memo` cannot freeze presentation during native scrolling. A shallow immutable view
-  // model snapshots scalar stream fields (notably Agent text and command output) without copying
-  // their potentially large string payloads. Nested values come from Vue's raw target and remain
-  // non-reactive; the next committed presentation revision creates the next view model.
-  //
-  // Keep this conversion beside the timeline row model rather than in the generic virtualizer:
-  // only this layer knows which field is the app-server proxy, while file trees and other virtual
-  // lists must not pay for chat-specific snapshots.
-  const rawItem = toRaw(row.item);
-  return markRaw({
-    ...row,
-    item: markRaw({ ...rawItem }) as ThreadTimelineItem,
-  }) satisfies ThreadTimelineRow;
-}
-
 function appendItemRows(
   rows: ThreadTimelineRow[],
   threadId: string | null,
@@ -137,9 +116,10 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
     return left.count === right.count && left.open === right.open && left.turnId === right.turnId;
   }
   if (left.type === "item" && right.type === "item") {
-    // App-server reducers preserve reactive item proxies for output deltas and replace the item for
-    // structural updates. Reusing the wrapper in the first case still reacts to nested text/output,
-    // while preventing every unrelated Markdown row from receiving a fresh prop on each token.
+    // App-server deltas mutate this reactive item proxy in place. Reuse the lightweight row wrapper
+    // so unrelated mounted Markdown rows do not rerender, but never clone or mark the item raw:
+    // nested text/output reactivity is the official Vue update path that feeds TanStack's row
+    // ResizeObserver. A separate presentation revision would duplicate timeline state.
     return (
       left.item === right.item &&
       left.turnId === right.turnId &&

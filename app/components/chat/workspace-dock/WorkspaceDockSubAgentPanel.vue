@@ -65,7 +65,6 @@ function interrupt() {
       :panel="panel"
       :preview="preview"
       :turns="turns"
-      :follow-key="[panelKey]"
       :status="threadStatuses[panelKey] ?? 'idle'"
       @interrupt="interrupt"
     />

@@ -87,14 +87,14 @@ importers:
         specifier: ^1.0.3
         version: 1.0.3
       '@tanstack/virtual-core':
-        specifier: ^3.17.6
-        version: 3.17.6
+        specifier: ^3.17.7
+        version: 3.17.7
       '@tanstack/vue-table':
         specifier: ^8.21.3
         version: 8.21.3(vue@3.5.40(typescript@6.0.3))
       '@tanstack/vue-virtual':
-        specifier: ^3.13.34
-        version: 3.13.34(vue@3.5.40(typescript@6.0.3))
+        specifier: ^3.13.35
+        version: 3.13.35(vue@3.5.40(typescript@6.0.3))
       '@unovis/vue':
         specifier: ^1.6.7
         version: 1.6.7(@unovis/ts@1.6.7(supports-color@10.2.2))(vue@3.5.40(typescript@6.0.3))
@@ -2914,6 +2914,9 @@ packages:
   '@tanstack/virtual-core@3.17.6':
     resolution: {integrity: sha512-h0/Ebo18CkOrChlQIhNtQkM5ySUnh/GumQ/D1st3hG2HWUPEF+ILUc2k29UtivCi/9G7w7G3/f7Xyd5cCFbKBw==}
 
+  '@tanstack/virtual-core@3.17.7':
+    resolution: {integrity: sha512-bp+v10y65sp2H7WpWfIMyxTNfl8ZVfxFTLRjPIFRryi6FV/J33z4IS53WO4pTk36KlvJ4iLiQz+oaydDC1xbcA==}
+
   '@tanstack/vue-table@8.21.3':
     resolution: {integrity: sha512-rusRyd77c5tDPloPskctMyPLFEQUeBzxdQ+2Eow4F7gDPlPOB1UnnhzfpdvqZ8ZyX2rRNGmqNnQWm87OI2OQPw==}
     engines: {node: '>=12'}
@@ -2922,6 +2925,11 @@ packages:
 
   '@tanstack/vue-virtual@3.13.34':
     resolution: {integrity: sha512-CBqbCcnVsKpl9IJ7frPnbBmAqmc7JttSySg04kgLYJ4yYuC8JsAbtUHP0yLtWGLyByjihN3SwaDCgHQ+Z4iPoA==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
+
+  '@tanstack/vue-virtual@3.13.35':
+    resolution: {integrity: sha512-lOfSPvgPdlaH6Qy+CyIc3XpycitaSQ9GECndGpTuDiu+uDA1am+90yWXwzDSd/20ZM196ggWJLS+Qb6WjVd/OA==}
     peerDependencies:
       vue: ^2.7.0 || ^3.0.0
 
@@ -9344,6 +9352,8 @@ snapshots:
 
   '@tanstack/virtual-core@3.17.6': {}
 
+  '@tanstack/virtual-core@3.17.7': {}
+
   '@tanstack/vue-table@8.21.3(vue@3.5.40(typescript@6.0.3))':
     dependencies:
       '@tanstack/table-core': 8.21.3
@@ -9352,6 +9362,11 @@ snapshots:
   '@tanstack/vue-virtual@3.13.34(vue@3.5.40(typescript@6.0.3))':
     dependencies:
       '@tanstack/virtual-core': 3.17.6
+      vue: 3.5.40(typescript@6.0.3)
+
+  '@tanstack/vue-virtual@3.13.35(vue@3.5.40(typescript@6.0.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.7
       vue: 3.5.40(typescript@6.0.3)
 
   '@turbo/darwin-64@2.10.7':

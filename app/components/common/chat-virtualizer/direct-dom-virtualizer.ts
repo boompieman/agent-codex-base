@@ -4,7 +4,6 @@ import {
   observeElementOffset,
   observeElementRect,
   type PartialKeys,
-  type VirtualItem,
   type VirtualizerOptions,
 } from "@tanstack/virtual-core";
 import {
@@ -32,59 +31,17 @@ type DirectDomVirtualizerOptions<
 
 type DirectDomState = {
   container: HTMLElement | null;
-  edgeKeys: { count: number; first: VirtualItem["key"] | null; last: VirtualItem["key"] | null };
   lastPositions: WeakMap<HTMLElement, number>;
   lastSize: number | null;
   mode: DirectDomMode;
-  pendingPrependAnchor: { key: VirtualItem["key"]; top: number } | null;
   prevRange: { startIndex: number; endIndex: number; isScrolling: boolean } | null;
 };
 
-// OpenClaw and nanobot preserve prepends with a post-commit DOM anchor. The
-// same fallback is needed around virtual-core only for the residual Vue/DOM
-// delta, especially when a short non-scrollable list first becomes scrollable.
-// It stores one stable key and screen coordinate, never row sizes or a second
-// scroll state machine; all dynamic measurement remains owned by virtual-core.
-function capturePrependAnchor<TScrollElement extends Element, TItemElement extends Element>(
-  instance: Virtualizer<TScrollElement, TItemElement>,
-  nextOptions: VirtualizerOptions<TScrollElement, TItemElement>,
-  previousEdges: DirectDomState["edgeKeys"],
-) {
-  const nextCount = nextOptions.count;
-  const getNextKey = nextOptions.getItemKey;
-  if (
-    previousEdges.count === 0 ||
-    nextCount <= previousEdges.count ||
-    !getNextKey ||
-    getNextKey(0) === previousEdges.first ||
-    getNextKey(nextCount - 1) !== previousEdges.last
-  ) {
-    return null;
-  }
-
-  const viewport = instance.scrollElement;
-  if (!(viewport instanceof HTMLElement)) return null;
-  // While following, a scrollable viewport is already covered by virtual-core's end anchor and a
-  // DOM correction would apply the prepend delta twice. A detached timeline deliberately switches
-  // to anchorTo="start" so core cannot misclassify streaming row growth as an at-end resize; in
-  // that mode this keyed DOM anchor owns prepends for both scrollable and underfilled timelines.
-  if (nextOptions.anchorTo === "end" && viewport.scrollHeight - viewport.clientHeight > 1)
-    return null;
-  const viewportRect = viewport.getBoundingClientRect();
-  for (const item of instance.getVirtualItems()) {
-    const element = instance.elementsCache.get(item.key);
-    if (!(element instanceof HTMLElement)) continue;
-    const rect = element.getBoundingClientRect();
-    if (rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1) {
-      return { key: item.key, top: rect.top };
-    }
-  }
-  return null;
-}
-
 // Mirrors TanStack React adapter's directDomUpdates path for chat streams.
 // Vue's published adapter does not expose that flag yet, so this wraps the
-// official virtual-core and lets TanStack own end anchoring/follow behavior.
+// official virtual-core and lets TanStack own end anchoring/follow behavior. This adapter may
+// synchronize Vue and write row transforms, but it must not capture anchors or write scrollTop;
+// doing so would create a second scroll transaction beside virtual-core's official Chat mode.
 export function useDirectDomVirtualizer<
   TScrollElement extends Element,
   TItemElement extends Element,
@@ -94,11 +51,9 @@ export function useDirectDomVirtualizer<
 ) {
   const directState: DirectDomState = {
     container: null,
-    edgeKeys: { count: 0, first: null, last: null },
     lastPositions: new WeakMap<HTMLElement, number>(),
     lastSize: null,
     mode: directOptions.mode ?? "transform",
-    pendingPrependAnchor: null,
     prevRange: null,
   };
 
@@ -113,7 +68,6 @@ export function useDirectDomVirtualizer<
     wrapOptions(resolvedOptions.value),
   );
   const state = shallowRef(instance);
-  const containerElement = shallowRef<HTMLElement | null>(null);
   const commitVersion = shallowRef(0);
   const cleanup = instance._didMount();
 
@@ -131,7 +85,6 @@ export function useDirectDomVirtualizer<
       applyDirectStyles(instance);
       instance._willUpdate();
       applyDirectStyles(instance);
-      restorePendingPrependAnchor();
     },
     { flush: "post" },
   );
@@ -147,17 +100,10 @@ export function useDirectDomVirtualizer<
   watch(
     resolvedOptions,
     (nextOptions) => {
-      const anchor = capturePrependAnchor(instance, nextOptions, directState.edgeKeys);
-      // Reactive option updates can coalesce into one commit. Keep a captured
-      // prepend transaction until the post-flush watcher consumes it.
-      if (anchor) directState.pendingPrependAnchor = anchor;
+      // setOptions receives stable row keys before Vue patches the DOM. In end-anchored Chat mode,
+      // virtual-core captures and resolves prepend/append anchors here; the post-flush callback
+      // above only applies the positions core computed. Do not add a Vue-side anchor fallback.
       instance.setOptions(wrapOptions(nextOptions));
-      const count = instance.options.count;
-      directState.edgeKeys = {
-        count,
-        first: count ? instance.options.getItemKey(0) : null,
-        last: count ? instance.options.getItemKey(count - 1) : null,
-      };
       triggerRef(state);
       scheduleDomCommit();
     },
@@ -253,28 +199,14 @@ export function useDirectDomVirtualizer<
     }
   }
 
-  function restorePendingPrependAnchor() {
-    const anchor = directState.pendingPrependAnchor;
-    directState.pendingPrependAnchor = null;
-    const viewport = instance.scrollElement;
-    const element = anchor ? instance.elementsCache.get(anchor.key) : null;
-    if (!(viewport instanceof HTMLElement) || !(element instanceof HTMLElement) || !anchor) return;
-
-    const delta = element.getBoundingClientRect().top - anchor.top;
-    // One correction after Vue's commit is deliberate. Repeated RAF settling
-    // would compete with streaming and inner diff/command scroll ownership.
-    if (Math.abs(delta) > 1) viewport.scrollTop += delta;
-  }
-
   function containerRef(refValue: Element | ComponentPublicInstance | null) {
     const element = refValue instanceof HTMLElement ? refValue : null;
     // Vue may invoke a function ref again for the same DOM node after every component patch.
     // Treat this as a binding callback, not a render notification: resetting the cache and
     // scheduling a commit for an unchanged node creates a render -> ref -> post-flush watcher ->
-    // triggerRef feedback loop. Content and viewport changes are already owned by TanStack and
-    // the ResizeObservers in VirtualTimelineViewport, so doing nothing here is intentional.
+    // triggerRef feedback loop. Content and viewport changes are already owned by TanStack's
+    // observers, so doing nothing here is intentional.
     if (directState.container === element) return;
-    containerElement.value = element;
     directState.container = element;
     directState.lastSize = null;
     if (element) {
@@ -307,8 +239,6 @@ export function useDirectDomVirtualizer<
   }
 
   return {
-    applyDirectStyles,
-    containerElement,
     containerRef,
     measureElement,
     refresh,
