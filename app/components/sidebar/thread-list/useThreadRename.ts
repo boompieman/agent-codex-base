@@ -1,5 +1,5 @@
 import { storeToRefs } from "pinia";
-import { computed, nextTick, ref } from "vue";
+import { computed, ref } from "vue";
 import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
@@ -11,18 +11,15 @@ export function useThreadRename() {
   const { threads } = storeToRefs(navigation);
   const renameTarget = ref<{ hostId: number; threadId: string } | null>(null);
   const renameValue = ref("");
-  const renamingThreadKey = computed(() => {
-    const target = renameTarget.value;
-    return target ? `${target.hostId}:${target.threadId}` : null;
-  });
-  const renameKeyHandlers: Record<string, (event: KeyboardEvent) => void> = {
-    Escape: (event) => {
-      event.preventDefault();
-      cancelRename();
+  const submitting = ref(false);
+  const open = computed({
+    get: () => renameTarget.value !== null,
+    set: (value) => {
+      if (!value) cancelRename();
     },
-  };
+  });
 
-  function startInlineRename(thread: SidebarThreadRow) {
+  function startRename(thread: SidebarThreadRow) {
     const hostId = "hostId" in thread ? Number(thread.hostId) : Number(navigation.selectedHostId);
     const threadIdValue =
       "threadId" in thread &&
@@ -35,9 +32,6 @@ export function useThreadRename() {
     if (!hostId || !threadId) return;
     renameTarget.value = { hostId, threadId };
     renameValue.value = titleForThread(thread);
-    void nextTick(() => {
-      document.querySelector<HTMLInputElement>('[data-testid="rename-thread-input"]')?.focus();
-    });
   }
 
   async function submitRename() {
@@ -60,9 +54,13 @@ export function useThreadRename() {
       cancelRename();
       return;
     }
-    await navigation.renameThread(target.hostId, target.threadId, name);
-    renameTarget.value = null;
-    renameValue.value = "";
+    submitting.value = true;
+    try {
+      await navigation.renameThread(target.hostId, target.threadId, name);
+      cancelRename();
+    } finally {
+      submitting.value = false;
+    }
   }
 
   function cancelRename() {
@@ -70,15 +68,11 @@ export function useThreadRename() {
     renameValue.value = "";
   }
 
-  function handleRenameKeydown(event: KeyboardEvent) {
-    renameKeyHandlers[event.key]?.(event);
-  }
-
   return {
-    renamingThreadKey,
+    open,
     renameValue,
-    startInlineRename,
+    submitting,
+    startRename,
     submitRename,
-    handleRenameKeydown,
   };
 }

@@ -106,8 +106,6 @@ const controller = requireHostTreeController();
                 controller.threadCompletionAttention(project.hostId, String(thread.id))
               "
               :subtitle="formatRelative(thread.updatedAt)"
-              :rename-active="controller.renamingThreadKey === `${project.hostId}:${thread.id}`"
-              :rename-value="controller.renameValue"
               :pin-label="thread.pinned ? $t('app.unpinThread') : $t('app.pinThread')"
               :long-press-handlers="controller.longPressHandlers"
               :show-pinned-icon="thread.pinned"
@@ -119,9 +117,6 @@ const controller = requireHostTreeController();
               "
               @toggle-pin="controller.toggleThreadPin(String(thread.id), !thread.pinned)"
               @rename="controller.rename({ ...thread, hostId: project.hostId })"
-              @submit-rename="controller.submitRename()"
-              @rename-keydown="controller.renameKeydown($event)"
-              @update:rename-value="controller.updateRenameValue($event)"
             />
           </template>
           <div

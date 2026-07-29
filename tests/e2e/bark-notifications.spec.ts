@@ -133,5 +133,5 @@ test("plan-mode user questions render and notify through Sonner and Bark", async
   expect(request?.title).toContain("等待回答");
   expect(request?.body).toContain(hostName);
   expect(request?.body).toContain(question);
-  expect(request?.id).toContain(`thread-user-input:${host.id}:${threadId}:`);
+  expect(request?.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
 });

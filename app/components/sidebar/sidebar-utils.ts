@@ -1,3 +1,5 @@
+import type { HostRecord, PinnedThreadRecord } from "./sidebar-types";
+
 const threadStatusClassByStatus: Record<string, string> = {
   running: "text-primary",
   completedUnviewed: "text-primary",
@@ -57,6 +59,44 @@ export function pinnedThreadKey(thread: PinnedThreadRecord) {
   return `${thread.hostId}:${pinnedThreadId(thread)}`;
 }
 
+const sidebarLabelCollator = new Intl.Collator("zh-Hans-CN", {
+  numeric: true,
+  sensitivity: "base",
+});
+
+function compareSidebarLabels(left: string, right: string) {
+  const localized = sidebarLabelCollator.compare(left, right);
+  if (localized !== 0) return localized;
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+/**
+ * Returns a display-only copy so deterministic sidebar ordering never rewrites the user's
+ * persisted pin list. The explicit locale and identity tie-breakers keep the order identical
+ * across browsers even when labels compare equal under case-insensitive collation.
+ */
+export function sortPinnedThreadsForDisplay(
+  threads: readonly PinnedThreadRecord[],
+  hosts: readonly HostRecord[],
+) {
+  const hostNames = new Map(hosts.map((host) => [host.id, host.name]));
+  return threads.toSorted((left, right) => {
+    const byHostName = compareSidebarLabels(
+      hostNames.get(left.hostId) ?? "",
+      hostNames.get(right.hostId) ?? "",
+    );
+    if (byHostName !== 0) return byHostName;
+
+    const byTitle = compareSidebarLabels(left.title, right.title);
+    if (byTitle !== 0) return byTitle;
+
+    const byHostId = left.hostId - right.hostId;
+    if (byHostId !== 0) return byHostId;
+    return compareSidebarLabels(pinnedThreadId(left), pinnedThreadId(right));
+  });
+}
+
 export function threadKey(hostId: number, threadId: string) {
   return `${hostId}:${threadId}`;
 }
@@ -84,4 +124,3 @@ export function hostConnectionIsBusy(status: string) {
 export function hostConnectionLabelKey(status: string) {
   return hostConnectionLabelKeyByStatus[status] ?? "app.hostDisconnected";
 }
-import type { PinnedThreadRecord } from "./sidebar-types";

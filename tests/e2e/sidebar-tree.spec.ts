@@ -207,6 +207,43 @@ test("keeps non-pinned main threads in recent activity for the page session", as
   expect(sectionOrder[1]).toBeLessThan(sectionOrder[2]!);
 });
 
+test("sorts pinned threads for display without rewriting persisted pin order", async ({ page }) => {
+  await openApp(page);
+  const hosts = [
+    { ...defaultGatewayHost(302), name: "Zulu Host" },
+    { ...defaultGatewayHost(301), name: "Alpha Host" },
+  ];
+  const pinnedThreads = [
+    { hostId: 302, projectId: null, threadId: "z-alpha", title: "Alpha Thread" },
+    { hostId: 301, projectId: null, threadId: "a-zulu", title: "Zulu Thread" },
+    { hostId: 301, projectId: null, threadId: "a-alpha-b", title: "Alpha Thread" },
+    { hostId: 301, projectId: null, threadId: "a-alpha-a", title: "Alpha Thread" },
+  ];
+  await page.evaluate(
+    ({ hosts, pinnedThreads }) => {
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      driver.catalog.hosts = hosts;
+      driver.config.gatewayConfig.pinnedThreads = pinnedThreads;
+    },
+    { hosts, pinnedThreads },
+  );
+
+  const renderedThreadIds = await page
+    .locator('[data-testid^="pinned-thread-button-"]')
+    .evaluateAll((rows) =>
+      rows.map((row) => row.getAttribute("data-testid")?.replace("pinned-thread-button-", "")),
+    );
+  expect(renderedThreadIds).toEqual(["a-alpha-a", "a-alpha-b", "a-zulu", "z-alpha"]);
+
+  const storedThreadIds = await page.evaluate(() => {
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    return driver.config.gatewayConfig.pinnedThreads.map((thread) => thread.threadId);
+  });
+  expect(storedThreadIds).toEqual(pinnedThreads.map((thread) => thread.threadId));
+});
+
 test("long expanded tree labels truncate without displacing trailing statuses", async ({
   page,
 }) => {

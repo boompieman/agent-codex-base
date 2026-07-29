@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import type { BarkNotificationSettings } from "~~/shared/types";
 import type { ServerNotification } from "~~/shared/types";
 import { firstNonEmptyString } from "~~/shared/utils/strings";
 
 const BARK_REQUEST_TIMEOUT_MS = 10_000;
+const MAX_BARK_ERROR_BODY_LENGTH = 500;
 
 export class BarkRequestError extends Error {
   constructor(
@@ -29,7 +31,12 @@ async function sendBarkRequest(url: URL) {
   });
   if (!response.ok) {
     const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
-    throw new BarkRequestError(`Bark notification failed with HTTP ${response.status}`, retryable);
+    const responseBody = (await response.text()).trim().slice(0, MAX_BARK_ERROR_BODY_LENGTH);
+    const details = responseBody === "" ? "" : `: ${responseBody}`;
+    throw new BarkRequestError(
+      `Bark notification failed with HTTP ${response.status}${details}`,
+      retryable,
+    );
   }
 }
 
@@ -42,9 +49,14 @@ function buildBarkUrl(settings: BarkNotificationSettings, notification: ServerNo
   if (group !== null) {
     url.searchParams.set("group", group);
   }
-  // Bark 1.5.2+/server 2.2.5+ replaces a notification with the same id. The Gateway key is
-  // already stable across retries and process restarts, so provider-level retries remain
-  // at-least-once without producing duplicate alerts after an ambiguous timeout.
-  url.searchParams.set("id", notification.key);
+  // Bark forwards id as the APNs collapse identifier, whose UTF-8 representation is limited to
+  // 64 bytes. Gateway keys deliberately contain scope and event details and routinely exceed that
+  // limit, so never pass them through directly. A stable SHA-256 base64url digest retains retry
+  // idempotency in 43 ASCII bytes without leaking thread identifiers to the push provider.
+  url.searchParams.set("id", barkNotificationId(notification.key));
   return url;
+}
+
+function barkNotificationId(key: string) {
+  return createHash("sha256").update(key).digest("base64url");
 }

@@ -135,8 +135,11 @@ test("virtualizes a large running turn in one agent timeline", async ({ page }, 
 
   const fileChange = page.getByRole("button", { name: /src\/large_file_/ }).first();
   await expect(fileChange).toBeVisible();
-  // A collapsed file card remains discoverable, but its expensive diff highlighter must not mount.
-  await expect(page.locator(".diff-markdown .syntax-highlight")).toHaveCount(0);
+  // Visible file cards start expanded, but outer timeline virtualization must limit expensive
+  // highlighters to the viewport neighborhood instead of mounting all 91 file changes.
+  const mountedDiffs = page.locator(".diff-markdown .syntax-highlight");
+  await expect.poll(() => mountedDiffs.count()).toBeGreaterThan(0);
+  await expect.poll(() => mountedDiffs.count()).toBeLessThan(30);
 
   // Move to the opposite end after capturing a real mounted node. This verifies outer timeline
   // virtualization directly without relying on an estimated offset inside the 500-row document.
@@ -155,6 +158,7 @@ test("virtualizes a large running turn in one agent timeline", async ({ page }, 
   await waitForChatScrollToSettle(page);
   await expect(page.getByText("large command lifecycle probe", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/lifecycle-probe-output/)).toHaveCount(0);
+  await expect(mountedDiffs).toHaveCount(0);
   expect(await commandRowHandle.evaluate((element) => element.isConnected)).toBe(false);
   await expect.poll(() => mountedRows.count()).toBeLessThan(30);
   const resizeObserverErrors = pageErrors.filter((message) =>
@@ -455,7 +459,15 @@ test("opens sidebar context actions with long press on mobile", async ({
   await longPress(page, threadButton);
   await page.getByRole("menuitem", { name: /置顶/ }).click();
   await page.getByTestId("mobile-sidebar-toggle").click();
-  await expect(page.getByTestId(`pinned-thread-button-${threadId}`)).toBeVisible();
+  const pinnedThread = page.getByTestId(`pinned-thread-button-${threadId}`);
+  await expect(pinnedThread).toBeVisible();
+
+  await longPress(page, pinnedThread);
+  await page.getByRole("menuitem", { name: /重命名/ }).click();
+  await expect(page.getByTestId("rename-thread-dialog")).toBeVisible();
+  await page.getByTestId("rename-thread-input").fill("Renamed mobile thread");
+  await page.getByTestId("rename-thread-submit").click();
+  await expect(pinnedThread).toContainText("Renamed mobile thread");
 });
 
 test("opens and closes the subagent side panel on mobile", async ({ page }) => {

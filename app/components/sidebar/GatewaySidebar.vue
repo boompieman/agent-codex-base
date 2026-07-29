@@ -19,6 +19,7 @@ import AddProjectDialog from "./AddProjectDialog.vue";
 import HostTree from "./host-tree/HostTree.vue";
 import PinnedThreadList from "./thread-list/PinnedThreadList.vue";
 import RecentThreadList from "./thread-list/RecentThreadList.vue";
+import ThreadRenameDialog from "./thread-list/ThreadRenameDialog.vue";
 import SidebarScrollArea from "./SidebarScrollArea.vue";
 import { SidebarFooter } from "@/components/ui/sidebar";
 import { useSidebarTree } from "./host-tree/useSidebarTree";
@@ -51,7 +52,6 @@ const {
   pinnedRuntimeStatus,
   pinnedCompletionAttention,
 } = sidebarTree;
-const { renamingThreadKey, renameValue } = threadRename;
 const { recentThreads } = recentActivity;
 const { selectedHostTitle, canLaunch } = workspaceActions;
 const { activeCount: tmuxActiveCount } = tmuxLauncher;
@@ -67,8 +67,6 @@ const hostTreeController = computed<HostTreeController>(() => ({
   selectedProjectId: sidebarTree.selectedProjectId.value,
   selectedThreadId: sidebarTree.selectedThreadId.value,
   hostConnectionStatuses: sidebarTree.hostConnectionStatuses.value,
-  renamingThreadKey: threadRename.renamingThreadKey.value,
-  renameValue: threadRename.renameValue.value,
   longPressHandlers: longPressContextMenuHandlers,
   selectHost: sidebarTree.selectHost,
   addProject: openAddProject,
@@ -80,10 +78,7 @@ const hostTreeController = computed<HostTreeController>(() => ({
   startThreadInProject: sidebarTree.startThreadInProject,
   openThread: sidebarTree.openThread,
   toggleThreadPin: navigation.setThreadPinned,
-  rename: threadRename.startInlineRename,
-  submitRename: threadRename.submitRename,
-  renameKeydown: threadRename.handleRenameKeydown,
-  updateRenameValue: (value) => (threadRename.renameValue.value = value),
+  rename: threadRename.startRename,
   threadRuntimeStatus: sidebarTree.threadRuntimeStatus,
   threadCompletionAttention: sidebarTree.threadCompletionAttention,
 }));
@@ -127,32 +122,22 @@ function openEditProject(project: ProjectRecord) {
             :hosts="hosts"
             :selected-host-id="selectedHostId"
             :selected-thread-id="selectedThreadId"
-            :renaming-thread-key="renamingThreadKey"
-            :rename-value="renameValue"
             :long-press-handlers="longPressContextMenuHandlers"
             :runtime-status="pinnedRuntimeStatus"
             :completion-attention="pinnedCompletionAttention"
             @open="openPinnedThread"
             @unpin="navigation.setPinnedThread($event, false)"
-            @rename="threadRename.startInlineRename"
-            @submit-rename="threadRename.submitRename"
-            @rename-keydown="threadRename.handleRenameKeydown"
-            @update:rename-value="renameValue = $event"
+            @rename="threadRename.startRename"
           />
 
           <RecentThreadList
             :threads="recentThreads"
             :selected-host-id="selectedHostId"
             :selected-thread-id="selectedThreadId"
-            :renaming-thread-key="renamingThreadKey"
-            :rename-value="renameValue"
             :long-press-handlers="longPressContextMenuHandlers"
             @open="recentActivity.openRecentThread"
             @pin="recentActivity.pinRecentThread"
-            @rename="threadRename.startInlineRename"
-            @submit-rename="threadRename.submitRename"
-            @rename-keydown="threadRename.handleRenameKeydown"
-            @update:rename-value="renameValue = $event"
+            @rename="threadRename.startRename"
           />
 
           <HostTree :controller="hostTreeController" />
@@ -199,6 +184,16 @@ function openEditProject(project: ProjectRecord) {
       :host="projectEditor?.host ?? null"
       :project="projectEditor?.project ?? null"
       @update:open="projectEditor = $event ? projectEditor : null"
+    />
+
+    <!-- Rename is a single modal workflow for desktop context-click and mobile long-press. Keep
+         it outside row renderers: context menus unmount after selection, and an inline input inside
+         that subtree loses focus or disappears when a mobile sidebar Sheet updates. -->
+    <ThreadRenameDialog
+      v-model:open="threadRename.open.value"
+      v-model="threadRename.renameValue.value"
+      :submitting="threadRename.submitting.value"
+      @submit="threadRename.submitRename"
     />
   </aside>
 </template>

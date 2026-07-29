@@ -219,15 +219,29 @@ export async function revealVirtualizedChatLocator(page: Page, locator: Locator)
 }
 
 export async function scrollChatViewportBy(page: Page, deltaY: number) {
-  return await page.getByTestId(chatScrollAreaTestId).evaluate((root: HTMLElement, deltaY) => {
-    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
-    if (!viewport) throw new Error("Missing chat viewport");
-    const before = viewport.scrollTop;
-    viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
-    viewport.scrollTop += deltaY;
-    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
-    return { before, after: viewport.scrollTop };
+  const viewport = page
+    .getByTestId(chatScrollAreaTestId)
+    .locator('[data-slot="scroll-area-viewport"]');
+  const before = await chatViewportScrollTop(page);
+
+  // Keep wheel intent and its default scroll in one browser task. Native default handling runs
+  // before Vue microtasks or ResizeObserver can mount and measure the newly overscanned window;
+  // splitting these operations across Playwright commands introduces an impossible intermediate
+  // layout where estimate compensation can consume the requested wheel delta. Do not manually
+  // dispatch `scroll`: assigning scrollTop schedules the browser's real event. Wait for movement,
+  // not TanStack's scroll-end timer, so the caller still streams during active scrolling.
+  await viewport.evaluate((element: HTMLElement, delta) => {
+    element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: delta }));
+    element.scrollTop += delta;
   }, deltaY);
+  await expect
+    .poll(async () => {
+      const after = await chatViewportScrollTop(page);
+      return deltaY < 0 ? before - after : after - before;
+    })
+    .toBeGreaterThan(0);
+
+  return { before, after: await chatViewportScrollTop(page) };
 }
 
 export async function startChatTouchScrollUp(page: Page, distance: number) {

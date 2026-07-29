@@ -27,7 +27,10 @@ export async function deliverBarkNotification(notification: ServerNotification) 
     factor: 2,
     shouldRetry: ({ error }) => !(error instanceof BarkRequestError) || error.retryable,
   })
-    .then(() => markDelivered(notification.key))
+    .then(() => {
+      markDelivered(notification.key);
+      logSuccessfulDelivery(userId, notification);
+    })
     .finally(() => {
       pendingDeliveries.delete(deliveryKey);
       clearPending(notification.key);
@@ -55,4 +58,17 @@ function markDelivered(key: string) {
     ...gatewayMemoryState.deliveredNotificationKeys.slice(-(MAX_DELIVERED_NOTIFICATION_KEYS - 1)),
     key,
   ];
+}
+
+function logSuccessfulDelivery(userId: number, notification: ServerNotification) {
+  const { target } = notification;
+  console.info("[notifications] Bark notification delivered", {
+    userId,
+    key: notification.key,
+    targetKind: target.kind,
+    hostId: target.hostId,
+    projectId: target.projectId,
+    threadId: target.threadId,
+    ...(target.kind === "tmuxMonitor" ? { monitorId: target.monitorId } : {}),
+  });
 }

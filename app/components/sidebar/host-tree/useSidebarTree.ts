@@ -5,7 +5,12 @@ import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
-import { pinnedThreadId, pinnedThreadKey, threadKey } from "../sidebar-utils";
+import {
+  pinnedThreadId,
+  pinnedThreadKey,
+  sortPinnedThreadsForDisplay,
+  threadKey,
+} from "../sidebar-utils";
 import type { PinnedThreadRecord, ProjectRecord } from "../sidebar-types";
 import { firstNonEmptyString } from "~~/shared/utils/strings";
 
@@ -16,7 +21,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
   const threadView = useGatewayThreadViewStore();
   const { hosts, projects, projectDirectoryAvailability, hostConnectionStatuses } =
     storeToRefs(store);
-  const pinnedThreads = useGatewayPinnedThreads();
+  const storedPinnedThreads = useGatewayPinnedThreads();
   const { threads, openingPinnedThreadKey, selectedHostId, selectedProjectId, selectedThreadId } =
     storeToRefs(navigation);
   const { unviewedCompletedThreadKeys, threadStatuses } = storeToRefs(runtime);
@@ -24,6 +29,9 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
   const expandedProjectIds = ref<Set<number>>(new Set());
   const expandedMissingProjectHostIds = ref<Set<number>>(new Set());
   const suppressTreeAutoExpand = ref(false);
+  const pinnedThreads = computed(() =>
+    sortPinnedThreadsForDisplay(storedPinnedThreads.value, hosts.value),
+  );
 
   const projectThreads = computed(() =>
     threads.value.filter((thread) => thread.pinned !== true).slice(0, 20),

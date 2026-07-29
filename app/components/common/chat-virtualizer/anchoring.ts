@@ -1,4 +1,9 @@
-import { elementScroll, type VirtualizerOptions } from "@tanstack/virtual-core";
+import {
+  elementScroll,
+  type VirtualItem,
+  type Virtualizer,
+  type VirtualizerOptions,
+} from "@tanstack/virtual-core";
 
 type ChatVirtualizerBehavior = Pick<
   VirtualizerOptions<HTMLElement, Element>,
@@ -34,4 +39,34 @@ export function createChatVirtualizerBehavior(options: {
       elementScroll(offset, scrollOptions, instance);
     },
   };
+}
+
+export function shouldAdjustChatScrollForSizeChange(
+  item: VirtualItem,
+  delta: number,
+  instance: Virtualizer<HTMLElement, Element>,
+  followLatest: boolean,
+) {
+  if (followLatest) return true;
+
+  const viewport = instance.scrollElement;
+  const scrollOffset = viewport instanceof HTMLElement ? viewport.scrollTop : instance.scrollOffset;
+  const measuredEnd = item.end + delta;
+
+  // TanStack's default first-measurement policy compensates whenever the estimated row starts
+  // above the fold. During upward scrolling, an estimated row can still span the fold; replacing
+  // that estimate and adjusting scrollTop moves the text currently under the reader. The public
+  // size-change hook exists for this chat-specific distinction, so only rows whose measured box
+  // is entirely above the viewport may move the outer timeline anchor.
+  //
+  // Do not disable this compensation while scrolling backward. Upward scrolling is precisely when
+  // estimated rows mount above the viewport; ignoring their estimate-to-measurement delta makes
+  // every newly mounted row displace the text under the reader. The fully-above-fold condition is
+  // what separates safe anchor compensation from growth in a visible streaming row.
+  //
+  // Do not broaden this to item.start < scrollOffset or add another gesture state machine here.
+  // Diff and command output own bounded inner scrollports and never participate in this outer
+  // timeline adjustment. Keeping the policy at the virtualizer boundary also prevents individual
+  // message renderers from applying competing scrollTop writes.
+  return measuredEnd <= (scrollOffset ?? 0);
 }
