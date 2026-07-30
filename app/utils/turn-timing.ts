@@ -4,6 +4,10 @@ export interface TurnTiming {
   durationMs: number | null;
 }
 
+export interface DisplayedTurnTiming extends TurnTiming {
+  active: boolean;
+}
+
 export function resolvedTurnDurationMs(timing: TurnTiming, nowMs: number) {
   if (timing.durationMs !== null && Number.isFinite(timing.durationMs)) {
     return Math.max(0, timing.durationMs);
