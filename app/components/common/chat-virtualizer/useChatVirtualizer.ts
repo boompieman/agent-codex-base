@@ -53,6 +53,11 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
     (event) => {
       const viewport = event.currentTarget;
       if (!(viewport instanceof HTMLElement)) return;
+      // Diff and command output own bounded nested scrollports. Ignore their scroll events at the
+      // outer Chat boundary just as stick-to-bottom-state does; only geometry changes reported by
+      // the outer viewport may change followLatest. Do not infer this from item types or stop
+      // nested scrolling in each card, because scroll ownership belongs to the two viewports.
+      if (event.target !== viewport) return;
       const distanceFromEnd = Math.max(
         0,
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,

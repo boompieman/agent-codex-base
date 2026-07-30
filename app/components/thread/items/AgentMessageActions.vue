@@ -34,11 +34,13 @@ async function copyText() {
 </script>
 
 <template>
-  <div data-testid="agent-message-actions" class="mt-2 flex items-center gap-2">
+  <!-- The parent mounts actions only after the existing intermediate-process disclosure closes. -->
+  <div
+    data-testid="agent-message-actions"
+    class="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+  >
     <TurnDurationLabel v-if="turnTiming" :timing="turnTiming" />
-    <span
-      class="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-    >
+    <span>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger as-child>

@@ -10,6 +10,7 @@ const props = defineProps<{
   threadId: string | null;
   userMessageVariant?: "normal" | "steer";
   turnTiming?: DisplayedTurnTiming | null;
+  agentActionsAvailable?: boolean;
 }>();
 
 const itemComponent = computed(() => componentForThreadItem(props.item.type));
@@ -23,5 +24,6 @@ const itemComponent = computed(() => componentForThreadItem(props.item.type));
     :thread-id="threadId"
     :variant="userMessageVariant"
     :turn-timing="item.type === 'agentMessage' ? turnTiming : undefined"
+    :agent-actions-available="item.type === 'agentMessage' && agentActionsAvailable"
   />
 </template>

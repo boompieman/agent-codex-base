@@ -9,18 +9,19 @@ import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 const props = defineProps<{
   item: ThreadHistoryItem;
   turnTiming?: DisplayedTurnTiming | null;
+  agentActionsAvailable?: boolean;
 }>();
 
 const text = computed(() => threadItemText(props.item));
 const inProgress = computed(() => isItemInProgress(props.item));
-const showFooter = computed(
-  () => Boolean(text.value) && !inProgress.value && props.turnTiming?.active === false,
+const hasFooter = computed(
+  () => Boolean(text.value) && props.turnTiming != null && props.agentActionsAvailable === true,
 );
 </script>
 
 <template>
   <div class="group min-w-0 max-w-full text-[0.9375rem] leading-8 text-ink lg:max-w-4xl">
     <MarkdownContent :content="text" :streaming="inProgress" />
-    <AgentMessageActions v-if="showFooter" :text="text" :turn-timing="turnTiming" />
+    <AgentMessageActions v-if="hasFooter" :text="text" :turn-timing="turnTiming" />
   </div>
 </template>

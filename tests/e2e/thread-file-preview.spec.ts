@@ -493,6 +493,14 @@ done
   });
   await expect(page.getByTestId("chat-main-pane")).toBeVisible();
   await expect(panel).toBeVisible();
+  const [returnedAgentBox, returnedFilesBox] = await Promise.all([
+    page.getByTestId("chat-main-pane").boundingBox(),
+    panel.boundingBox(),
+  ]);
+  // Both panels belong to the restored horizontal split. A reused Agent renderer must be laid out
+  // again after fromJSON; otherwise it can retain a previous group's partial height until reload
+  // while the adjacent Files panel already occupies the full Dockview height.
+  expect(Math.abs(returnedAgentBox!.height - returnedFilesBox!.height)).toBeLessThan(2);
   await page.waitForTimeout(300);
   expect(reopenedPopouts).toBe(0);
 });
