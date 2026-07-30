@@ -1,4 +1,5 @@
 import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
+import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 import { itemKey, userMessageVariant, type ThreadTurnSections } from "./thread-turn-sections";
 
 export type { ThreadTimelineTurn } from "~~/shared/types";
@@ -28,6 +29,7 @@ export type ThreadTimelineRow =
       section: ThreadTimelineItemSection;
       item: ThreadTimelineItem;
       userMessageVariant: "normal" | "steer";
+      turnTiming: DisplayedTurnTiming | null;
     }
   | {
       key: string;
@@ -54,6 +56,8 @@ export function buildThreadTimelineRows(input: {
 }) {
   return input.turns.flatMap(({ turn, sections, intermediateOpen }) => {
     const rows: ThreadTimelineRow[] = [];
+    const timing = displayedTurnTiming(turn);
+    const timingTarget = sections.finalItems.findLast((item) => item.type === "agentMessage");
     appendItemRows(rows, input.threadId, turn.id, "user", sections.userItems, sections);
 
     if (sections.intermediateItems.length) {
@@ -76,16 +80,24 @@ export function buildThreadTimelineRows(input: {
       }
     }
 
-    appendItemRows(rows, input.threadId, turn.id, "final", sections.finalItems, sections);
-    if (typeof turn.startedAt === "number" || typeof turn.durationMs === "number") {
+    appendItemRows(
+      rows,
+      input.threadId,
+      turn.id,
+      "final",
+      sections.finalItems,
+      sections,
+      timingTarget,
+      timing,
+    );
+    // Completed turns normally render timing beside the final answer's copy action. Keep a
+    // standalone row only for interrupted/error turns that never produced an Agent answer.
+    if (timing !== null && timingTarget === undefined) {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:duration`,
         type: "turnDuration",
         turnId: turn.id,
-        startedAt: typeof turn.startedAt === "number" ? turn.startedAt : null,
-        completedAt: typeof turn.completedAt === "number" ? turn.completedAt : null,
-        durationMs: turn.durationMs ?? null,
-        active: turn.status === "inProgress",
+        ...timing,
       });
     }
     return rows;
@@ -118,6 +130,8 @@ function appendItemRows(
   section: ThreadTimelineItemSection,
   items: ThreadTimelineItem[],
   sections: ThreadTurnSections,
+  timingTarget?: ThreadTimelineItem,
+  timing: DisplayedTurnTiming | null = null,
 ) {
   items.forEach((item, index) => {
     rows.push({
@@ -127,8 +141,19 @@ function appendItemRows(
       section,
       item,
       userMessageVariant: userMessageVariant(item, sections),
+      turnTiming: item === timingTarget ? timing : null,
     });
   });
+}
+
+function displayedTurnTiming(turn: ThreadTimelineTurn): DisplayedTurnTiming | null {
+  if (typeof turn.startedAt !== "number" && typeof turn.durationMs !== "number") return null;
+  return {
+    startedAt: typeof turn.startedAt === "number" ? turn.startedAt : null,
+    completedAt: typeof turn.completedAt === "number" ? turn.completedAt : null,
+    durationMs: turn.durationMs ?? null,
+    active: turn.status === "inProgress",
+  };
 }
 
 function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
@@ -145,7 +170,8 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.item === right.item &&
       left.turnId === right.turnId &&
       left.section === right.section &&
-      left.userMessageVariant === right.userMessageVariant
+      left.userMessageVariant === right.userMessageVariant &&
+      sameTurnTiming(left.turnTiming, right.turnTiming)
     );
   }
   if (left.type === "turnDuration" && right.type === "turnDuration") {
@@ -158,4 +184,14 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
     );
   }
   return false;
+}
+
+function sameTurnTiming(left: DisplayedTurnTiming | null, right: DisplayedTurnTiming | null) {
+  if (left === null || right === null) return left === right;
+  return (
+    left.startedAt === right.startedAt &&
+    left.completedAt === right.completedAt &&
+    left.durationMs === right.durationMs &&
+    left.active === right.active
+  );
 }

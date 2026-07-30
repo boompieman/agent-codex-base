@@ -75,7 +75,9 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   await replayGatewayLiveEvents(page, [startedEvent, completedEvent]);
 
   await expect(page.getByText("completed history")).toBeVisible();
-  await expect(page.getByText("本轮用时 2.50s")).toBeVisible();
+  const agentActions = page.getByTestId("agent-message-actions");
+  await expect(agentActions.getByText("本轮用时 2.50s")).toBeVisible();
+  await expect(agentActions.getByRole("button", { name: "复制输出" })).toBeAttached();
   await expect(page.getByText("思考中")).toBeHidden();
 
   await seedGatewayThread(page, {
