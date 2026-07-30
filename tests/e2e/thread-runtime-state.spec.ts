@@ -6,7 +6,6 @@ import {
   installRealtimeThreadSnapshotMock,
   openThreadInStore,
   receiveRealtimeThreadEvent,
-  replayGatewayLiveEvents,
   seedGatewayThread,
   selectedThreadStatusInStore,
 } from "./helpers/gateway-store";
@@ -63,18 +62,27 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     payload: { method: "turn/completed", params: { threadId, turn: completedTurn } },
     createdAt: "2026-07-02T10:00:01.000Z",
   };
+  const activeTurn = appServerTurnFixture({
+    ...completedTurn,
+    status: "inProgress",
+    completedAt: null,
+    durationMs: null,
+  });
   await seedGatewayThread(page, {
     projectId: 1,
     threadId,
     currentThread: { id: threadId, name: "Completed UI", status: { type: "idle" } },
-    history: { thread: { id: threadId, turns: [completedTurn] } },
-    events: [startedEvent, completedEvent],
+    history: { thread: { id: threadId, turns: [activeTurn] } },
+    events: [startedEvent],
     loading: true,
-    status: "completed",
+    status: "running",
   });
-  await replayGatewayLiveEvents(page, [startedEvent, completedEvent]);
 
   await expect(page.getByText("completed history")).toBeVisible();
+  await expect(page.getByTestId("agent-message-actions")).toBeHidden();
+
+  await applyGatewayLiveEvent(page, completedEvent);
+
   const agentActions = page.getByTestId("agent-message-actions");
   await expect(agentActions.getByText("本轮用时 2.50s")).toBeVisible();
   await expect(agentActions.getByRole("button", { name: "复制输出" })).toBeAttached();

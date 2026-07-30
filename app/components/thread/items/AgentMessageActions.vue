@@ -35,6 +35,7 @@ async function copyText() {
 
 <template>
   <div data-testid="agent-message-actions" class="mt-2 flex items-center gap-2">
+    <TurnDurationLabel v-if="turnTiming" :timing="turnTiming" />
     <span
       class="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
     >
@@ -57,6 +58,5 @@ async function copyText() {
         </Tooltip>
       </TooltipProvider>
     </span>
-    <TurnDurationLabel v-if="turnTiming" :timing="turnTiming" />
   </div>
 </template>

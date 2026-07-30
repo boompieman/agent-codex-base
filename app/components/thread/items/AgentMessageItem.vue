@@ -13,11 +13,14 @@ const props = defineProps<{
 
 const text = computed(() => threadItemText(props.item));
 const inProgress = computed(() => isItemInProgress(props.item));
+const showFooter = computed(
+  () => Boolean(text.value) && !inProgress.value && props.turnTiming?.active === false,
+);
 </script>
 
 <template>
   <div class="group min-w-0 max-w-full text-[0.9375rem] leading-8 text-ink lg:max-w-4xl">
     <MarkdownContent :content="text" :streaming="inProgress" />
-    <AgentMessageActions v-if="text" :text="text" :turn-timing="turnTiming" />
+    <AgentMessageActions v-if="showFooter" :text="text" :turn-timing="turnTiming" />
   </div>
 </template>
