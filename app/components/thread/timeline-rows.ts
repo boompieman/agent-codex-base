@@ -92,7 +92,7 @@ export function buildThreadTimelineRows(input: {
     );
     // Completed turns normally render timing beside the final answer's copy action. Keep a
     // standalone row only for interrupted/error turns that never produced an Agent answer.
-    if (timing !== null && timingTarget === undefined) {
+    if (hasTimingValue(timing) && timingTarget === undefined) {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:duration`,
         type: "turnDuration",
@@ -146,14 +146,17 @@ function appendItemRows(
   });
 }
 
-function displayedTurnTiming(turn: ThreadTimelineTurn): DisplayedTurnTiming | null {
-  if (typeof turn.startedAt !== "number" && typeof turn.durationMs !== "number") return null;
+function displayedTurnTiming(turn: ThreadTimelineTurn): DisplayedTurnTiming {
   return {
     startedAt: typeof turn.startedAt === "number" ? turn.startedAt : null,
     completedAt: typeof turn.completedAt === "number" ? turn.completedAt : null,
     durationMs: turn.durationMs ?? null,
     active: turn.status === "inProgress",
   };
+}
+
+function hasTimingValue(timing: DisplayedTurnTiming) {
+  return timing.startedAt !== null || timing.durationMs !== null;
 }
 
 function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
