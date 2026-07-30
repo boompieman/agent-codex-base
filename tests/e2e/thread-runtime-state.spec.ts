@@ -47,6 +47,12 @@ test("opening completed history does not show fake thinking", async ({ page }) =
         content: [{ type: "text", text: "completed history" }],
       },
       {
+        id: "reasoning-1",
+        type: "reasoning",
+        status: "completed",
+        summary: ["intermediate work"],
+      },
+      {
         id: "agent-1",
         type: "agentMessage",
         phase: "final_answer",
@@ -79,11 +85,25 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   });
 
   await expect(page.getByText("completed history")).toBeVisible();
-  await expect(page.getByTestId("agent-message-actions")).toBeHidden();
+  await expect(page.getByRole("button", { name: /中间过程/ })).toHaveAttribute(
+    "data-state",
+    "open",
+  );
+  await expect(page.getByTestId("agent-message-actions")).toHaveCount(0);
+  await expect(page.getByText(/本轮用时/)).toHaveCount(0);
 
   await applyGatewayLiveEvent(page, completedEvent);
 
+  await expect(page.getByRole("button", { name: /中间过程/ })).toHaveAttribute(
+    "data-state",
+    "closed",
+  );
   const agentActions = page.getByTestId("agent-message-actions");
+  await expect(agentActions).toBeAttached();
+  await page.getByText("done", { exact: true }).hover();
+  await expect
+    .poll(() => agentActions.evaluate((element) => getComputedStyle(element).opacity))
+    .toBe("1");
   await expect(agentActions.getByText("本轮用时 2.50s")).toBeVisible();
   await expect(agentActions.getByRole("button", { name: "复制输出" })).toBeAttached();
   await expect(page.getByText("思考中")).toBeHidden();

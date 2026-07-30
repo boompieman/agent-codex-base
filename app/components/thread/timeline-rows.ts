@@ -30,6 +30,7 @@ export type ThreadTimelineRow =
       item: ThreadTimelineItem;
       userMessageVariant: "normal" | "steer";
       turnTiming: DisplayedTurnTiming | null;
+      agentActionsAvailable: boolean;
     }
   | {
       key: string;
@@ -53,6 +54,7 @@ export interface ThreadTimelineTurnState {
 export function buildThreadTimelineRows(input: {
   threadId: string | null;
   turns: ThreadTimelineTurnState[];
+  agentActionsAvailable: boolean;
 }) {
   return input.turns.flatMap(({ turn, sections, intermediateOpen }) => {
     const rows: ThreadTimelineRow[] = [];
@@ -89,10 +91,11 @@ export function buildThreadTimelineRows(input: {
       sections,
       timingTarget,
       timing,
+      input.agentActionsAvailable,
     );
     // Completed turns normally render timing beside the final answer's copy action. Keep a
     // standalone row only for interrupted/error turns that never produced an Agent answer.
-    if (hasTimingValue(timing) && timingTarget === undefined) {
+    if (input.agentActionsAvailable && hasTimingValue(timing) && timingTarget === undefined) {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:duration`,
         type: "turnDuration",
@@ -132,6 +135,7 @@ function appendItemRows(
   sections: ThreadTurnSections,
   timingTarget?: ThreadTimelineItem,
   timing: DisplayedTurnTiming | null = null,
+  agentActionsAvailable = false,
 ) {
   items.forEach((item, index) => {
     rows.push({
@@ -142,6 +146,7 @@ function appendItemRows(
       item,
       userMessageVariant: userMessageVariant(item, sections),
       turnTiming: item === timingTarget ? timing : null,
+      agentActionsAvailable: item === timingTarget && agentActionsAvailable,
     });
   });
 }
@@ -174,6 +179,7 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.turnId === right.turnId &&
       left.section === right.section &&
       left.userMessageVariant === right.userMessageVariant &&
+      left.agentActionsAvailable === right.agentActionsAvailable &&
       sameTurnTiming(left.turnTiming, right.turnTiming)
     );
   }

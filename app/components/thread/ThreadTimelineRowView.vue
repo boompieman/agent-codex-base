@@ -33,6 +33,7 @@ const emit = defineEmits<{
     :thread-id="threadId"
     :user-message-variant="props.row.userMessageVariant"
     :turn-timing="props.row.turnTiming"
+    :agent-actions-available="props.row.agentActionsAvailable"
   />
   <TurnDurationLabel v-else :timing="props.row" />
 </template>

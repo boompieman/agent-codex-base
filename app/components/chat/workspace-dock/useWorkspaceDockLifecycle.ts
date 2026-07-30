@@ -123,6 +123,20 @@ export function useWorkspaceDockLifecycle(options: {
     }
     options.reconcile(api.value);
     activate(workspaceLayout.activePanelFor(scopeKey));
+    void layoutRestoredScope(scopeKey);
+  }
+
+  async function layoutRestoredScope(scopeKey: string) {
+    await nextTick();
+    const currentApi = api.value;
+    if (currentApi === null || activeScopeKey !== scopeKey) return;
+    // fromJSON(reuseExistingPanels) moves Dockview's always-mounted Agent renderer between groups.
+    // The outer element may keep the same dimensions, so Dockview's ResizeObserver has no reason
+    // to fire even when the reused panel inherited the previous group's stale content height.
+    // Re-run Dockview's documented layout transaction after Vue commits the move; do not add a
+    // competing ResizeObserver or patch the Agent timeline's height, because Dockview already owns
+    // group geometry and the timeline must only measure rows inside the size it receives.
+    currentApi.layout(currentApi.width, currentApi.height, true);
   }
 
   function switchScope(scopeKey: string) {

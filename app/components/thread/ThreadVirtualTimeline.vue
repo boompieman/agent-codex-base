@@ -65,13 +65,22 @@ const { isIntermediateOpen, setIntermediateOpen } = useIntermediateStepsDisclosu
   autoCollapseIntermediate,
 });
 const rows = computed<ThreadTimelineRow[]>((previous) => {
+  const timelineTurns = turnStates.value.map(({ turn, sections }) => ({
+    turn,
+    sections,
+    intermediateOpen: isIntermediateOpen(turn.id),
+  }));
+  // The disclosure controller already owns the Agent-loop lifecycle: active work stays open and
+  // the whole intermediate process collapses only after the thread settles. Footer actions must
+  // consume that result instead of treating one turn/completed event as the end of a Goal or an
+  // automatic continuation. Requiring every disclosure to be closed also keeps the actions hidden
+  // while a reader has explicitly reopened historical intermediate work.
+  const agentActionsAvailable =
+    !threadIsRunning.value && timelineTurns.every((turn) => !turn.intermediateOpen);
   const next = buildThreadTimelineRows({
     threadId: props.threadId,
-    turns: turnStates.value.map(({ turn, sections }) => ({
-      turn,
-      sections,
-      intermediateOpen: isIntermediateOpen(turn.id),
-    })),
+    turns: timelineTurns,
+    agentActionsAvailable,
   });
   // A streaming delta invalidates the row list but normally changes only one item. Preserve all
   // other row identities so Vue and Markdown renderers do not repeat work inside the virtual
