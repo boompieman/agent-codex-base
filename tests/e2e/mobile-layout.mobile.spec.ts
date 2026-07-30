@@ -258,15 +258,18 @@ test("mobile viewport resize during explicit history prepend stays bottom pinned
   await expect.poll(() => threadTurnCount(page)).toBe(5);
   await waitForAnimationFrames(page, 8);
   const samples = await stopFrameTracking(page);
-  // Chromium can expose one frame of the new external viewport geometry before
-  // visualViewport/ResizeObserver callbacks run. The application contract is
-  // that this does not become a multi-frame correction cascade and remains
-  // pinned after that unavoidable browser-owned frame.
+  // Playwright changes Chromium's external viewport before the page receives its corresponding
+  // resize/ResizeObserver delivery. Depending on browser scheduling, multiple rAF samples can
+  // therefore expose the same old 35px bottom distance even though the application has not had a
+  // resize callback yet. Validate the behavior we own: correction happens within a bounded prefix
+  // and, once settled, never oscillates or starts another compensation cascade.
+  const firstSettledFrame = samples.findIndex((distance) => distance <= 2);
+  expect(firstSettledFrame, JSON.stringify(samples)).toBeGreaterThanOrEqual(0);
+  expect(firstSettledFrame, JSON.stringify(samples)).toBeLessThanOrEqual(3);
   expect(
-    samples.filter((distance) => distance > 2).length,
+    Math.max(...samples.slice(firstSettledFrame)),
     JSON.stringify(samples),
-  ).toBeLessThanOrEqual(1);
-  expect(Math.max(...samples.slice(-4)), JSON.stringify(samples)).toBeLessThanOrEqual(2);
+  ).toBeLessThanOrEqual(2);
 });
 
 test("mobile touch scrolling stays anchored while Agent output streams", async ({
