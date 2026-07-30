@@ -1,4 +1,4 @@
-import type { AppServerThread } from "~~/shared/types";
+import type { GatewayThread } from "~~/shared/types";
 import { firstNonEmptyString } from "~~/shared/utils/strings";
 import { unknownGatewayErrorFromError } from "../errors";
 
@@ -90,9 +90,9 @@ export function titleForThread(
   return identity === undefined ? "Untitled" : String(identity);
 }
 
-export function sortThreads(threads: AppServerThread[]) {
+export function sortThreads(threads: GatewayThread[]) {
   return [...threads].sort((left, right) => {
-    if (Boolean(left.pinned) !== Boolean(right.pinned)) {
+    if (left.pinned !== right.pinned) {
       return left.pinned === true ? -1 : 1;
     }
     return (

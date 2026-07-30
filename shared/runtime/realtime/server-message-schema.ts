@@ -1,11 +1,6 @@
 import { z } from "zod";
 import type { RealtimeServerMessage } from "../../types";
-import {
-  appServerThreadSchema,
-  rpcEnvelopeSchema,
-  threadGoalSchema,
-  threadTurnSchema,
-} from "../app-server";
+import { gatewayThreadSchema, rpcEnvelopeSchema, threadGoalSchema } from "../app-server";
 import { realtimeClientMessageSchema } from "./client-message-schema";
 import {
   nonEmptyString,
@@ -16,9 +11,35 @@ import {
   threadScopeFields,
 } from "./common";
 
+const projectedHistoryItemSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).nullish(),
+    type: z.string().nullish(),
+  })
+  .loose();
+const projectedHistoryTurnSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).nullish(),
+    status: z.union([z.string(), z.object({ type: z.unknown().optional() }).loose()]).nullish(),
+    items: z.array(projectedHistoryItemSchema).optional(),
+    itemsView: z.enum(["notLoaded", "summary", "full"]).optional(),
+    startedAt: z.union([z.number(), z.string()]).nullish(),
+    completedAt: z.union([z.number(), z.string()]).nullish(),
+    durationMs: z.number().nullish(),
+  })
+  .loose();
 const threadHistorySchema = z
   .object({
-    thread: appServerThreadSchema.extend({ turns: z.array(threadTurnSchema) }),
+    thread: z
+      .object({
+        id: nonEmptyString,
+        // This is Gateway's reducer projection, not the official Thread.turns DTO. Items retain
+        // event-specific fields and partially materialized turns are valid while streaming. The
+        // strict 0.146 schema belongs at the app-server RPC boundary; reusing it here would reject
+        // Gateway state such as active context compaction and paginated history.
+        turns: z.array(projectedHistoryTurnSchema),
+      })
+      .strict(),
   })
   .strict();
 const gatewayEventSchema = z
@@ -37,6 +58,35 @@ const turnsPageStateSchema = z
     backwardsCursor: z.string().nullable(),
   })
   .strict();
+const tmuxPaneSnapshotSchema = z
+  .object({
+    sessionName: z.string(),
+    sessionId: nonEmptyString,
+    sessionCreated: z.number(),
+    windowIndex: z.number().int().nonnegative(),
+    windowName: z.string(),
+    paneIndex: z.number().int().nonnegative(),
+    paneId: nonEmptyString,
+    panePid: positiveId,
+    currentCommand: z.string(),
+    running: z.boolean(),
+  })
+  .strict();
+const tmuxSessionsSnapshotFields = {
+  hostId: positiveId,
+  sessions: z.array(
+    z
+      .object({
+        name: z.string(),
+        sessionId: nonEmptyString,
+        sessionCreated: z.number(),
+        panes: z.array(tmuxPaneSnapshotSchema),
+      })
+      .strict(),
+  ),
+  error: z.string().nullable(),
+  scannedAt: nonEmptyString,
+};
 const threadSettingsSchema = z
   .object({
     model: nullableString,
@@ -73,7 +123,7 @@ const projectSchema = z
   .strict();
 const threadOpenResultFields = {
   hostId: positiveId,
-  thread: appServerThreadSchema,
+  thread: gatewayThreadSchema,
   history: threadHistorySchema,
   lastEventId: nonNegativeId,
   eventEpoch: nonEmptyString,
@@ -270,6 +320,14 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         message: z.string().nullable(),
       })
       .strict(),
+    z
+      .object({
+        type: z.literal("tmux.sessions.snapshot"),
+        ...requestIdField,
+        ...tmuxSessionsSnapshotFields,
+      })
+      .strict(),
+    z.object({ type: z.literal("tmux.sessions.updated"), ...tmuxSessionsSnapshotFields }).strict(),
     z.object({ type: z.literal("thread.event"), event: gatewayEventSchema }).strict(),
     z
       .object({

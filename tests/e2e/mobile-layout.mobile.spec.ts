@@ -4,6 +4,7 @@ import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { hostRecordSchema, projectRecordSchema } from "./helpers/http-schemas";
 import { appendAgentStreamLines, seedGatewayThread } from "./helpers/gateway-store";
 import { defaultGatewayHost } from "./fixtures/thread-history";
+import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 import {
   buildTextTurns,
   frameSpread,
@@ -480,8 +481,15 @@ test("opens sidebar context actions with long press on mobile", async ({
 
 test("opens and closes the subagent side panel on mobile", async ({ page }) => {
   await openApp(page);
+  const parentThread = gatewayThreadFixture({ id: "mobile-parent-thread", name: "Mobile Parent" });
+  const subAgentThread = gatewayThreadFixture({
+    id: "mobile-subagent-thread",
+    name: "Mobile Parent Inherited Name",
+    agentNickname: "Scout",
+    agentRole: "explorer",
+  });
   await page.evaluate(
-    (host) => {
+    ({ host, parentThread, subAgentThread }) => {
       const driver = window.__codexGatewayE2e;
       if (!driver) throw new Error("Gateway E2E driver is unavailable");
       const { catalog, navigation, views } = driver;
@@ -490,7 +498,7 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
       catalog.hosts = [host];
       navigation.selectedHostId = 1;
       navigation.selectedThreadId = threadId;
-      views.currentThread = { id: threadId, name: "Mobile Parent" };
+      views.currentThread = parentThread;
       views.history = {
         thread: {
           id: threadId,
@@ -516,12 +524,7 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
           hostId: 1,
           projectId: null,
           threadId: subThreadId,
-          currentThread: {
-            id: subThreadId,
-            name: "Mobile Parent Inherited Name",
-            agentNickname: "Scout",
-            agentRole: "explorer",
-          },
+          currentThread: subAgentThread,
           history: {
             thread: {
               id: subThreadId,
@@ -553,7 +556,11 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
       driver.bootstrap.initializing = false;
       views.loading = false;
     },
-    { ...defaultGatewayHost(1), name: "Mobile Host" },
+    {
+      host: { ...defaultGatewayHost(1), name: "Mobile Host" },
+      parentThread,
+      subAgentThread,
+    },
   );
 
   await openIntermediateSteps(page);

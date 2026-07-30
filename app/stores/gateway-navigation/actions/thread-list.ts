@@ -1,5 +1,5 @@
 import { gatewayApi } from "@/utils/gateway-api";
-import type { AppServerThread } from "~~/shared/types";
+import type { GatewayThread } from "~~/shared/types";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayConfigStore } from "@/stores/gateway-config";
@@ -9,7 +9,7 @@ import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity"
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import type { ThreadListResponse } from "@/stores/gateway/types";
-import { messageFromError, pinnedKey, sortThreads } from "@/stores/gateway/thread-utils/identity";
+import { messageFromError, sortThreads } from "@/stores/gateway/thread-utils/identity";
 import { runtimeStatusFromAppThreadStatus } from "@/stores/gateway/thread-utils/status";
 import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
 import { captureSessionEpoch } from "@/utils/session-epoch";
@@ -24,24 +24,9 @@ export function createThreadListActions() {
     if (!sessionIsCurrent()) return false;
     if (response.projects !== undefined) catalog.mergeProjects(response.projects);
     applyProjectDirectoryAvailability(response);
-    useGatewayThreadActivityStore().ingestThreads(hostId, response.data ?? [], catalog.projects);
+    useGatewayThreadActivityStore().ingestGatewayThreads(response.data ?? [], catalog.projects);
     syncThreadStatusesFromList(hostId, response.data ?? []);
     return true;
-  }
-
-  function decorateThreads(threads: AppServerThread[]) {
-    const config = useGatewayConfigStore();
-    const navigation = useGatewayNavigationStore();
-    const pinned = new Set(
-      config.gatewayConfig.pinnedThreads.map((thread) => pinnedKey(thread.hostId, thread.threadId)),
-    );
-    return threads.map((thread) => ({
-      ...thread,
-      pinned:
-        navigation.selectedHostId !== null
-          ? pinned.has(pinnedKey(navigation.selectedHostId, String(thread.id)))
-          : false,
-    }));
   }
 
   return {
@@ -94,11 +79,7 @@ export function createThreadListActions() {
           return;
         if (response.projects !== undefined) catalog.mergeProjects(response.projects);
         applyProjectDirectoryAvailability(response);
-        useGatewayThreadActivityStore().ingestThreads(
-          hostId,
-          response.data ?? [],
-          catalog.projects,
-        );
+        useGatewayThreadActivityStore().ingestGatewayThreads(response.data ?? [], catalog.projects);
         catalog.setHostConnectionStatus(hostId, "connected");
         syncThreadStatusesFromList(hostId, response.data ?? []);
         // Sub-agent threads remain addressable by their explicit panel links, but they are not
@@ -107,7 +88,10 @@ export function createThreadListActions() {
         const mainThreads = (response.data ?? []).filter(
           (thread) => !isAppServerSubAgentThread(thread),
         );
-        navigation.threads = sortThreads(decorateThreads(mainThreads));
+        // `/api/threads` is the sole AppServerThread -> GatewayThread boundary. Do not overlay
+        // browser config here: doing so creates two pin authorities and makes cross-tab updates
+        // dependent on which request happened last.
+        navigation.threads = sortThreads(mainThreads);
         config.setCatalog(catalog.hosts, catalog.projects);
       } catch (error: unknown) {
         if (!sessionIsCurrent()) return;
@@ -130,7 +114,6 @@ export function createThreadListActions() {
         }
       }
     },
-    decorateThreads,
   };
 }
 
@@ -143,21 +126,9 @@ function applyProjectDirectoryAvailability(response: ThreadListResponse) {
   };
 }
 
-function syncThreadStatusesFromList(hostId: number, threads: AppServerThread[]) {
+function syncThreadStatusesFromList(hostId: number, threads: GatewayThread[]) {
   const runtime = useGatewayThreadRuntimeStore();
   for (const thread of threads) {
-    if (
-      thread.id === null ||
-      thread.id === undefined ||
-      thread.status === null ||
-      thread.status === undefined
-    ) {
-      continue;
-    }
-    runtime.setThreadStatus(
-      hostId,
-      String(thread.id),
-      runtimeStatusFromAppThreadStatus(thread.status),
-    );
+    runtime.setThreadStatus(hostId, thread.id, runtimeStatusFromAppThreadStatus(thread.status));
   }
 }

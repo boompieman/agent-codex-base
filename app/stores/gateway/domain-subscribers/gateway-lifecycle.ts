@@ -9,7 +9,6 @@ import { setRealtimeRequestContextResolver } from "@/stores/gateway-realtime/req
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayHostMetricsDataStore } from "@/stores/gateway-host-metrics/data";
 import { gatewayDomainEvents } from "../domain-events";
-import { sortThreads } from "../thread-utils/identity";
 
 const lifecycleNotificationKeys = new Set<string>();
 
@@ -28,18 +27,22 @@ export function registerGatewayLifecycleSubscribers() {
   });
   gatewayDomainEvents.on("gateway-config-applied", ({ config }) => {
     const catalog = useGatewayCatalogStore();
-    const navigation = useGatewayNavigationStore();
     catalog.hosts = [...config.hosts];
     catalog.projects = [...config.projects];
-    navigation.threads = sortThreads(navigation.decorateThreads(navigation.threads));
   });
   gatewayDomainEvents.on("host-removed", ({ hostId }) => {
     useGatewayRealtimeStore().closeHostThreadEvents(hostId);
     useGatewayHostMetricsDataStore().clearHost(hostId);
   });
   gatewayDomainEvents.on("pinned-threads-invalidated", () => {
+    const navigation = useGatewayNavigationStore();
     void useGatewayConfigStore()
       .refreshPinnedThreads()
+      .then(async () => {
+        // The server projection is the only pin authority for GatewayThread. Refetch the selected
+        // catalog instead of re-projecting app-server data in the browser after a cross-tab update.
+        if (navigation.selectedHostId !== null) await navigation.listThreads();
+      })
       .catch((error: unknown) => {
         console.warn("[gateway] failed to refresh pinned threads", error);
       });

@@ -1,10 +1,10 @@
 import type {
   GatewayConfig,
   GatewayEvent,
+  AppServerThreadStatus,
   HostRecord,
   PinnedThreadRecord,
   ProjectRecord,
-  ThreadHistoryStatus,
 } from "~~/shared/types";
 import { normalizeNotificationSettings } from "~~/shared/config";
 import { trimmedOrNull } from "~~/shared/utils/strings";
@@ -30,7 +30,7 @@ export interface ThreadMetadataRecord {
   name: string | null;
   preview: string | null;
   cwd: string | null;
-  status: ThreadHistoryStatus;
+  status: AppServerThreadStatus;
   recencyAt: number | null;
   updatedAt: number;
 }

@@ -13,6 +13,7 @@ import { SftpChannelPool } from "./ssh-sftp";
 import { uploadFile, uploadFileResumable } from "./ssh-transfer";
 import { currentGatewayUserId } from "../../state/memory";
 import { EventEmitter } from "@posva/event-emitter";
+import { SshBackgroundTaskScheduler } from "./ssh-background-tasks";
 
 const SSH_READY_TIMEOUT_MS = 30_000;
 const SSH_KEEPALIVE_INTERVAL_MS = 30_000;
@@ -27,6 +28,7 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
   private clientTokens = new Map<string, symbol>();
   private sftpChannels = new SftpChannelPool();
   private hostKeysByUser = new Map<string, Map<number, string>>();
+  private backgroundTasks = new SshBackgroundTaskScheduler();
 
   constructor() {
     super();
@@ -61,6 +63,14 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
     return await new Promise<ClientChannel>((resolve, reject) => {
       client.exec(command, (error, channel) => (error ? reject(error) : resolve(channel)));
     });
+  }
+
+  runBackground<Result>(host: HostWithSecret, task: () => Promise<Result>) {
+    const connectionKey = sshConnectionKey(host, resolveSshConfig(host));
+    // The Client pool itself is keyed by the resolved remote identity and credentials. Use that
+    // same key here: two Gateway users with identical credentials share one physical SSH transport,
+    // so their best-effort collectors must share its background bulkhead as well.
+    return this.backgroundTasks.run(connectionKey, task);
   }
 
   async exec(

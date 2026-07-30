@@ -11,6 +11,8 @@ import {
   selectedThreadStatusInStore,
 } from "./helpers/gateway-store";
 import { defaultGatewayProject } from "./fixtures/thread-history";
+import { gatewayThreadFixture } from "./fixtures/gateway-thread";
+import { appServerTurnFixture } from "./fixtures/app-server-turn";
 import { z } from "zod";
 
 const storedRouteSelectionSchema = z.object({
@@ -29,13 +31,16 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     method: "turn/started",
     payload: {
       method: "turn/started",
-      params: { threadId, turn: { id: "turn-1", status: "running", items: [] } },
+      params: { threadId, turn: appServerTurnFixture({ id: "turn-1" }) },
     },
     createdAt: "2026-07-02T10:00:00.000Z",
   };
-  const completedTurn = {
+  const completedTurn = appServerTurnFixture({
     id: "turn-1",
     status: "completed",
+    startedAt: 1_782_986_400,
+    completedAt: 1_782_986_402.5,
+    durationMs: 2_500,
     items: [
       {
         id: "user-1",
@@ -49,7 +54,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
         text: "done",
       },
     ],
-  };
+  });
   const completedEvent = {
     id: 2,
     hostId: 1,
@@ -61,7 +66,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   await seedGatewayThread(page, {
     projectId: 1,
     threadId,
-    currentThread: { id: threadId, name: "Completed UI", status: "completed" },
+    currentThread: { id: threadId, name: "Completed UI", status: { type: "idle" } },
     history: { thread: { id: threadId, turns: [completedTurn] } },
     events: [startedEvent, completedEvent],
     loading: true,
@@ -70,6 +75,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   await replayGatewayLiveEvents(page, [startedEvent, completedEvent]);
 
   await expect(page.getByText("completed history")).toBeVisible();
+  await expect(page.getByText("本轮用时 2.50s")).toBeVisible();
   await expect(page.getByText("思考中")).toBeHidden();
 
   await seedGatewayThread(page, {
@@ -91,7 +97,7 @@ test("opening a cached thread applies terminal events before deriving composer s
 }) => {
   await openApp(page);
   const threadId = "e2e-cached-terminal-thread";
-  const staleTurn = {
+  const staleTurn = appServerTurnFixture({
     id: "turn-stale-1",
     status: "inProgress",
     items: [
@@ -101,8 +107,8 @@ test("opening a cached thread applies terminal events before deriving composer s
         content: [{ type: "text", text: "stale cached request" }],
       },
     ],
-  };
-  const completedTurn = {
+  });
+  const completedTurn = appServerTurnFixture({
     ...staleTurn,
     status: "completed",
     items: [
@@ -114,7 +120,7 @@ test("opening a cached thread applies terminal events before deriving composer s
         text: "cached turn is done",
       },
     ],
-  };
+  });
 
   await installRealtimeThreadSnapshotMock(page, {
     snapshots: {
@@ -220,7 +226,7 @@ test("live terminal event updates selected thread even when snapshot cursor is a
   await openApp(page);
   const cursorThreadId = "e2e-terminal-cursor-thread";
   const turnId = "turn-terminal-cursor";
-  const runningTurn = {
+  const runningTurn = appServerTurnFixture({
     id: turnId,
     status: "inProgress",
     items: [
@@ -230,8 +236,8 @@ test("live terminal event updates selected thread even when snapshot cursor is a
         content: [{ type: "text", text: "cursor race request" }],
       },
     ],
-  };
-  const completedTurn = {
+  });
+  const completedTurn = appServerTurnFixture({
     ...runningTurn,
     status: "completed",
     items: [
@@ -243,7 +249,7 @@ test("live terminal event updates selected thread even when snapshot cursor is a
         text: "cursor race done",
       },
     ],
-  };
+  });
   await seedGatewayThread(page, {
     projectId: 1,
     threadId: cursorThreadId,
@@ -257,7 +263,10 @@ test("live terminal event updates selected thread even when snapshot cursor is a
         hostId: 1,
         projectId: 1,
         threadId: cursorThreadId,
-        currentThread: { id: cursorThreadId, name: "Cursor Race Thread" },
+        currentThread: gatewayThreadFixture(
+          { id: cursorThreadId, name: "Cursor Race Thread" },
+          { projectId: 1 },
+        ),
         history: { thread: { id: cursorThreadId, turns: [runningTurn] } },
         events: [],
         olderTurnsCursor: null,
@@ -304,6 +313,7 @@ test("context compaction duration survives event replay timing", async ({ page }
       params: {
         threadId,
         turnId: "turn-context",
+        startedAtMs: Date.parse("2026-07-02T10:00:00.000Z"),
         item: {
           id: "context-compaction",
           type: "contextCompaction",
@@ -311,7 +321,7 @@ test("context compaction duration survives event replay timing", async ({ page }
         },
       },
     },
-    createdAt: "2026-07-02T10:00:00.000Z",
+    createdAt: "2026-07-02T10:00:02.000Z",
   });
   await applyGatewayLiveEvent(page, {
     id: 402,
@@ -323,6 +333,7 @@ test("context compaction duration survives event replay timing", async ({ page }
       params: {
         threadId,
         turnId: "turn-context",
+        completedAtMs: Date.parse("2026-07-02T10:00:04.250Z"),
         item: {
           id: "context-compaction",
           type: "contextCompaction",
@@ -330,7 +341,7 @@ test("context compaction duration survives event replay timing", async ({ page }
         },
       },
     },
-    createdAt: "2026-07-02T10:00:04.250Z",
+    createdAt: "2026-07-02T10:00:09.000Z",
   });
 
   const chatScrollArea = page.getByTestId("chat-scroll-area");
@@ -342,7 +353,7 @@ test("context compaction duration survives event replay timing", async ({ page }
 test("turn completed keeps thread running while context compaction is active", async ({ page }) => {
   await openApp(page);
   const threadId = "e2e-context-compaction-active-after-turn";
-  const activeCompactionTurn = {
+  const activeCompactionTurn = appServerTurnFixture({
     id: "turn-context-active",
     status: "completed",
     items: [
@@ -350,10 +361,10 @@ test("turn completed keeps thread running while context compaction is active", a
         id: "context-compaction-active",
         type: "contextCompaction",
         status: "inProgress",
-        startedAt: "2026-07-02T10:00:00.000Z",
+        startedAt: Date.parse("2026-07-02T10:00:00.000Z"),
       },
     ],
-  };
+  });
 
   await seedGatewayThread(page, {
     threadId,
@@ -398,7 +409,7 @@ test("restoring a cached thread uses app-server snapshot state for active contex
               id: "context-compaction-running",
               type: "contextCompaction",
               status: "inProgress",
-              startedAt: "2026-07-02T10:00:00.000Z",
+              startedAt: Date.parse("2026-07-02T10:00:00.000Z"),
             },
           ],
         },
@@ -414,7 +425,11 @@ test("restoring a cached thread uses app-server snapshot state for active contex
   await installRealtimeThreadSnapshotMock(page, {
     snapshots: {
       [threadId]: {
-        thread: { id: threadId, name: "Active Context Cache", status: "running" },
+        thread: {
+          id: threadId,
+          name: "Active Context Cache",
+          status: { type: "active", activeFlags: [] },
+        },
         history: activeContextHistory,
         runtimeStatus: "running",
       },

@@ -11,7 +11,7 @@ import {
 
 export function registerThreadProjectionSubscribers() {
   gatewayDomainEvents.on("thread-summary-detected", (event) => {
-    useGatewayThreadActivityStore().upsertThread(
+    useGatewayThreadActivityStore().upsertAppServerThread(
       event.hostId,
       event.thread,
       useGatewayCatalogStore().projects,

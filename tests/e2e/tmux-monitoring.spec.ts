@@ -44,6 +44,11 @@ done
   );
 
   await openApp(page);
+  const legacySessionRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/api\/hosts\/\d+\/tmux\/sessions(?:\?|$)/.test(request.url()))
+      legacySessionRequests.push(request.url());
+  });
   await configureBarkNotifications(page, bark.url);
   const { host, project } = await remoteWorkspace.provision({ hostName });
   await remoteWorkspace.startThread(project.id);
@@ -72,6 +77,7 @@ done
   // registry still identifies it as a shell and allows the idle transition.
   await expect(explicitShellPane).toContainText("bash");
   await expect(explicitShellPane.getByRole("button", { name: "已回到 Shell" })).toBeDisabled();
+  expect(legacySessionRequests).toEqual([]);
 
   await runningPane.getByRole("button", { name: `查看 ${sessionName} Pane 输出` }).click();
   const paneOutput = page.getByTestId("tmux-pane-output");
@@ -181,6 +187,7 @@ done`,
   await hostNode.getByRole("button", { name: `刷新 ${hostName} 的 Pane` }).click();
   const exitPane = panel.getByTestId(`tmux-pane-${exitSessionName}-0-0`);
   await expect(exitPane).toContainText("sleep");
+  expect(legacySessionRequests).toEqual([]);
   await exitPane.getByRole("button", { name: "加入监控" }).click();
   await execRemoteSsh(remote, `tmux kill-session -t ${shellQuote(exitSessionName)}`);
   await hostNode.getByRole("button", { name: /立即检查/ }).click();

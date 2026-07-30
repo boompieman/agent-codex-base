@@ -1,4 +1,4 @@
-import type { AppServerThread, PinnedThreadRecord } from "~~/shared/types";
+import type { GatewayThread, PinnedThreadRecord } from "~~/shared/types";
 import { gatewayApi } from "@/utils/gateway-api";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayConfigStore } from "@/stores/gateway-config";
@@ -80,13 +80,12 @@ export function createThreadPinningActions() {
       }
     },
 
-    upsertPinnedMetadataFromThread(thread: AppServerThread) {
+    upsertPinnedMetadataFromThread(thread: GatewayThread) {
       const gateway = useGatewayConfigStore();
       const catalog = useGatewayCatalogStore();
       const navigation = useGatewayNavigationStore();
-      if (navigation.selectedHostId === null || thread.id === null || thread.id === undefined)
-        return;
-      const key = pinnedKey(navigation.selectedHostId, String(thread.id));
+      if (navigation.selectedHostId === null) return;
+      const key = pinnedKey(navigation.selectedHostId, thread.id);
       const index = gateway.gatewayConfig.pinnedThreads.findIndex(
         (item) => pinnedKey(item.hostId, item.threadId) === key,
       );

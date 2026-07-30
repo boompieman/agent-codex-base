@@ -2,7 +2,7 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { useTimestamp } from "@vueuse/core";
 import { BrainIcon, Loader2Icon } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { isItemInProgress, threadItemText } from "@/utils/thread-items";
 import { formatDurationMs, itemCompletedAtMs, itemStartedAtMs } from "@/utils/item-timing";
@@ -10,16 +10,17 @@ import { formatDurationMs, itemCompletedAtMs, itemStartedAtMs } from "@/utils/it
 const props = defineProps<{ item: ThreadHistoryItem }>();
 const { t } = useI18n();
 const { timestamp: now, pause, resume } = useTimestamp({ controls: true, interval: 100 });
-const localStartedAt = ref(Date.now());
-
 const text = computed(() => threadItemText(props.item));
 const inProgress = computed(() => isItemInProgress(props.item));
-const startedAt = computed(() => itemStartedAtMs(props.item) ?? localStartedAt.value);
+const startedAt = computed(() => itemStartedAtMs(props.item));
 const completedAt = computed(() => itemCompletedAtMs(props.item));
-const elapsedMs = computed(
-  () => (inProgress.value ? now.value : (completedAt.value ?? now.value)) - startedAt.value,
+const elapsedMs = computed(() => {
+  if (startedAt.value === null) return null;
+  return (inProgress.value ? now.value : (completedAt.value ?? now.value)) - startedAt.value;
+});
+const timeLabel = computed(() =>
+  elapsedMs.value === null ? null : formatDurationMs(elapsedMs.value),
 );
-const timeLabel = computed(() => formatDurationMs(elapsedMs.value));
 
 watch(inProgress, (active) => (active ? resume() : pause()), { immediate: true });
 </script>
@@ -33,6 +34,7 @@ watch(inProgress, (active) => (active ? resume() : pause()), { immediate: true }
         <div class="mb-1 flex items-center gap-2 text-xs text-ink-muted">
           <span>{{ t("app.thinking") }}</span>
           <span
+            v-if="timeLabel !== null"
             class="rounded-full bg-surface/80 px-2 py-0.5 font-mono text-[0.6875rem] text-ink-secondary"
             >{{ timeLabel }}</span
           >

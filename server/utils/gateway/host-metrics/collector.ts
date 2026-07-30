@@ -1,6 +1,7 @@
 import type { ClientChannel } from "ssh2";
 import type { HostRecord, HostMetricsSample } from "~~/shared/types";
 import type { SshConnectionPool } from "../infra/ssh/ssh-connection";
+import { AdaptivePollSchedule } from "../infra/background/adaptive-poll-schedule";
 import { hostMetricsRemoteCommand } from "./remote-command";
 import { HostMetricsRemoteParser } from "./remote-parser";
 import { buildHostMetricsSample } from "./sample-builder";
@@ -10,7 +11,6 @@ const MIN_SAMPLE_DELAY_MS = 2_000;
 const MAX_SAMPLE_DELAY_MS = 30_000;
 const SAMPLE_TIMEOUT_MS = 45_000;
 const FAILURE_DELAYS_MS = [5_000, 10_000, 20_000, 30_000] as const;
-const JITTER_RATIO = 0.1;
 
 export interface HostMetricsCollectorCallbacks {
   sample: (sample: HostMetricsSample) => void;
@@ -29,8 +29,12 @@ export class HostMetricsCollector {
   private channel: ClientChannel | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
-  private failureCount = 0;
   private previous: RawHostMetricsSample | null = null;
+  private readonly schedulePolicy = new AdaptivePollSchedule({
+    minimumDelayMs: MIN_SAMPLE_DELAY_MS,
+    maximumDelayMs: MAX_SAMPLE_DELAY_MS,
+    failureDelaysMs: FAILURE_DELAYS_MS,
+  });
 
   constructor(
     private readonly ssh: SshConnectionPool,
@@ -66,9 +70,8 @@ export class HostMetricsCollector {
       case "sample": {
         const sample = buildHostMetricsSample(result.raw, this.previous);
         this.previous = result.raw;
-        this.failureCount = 0;
         this.callbacks.sample(sample);
-        this.schedule(successDelay(result.elapsedMs));
+        this.schedule(this.schedulePolicy.afterSuccess(result.elapsedMs));
         return;
       }
       case "unsupported":
@@ -82,12 +85,18 @@ export class HostMetricsCollector {
         this.callbacks.error(result.message);
         break;
     }
-    this.schedule(failureDelay(this.failureCount));
-    this.failureCount += 1;
+    this.schedule(this.schedulePolicy.afterFailure());
   }
 
   private async collectOnce(): Promise<CollectionResult> {
     const startedAt = Date.now();
+    return await this.ssh.runBackground(this.host, async () => {
+      if (!this.running) return { kind: "disconnected", message: null };
+      return await this.collectChannelOnce(startedAt);
+    });
+  }
+
+  private async collectChannelOnce(startedAt: number): Promise<CollectionResult> {
     const channel = await this.ssh.execChannelIfConnected(this.host, hostMetricsRemoteCommand());
     if (channel === null) return { kind: "disconnected", message: null };
     if (!this.running) {
@@ -154,23 +163,6 @@ export class HostMetricsCollector {
     this.timer = setTimeout(() => {
       this.timer = null;
       void this.collect();
-    }, withJitter(delayMs));
+    }, delayMs);
   }
-}
-
-function successDelay(elapsedMs: number) {
-  // Self-clock polling cannot build a queue: a slow sample lengthens the quiet period before the
-  // next channel. RPC, terminals, and file traffic keep using the shared SSH connection without
-  // ever awaiting metrics. Do not replace this with setInterval or a remote infinite loop; either
-  // can accumulate metric output behind a congested connection and compete with Agent streaming.
-  return Math.min(MAX_SAMPLE_DELAY_MS, Math.max(MIN_SAMPLE_DELAY_MS, elapsedMs));
-}
-
-function failureDelay(failureCount: number) {
-  return FAILURE_DELAYS_MS[Math.min(failureCount, FAILURE_DELAYS_MS.length - 1)]!;
-}
-
-function withJitter(delayMs: number) {
-  const factor = 1 - JITTER_RATIO + Math.random() * JITTER_RATIO * 2;
-  return Math.round(delayMs * factor);
 }

@@ -11,6 +11,7 @@ import type {
   GatewayConfig,
   HostMetricsCollectorStatus,
   HostMetricsSample,
+  TmuxSessionsSnapshot,
 } from "~~/shared/types";
 import type { AppServerEventParams } from "~~/shared/thread-history/app-server-event-handlers/types";
 import type { ThreadRuntimeStatus } from "./types";
@@ -65,6 +66,7 @@ export type GatewayDomainEventMap = {
     status: HostMetricsCollectorStatus;
     message: string | null;
   };
+  "realtime-tmux-sessions": TmuxSessionsSnapshot;
   "thread-summary-detected": {
     hostId: number;
     thread: AppServerThread;

@@ -1,4 +1,4 @@
-import type { AppServerThread, ThreadHistoryState } from "~~/shared/types";
+import type { ThreadHistorySeed, ThreadHistoryState } from "~~/shared/thread-history/types";
 import {
   appendAgentDelta,
   appendCommandOutputDelta,
@@ -19,7 +19,7 @@ import { pinnedKey } from "../thread-utils/identity";
 
 type HistoryUpdate = (
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
 ) => ThreadHistoryState;
 
 interface PendingHistoryProjection {

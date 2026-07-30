@@ -20,6 +20,7 @@ export interface RealtimePeerState {
   sessionRevocationUnsubscribe?: () => void;
   threadUnsubscribers: Map<string, () => void>;
   hostMetricsUnsubscribers: Map<number, () => void>;
+  tmuxSessionUnsubscribers: Map<number, () => void>;
 }
 
 const peerStates = new WeakMap<RealtimePeer, RealtimePeerState>();
@@ -36,6 +37,7 @@ export function stateFor(peer: RealtimePeer) {
       userId: null,
       threadUnsubscribers: new Map(),
       hostMetricsUnsubscribers: new Map(),
+      tmuxSessionUnsubscribers: new Map(),
     };
     peerStates.set(peer, state);
   }

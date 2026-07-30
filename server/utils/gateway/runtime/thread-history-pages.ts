@@ -1,12 +1,12 @@
 import { SERVER_TURN_CACHE_LIMIT } from "~~/shared/config";
-import type { AppServerThread, ThreadHistoryState } from "~~/shared/types";
+import type { ThreadHistorySeed, ThreadHistoryState } from "~~/shared/types";
 import type { TurnsPage } from "./types";
 
-export function pageToFullHistory(thread: AppServerThread, page: TurnsPage): ThreadHistoryState {
+export function pageToFullHistory(thread: ThreadHistorySeed, page: TurnsPage): ThreadHistoryState {
   const turns = [...(page.data ?? [])].reverse().slice(-SERVER_TURN_CACHE_LIMIT);
   return {
     thread: {
-      ...thread,
+      id: thread.id,
       turns,
     },
   };

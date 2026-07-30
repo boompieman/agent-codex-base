@@ -1,6 +1,5 @@
 import { computed, ref } from "vue";
 import { defineStore, skipHydrate } from "pinia";
-import pLimit from "p-limit";
 import { useAccountLocalStorage } from "@/composables/storage/useAccountLocalStorage";
 import { useGatewayTranslator } from "@/composables/i18n/useGatewayTranslator";
 import type {
@@ -9,6 +8,7 @@ import type {
   TmuxMonitorThreadBinding,
   TmuxPaneSnapshot,
   TmuxSessionSnapshot,
+  TmuxSessionsSnapshot,
 } from "~~/shared/types";
 import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
 import { TMUX_WORKSPACE_PANEL_ID } from "@/stores/gateway/workspace-panels";
@@ -18,9 +18,13 @@ import {
   createTmuxMonitor,
   deleteTmuxMonitor,
   fetchTmuxMonitors,
-  fetchTmuxSessions,
   promoteTmuxMonitor,
 } from "./transport";
+import {
+  refreshTmuxSessionStream,
+  subscribeTmuxSessionStream,
+  unsubscribeTmuxSessionStream,
+} from "./session-realtime";
 
 export interface TmuxRemoteHostState {
   sessions: TmuxSessionSnapshot[];
@@ -42,8 +46,6 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
   const loadedAt = ref(0);
   const highlightedMonitorId = ref<number | null>(null);
   const remoteHosts = ref<Record<number, TmuxRemoteHostState>>({});
-  const pendingScans = new Map<number, Promise<TmuxRemoteHostState>>();
-  const scanLimit = pLimit(2);
   let pendingSummary: Promise<void> | null = null;
   let sessionGeneration = 0;
 
@@ -109,26 +111,13 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
     }
   }
 
-  async function scanSessions(hostId: number) {
-    const pending = pendingScans.get(hostId);
-    if (pending) return await pending;
-    // A user may expand many Hosts. Keep the dashboard responsive without creating a burst of
-    // browser requests; the server applies the authoritative shared SSH-channel limit as well.
-    const request = scanLimit(() => scanSessionsNow(hostId));
-    const trackedRequest = request.finally(() => {
-      if (pendingScans.get(hostId) === trackedRequest) pendingScans.delete(hostId);
-    });
-    pendingScans.set(hostId, trackedRequest);
-    return await trackedRequest;
-  }
-
-  async function scanSessionsNow(hostId: number) {
+  async function subscribeSessions(hostId: number) {
     const generation = sessionGeneration;
     updateRemoteState(hostId, { scanning: true, error: "" });
     try {
-      const result = await fetchTmuxSessions(hostId);
+      const result = await subscribeTmuxSessionStream(hostId);
       if (generation !== sessionGeneration) return createRemoteState();
-      updateRemoteState(hostId, { sessions: result.sessions });
+      applySessionsSnapshot(result);
     } catch (scanError) {
       if (generation !== sessionGeneration) return createRemoteState();
       updateRemoteState(hostId, {
@@ -138,6 +127,37 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
       if (generation === sessionGeneration) updateRemoteState(hostId, { scanning: false });
     }
     return remoteStateFor(hostId);
+  }
+
+  async function refreshSessions(hostId: number) {
+    const generation = sessionGeneration;
+    updateRemoteState(hostId, { scanning: true, error: "" });
+    try {
+      const result = await refreshTmuxSessionStream(hostId);
+      if (generation !== sessionGeneration) return createRemoteState();
+      applySessionsSnapshot(result);
+    } catch (scanError) {
+      if (generation !== sessionGeneration) return createRemoteState();
+      updateRemoteState(hostId, {
+        error: gatewayErrorMessage(scanError, t("app.tmuxScanFailed")),
+      });
+    } finally {
+      if (generation === sessionGeneration) updateRemoteState(hostId, { scanning: false });
+    }
+    return remoteStateFor(hostId);
+  }
+
+  function unsubscribeSessions(hostId: number) {
+    unsubscribeTmuxSessionStream(hostId);
+    updateRemoteState(hostId, { scanning: false });
+  }
+
+  function applySessionsSnapshot(snapshot: TmuxSessionsSnapshot) {
+    updateRemoteState(snapshot.hostId, {
+      sessions: snapshot.sessions,
+      scanning: false,
+      error: snapshot.error ?? "",
+    });
   }
 
   async function addMonitor(
@@ -169,7 +189,7 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
       active.value = monitors.active;
       history.value = monitors.history;
       loadedAt.value = Date.now();
-      await scanSessions(hostId);
+      await refreshSessions(hostId);
     } catch (checkError) {
       updateRemoteState(hostId, {
         error: gatewayErrorMessage(checkError, t("app.tmuxCheckRequestFailed")),
@@ -190,6 +210,7 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
   }
 
   function removeHost(hostId: number) {
+    unsubscribeTmuxSessionStream(hostId);
     remoteHosts.value = Object.fromEntries(
       Object.entries(remoteHosts.value).filter(([candidate]) => Number(candidate) !== hostId),
     );
@@ -204,7 +225,6 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
   function resetState() {
     sessionGeneration += 1;
     pendingSummary = null;
-    pendingScans.clear();
     panelOpen.value = false;
     active.value = [];
     history.value = [];
@@ -228,7 +248,10 @@ export const useGatewayTmuxStore = defineStore("gateway-tmux", () => {
     permanentActive,
     remoteStateFor,
     loadSummary,
-    refreshSessions: scanSessions,
+    subscribeSessions,
+    unsubscribeSessions,
+    refreshSessions,
+    applySessionsSnapshot,
     addMonitor,
     promoteMonitor,
     cancelMonitor,

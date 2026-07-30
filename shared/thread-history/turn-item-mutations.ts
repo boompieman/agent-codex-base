@@ -1,11 +1,10 @@
 import { itemId, turnId } from "./item-identity";
 import { ensureHistoryThread } from "./shape";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
+import type { ThreadHistoryItem, ThreadHistorySeed, ThreadHistoryState } from "./types";
 
 export function updateItemInTurnById(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   turnIdValue: string,
   itemIdValue: string,

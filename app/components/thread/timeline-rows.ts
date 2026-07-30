@@ -28,6 +28,15 @@ export type ThreadTimelineRow =
       section: ThreadTimelineItemSection;
       item: ThreadTimelineItem;
       userMessageVariant: "normal" | "steer";
+    }
+  | {
+      key: string;
+      type: "turnDuration";
+      turnId: string;
+      startedAt: number | null;
+      completedAt: number | null;
+      durationMs: number | null;
+      active: boolean;
     };
 
 export interface ThreadTimelineTurnState {
@@ -68,6 +77,17 @@ export function buildThreadTimelineRows(input: {
     }
 
     appendItemRows(rows, input.threadId, turn.id, "final", sections.finalItems, sections);
+    if (typeof turn.startedAt === "number" || typeof turn.durationMs === "number") {
+      rows.push({
+        key: `${input.threadId}:turn-${turn.id}:duration`,
+        type: "turnDuration",
+        turnId: turn.id,
+        startedAt: typeof turn.startedAt === "number" ? turn.startedAt : null,
+        completedAt: typeof turn.completedAt === "number" ? turn.completedAt : null,
+        durationMs: turn.durationMs ?? null,
+        active: turn.status === "inProgress",
+      });
+    }
     return rows;
   });
 }
@@ -87,6 +107,7 @@ export function reuseUnchangedTimelineRows(
 export function estimateThreadTimelineRow(row: ThreadTimelineRow | undefined) {
   if (row === undefined) return 96;
   if (row.type === "intermediateHeader") return 48;
+  if (row.type === "turnDuration") return 28;
   return estimatedItemHeights[row.item.type] ?? 96;
 }
 
@@ -125,6 +146,15 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.turnId === right.turnId &&
       left.section === right.section &&
       left.userMessageVariant === right.userMessageVariant
+    );
+  }
+  if (left.type === "turnDuration" && right.type === "turnDuration") {
+    return (
+      left.turnId === right.turnId &&
+      left.startedAt === right.startedAt &&
+      left.completedAt === right.completedAt &&
+      left.durationMs === right.durationMs &&
+      left.active === right.active
     );
   }
   return false;

@@ -64,6 +64,15 @@ export class RealtimeMessageDispatcher {
       .with({ type: "host.metrics.unsubscribe" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
+      .with({ type: "tmux.sessions.subscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "tmux.sessions.refresh" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "tmux.sessions.unsubscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "ping" }, (value) => this.dispatchEntry(peer, value, this.handlers[value.type]))
       .with({ type: "serverRequest.respond" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),

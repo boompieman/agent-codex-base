@@ -11,6 +11,7 @@ import type { TerminalOpenTarget, TerminalSessionSnapshot } from "./terminal";
 import type { BrowserPreviewSessionSnapshot, BrowserPreviewTarget } from "./browser";
 import type { ServerNotification } from "./notifications";
 import type { HostMetricsCollectorStatus, HostMetricsSample } from "./host-metrics";
+import type { TmuxSessionsSnapshot } from "./tmux";
 
 export type RealtimeClientMessage =
   | {
@@ -30,6 +31,20 @@ export type RealtimeClientMessage =
     }
   | {
       type: "host.metrics.unsubscribe";
+      hostId: number;
+    }
+  | {
+      type: "tmux.sessions.subscribe";
+      requestId: string;
+      hostId: number;
+    }
+  | {
+      type: "tmux.sessions.refresh";
+      requestId: string;
+      hostId: number;
+    }
+  | {
+      type: "tmux.sessions.unsubscribe";
       hostId: number;
     }
   | {
@@ -220,6 +235,8 @@ export type RealtimeServerMessage =
       status: HostMetricsCollectorStatus;
       message: string | null;
     }
+  | ({ type: "tmux.sessions.snapshot"; requestId: string } & TmuxSessionsSnapshot)
+  | ({ type: "tmux.sessions.updated" } & TmuxSessionsSnapshot)
   | {
       type: "thread.event";
       event: GatewayEvent;

@@ -28,6 +28,13 @@ export interface TmuxSessionSnapshot {
   panes: TmuxPaneSnapshot[];
 }
 
+export interface TmuxSessionsSnapshot {
+  hostId: number;
+  sessions: TmuxSessionSnapshot[];
+  error: string | null;
+  scannedAt: string;
+}
+
 export interface TmuxPaneOutput {
   output: string;
   capturedAt: string;

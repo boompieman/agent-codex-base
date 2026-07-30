@@ -1,5 +1,5 @@
 import type {
-  AppServerThread,
+  GatewayThread,
   GatewayEvent,
   ThreadHistoryState,
   TerminalOpenTarget,
@@ -19,7 +19,7 @@ export type HostConnectionStatus =
   | "failed";
 
 export interface ThreadListResponse {
-  data?: AppServerThread[];
+  data?: GatewayThread[];
   nextCursor?: string | null;
   backwardsCursor?: string | null;
   projects?: ProjectRecord[];
@@ -30,7 +30,7 @@ export interface ThreadViewState {
   hostId: number;
   projectId: number | null;
   threadId: string;
-  currentThread: AppServerThread | null;
+  currentThread: GatewayThread | null;
   history: ThreadHistoryState | null;
   events: GatewayEvent[];
   olderTurnsCursor: string | null;

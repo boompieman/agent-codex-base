@@ -4,7 +4,6 @@ import type {
   TmuxMonitorMode,
   TmuxPaneSnapshot,
   TmuxPaneOutput,
-  TmuxSessionSnapshot,
   TmuxMonitorThreadBinding,
 } from "~~/shared/types";
 import { gatewayApi } from "@/utils/gateway-api";
@@ -13,10 +12,6 @@ const tmuxApiRoot = (hostId: number) => `/api/hosts/${hostId}/tmux`;
 
 export function fetchTmuxMonitors() {
   return gatewayApi<TmuxMonitorListResult>("/api/tmux/monitors");
-}
-
-export function fetchTmuxSessions(hostId: number) {
-  return gatewayApi<{ sessions: TmuxSessionSnapshot[] }>(`${tmuxApiRoot(hostId)}/sessions`);
 }
 
 export function fetchTmuxPaneOutput(hostId: number, pane: TmuxPaneSnapshot) {

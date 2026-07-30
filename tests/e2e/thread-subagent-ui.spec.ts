@@ -121,6 +121,7 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                   params: {
                     threadId: openedThreadId,
                     turnId: "sub-turn",
+                    startedAtMs: Date.now(),
                     item: {
                       id: "sub-agent",
                       type: "agentMessage",

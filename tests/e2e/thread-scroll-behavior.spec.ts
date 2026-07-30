@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { ThreadHistoryState } from "../../shared/types";
 import type { ThreadViewState } from "../../app/stores/gateway/types";
+import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 import { openApp } from "./helpers/app";
 import {
   appendAgentStreamLines,
@@ -525,7 +526,10 @@ test("switching threads discards stale virtual row measurements", async ({ page 
         hostId: 1,
         projectId: 1,
         threadId: longThreadId,
-        currentThread: { id: longThreadId, name: "Long Measure" },
+        currentThread: gatewayThreadFixture(
+          { id: longThreadId, name: "Long Measure" },
+          { projectId: 1 },
+        ),
         history: {
           thread: {
             id: longThreadId,
@@ -544,7 +548,10 @@ test("switching threads discards stale virtual row measurements", async ({ page 
         hostId: 1,
         projectId: 1,
         threadId: shortThreadId,
-        currentThread: { id: shortThreadId, name: "Short Measure" },
+        currentThread: gatewayThreadFixture(
+          { id: shortThreadId, name: "Short Measure" },
+          { projectId: 1 },
+        ),
         history: {
           thread: {
             id: shortThreadId,
@@ -642,7 +649,7 @@ function cachedThreadView(threadId: string, history: ThreadHistoryState): Thread
     hostId: 1,
     projectId: 1,
     threadId,
-    currentThread: { id: threadId },
+    currentThread: gatewayThreadFixture({ id: threadId }, { projectId: 1 }),
     history,
     events: [],
     olderTurnsCursor: null,

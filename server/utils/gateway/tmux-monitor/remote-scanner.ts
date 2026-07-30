@@ -42,9 +42,11 @@ export class RemoteTmuxScanner {
   }
 
   private async scanNow(host: HostWithSecret): Promise<TmuxSessionSnapshot[]> {
-    const result = await sshConnections.exec(host, remoteLoginShellCommand(scanPayload()), {
-      timeoutMs: TMUX_COMMAND_TIMEOUT_MS,
-    });
+    const result = await sshConnections.runBackground(host, () =>
+      sshConnections.exec(host, remoteLoginShellCommand(scanPayload()), {
+        timeoutMs: TMUX_COMMAND_TIMEOUT_MS,
+      }),
+    );
     if (result.code === 127 && result.stderr.includes("codex_gateway_tmux_unavailable")) {
       throw new TmuxUnavailableError();
     }

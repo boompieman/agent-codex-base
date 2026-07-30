@@ -24,7 +24,7 @@ export const threadMetadataStore = {
   },
 
   record(hostId: number, projectId: number | null, thread: AppServerThread) {
-    const threadId = String(thread.id);
+    const threadId = thread.id;
     subAgentThreadStore.recordThreadMetadata(hostId, thread);
     const timestamp = Math.floor(Date.now() / 1000);
     const metadata = {
@@ -34,13 +34,13 @@ export const threadMetadataStore = {
       parentThreadId: parentThreadIdFromMetadata(thread),
       agentNickname: thread.agentNickname ?? null,
       agentRole: thread.agentRole ?? null,
-      title: thread.title ?? thread.name ?? null,
-      name: thread.name ?? null,
-      preview: thread.preview ?? thread.name ?? null,
-      cwd: thread.cwd ?? null,
-      status: thread.status ?? null,
-      recencyAt: toTimestamp(thread.recencyAt ?? thread.updatedAt ?? thread.createdAt) ?? timestamp,
-      updatedAt: toTimestamp(thread.updatedAt ?? thread.recencyAt ?? thread.createdAt) ?? timestamp,
+      title: thread.name,
+      name: thread.name,
+      preview: thread.preview,
+      cwd: thread.cwd,
+      status: thread.status,
+      recencyAt: toTimestamp(thread.recencyAt ?? thread.updatedAt) ?? timestamp,
+      updatedAt: toTimestamp(thread.updatedAt) ?? timestamp,
     };
     const index = gatewayMemoryState.threadMetadata.findIndex(
       (item) => item.hostId === hostId && item.threadId === threadId,
@@ -61,7 +61,7 @@ export const threadMetadataStore = {
         preview: metadata.preview ?? existing.preview,
         title: metadata.title ?? existing.title,
         name: metadata.name ?? existing.name,
-        status: metadata.status ?? existing.status,
+        status: metadata.status,
       };
     } else {
       gatewayMemoryState.threadMetadata.push(metadata);

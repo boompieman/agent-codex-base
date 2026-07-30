@@ -12,12 +12,14 @@ import { RemoteTmuxScanner } from "./remote-scanner";
 import { TmuxMonitorRepository } from "./repository";
 import type { StoredTmuxMonitor } from "./types";
 import { resolveTmuxThreadBinding } from "./thread-binding";
+import { TmuxSessionStreamManager } from "./session-stream/manager";
 
 export class TmuxMonitorService {
   private readonly repository = new TmuxMonitorRepository();
   private readonly scanner = new RemoteTmuxScanner();
   private readonly notifier = new TmuxMonitorNotifier(this.repository);
   private readonly permanentChecker = new PermanentTmuxMonitorChecker(this.repository);
+  readonly sessionStream = new TmuxSessionStreamManager((host) => this.scan(host));
 
   list(userId: number): TmuxMonitorListResult {
     return this.repository.listForUser(userId);
@@ -28,6 +30,7 @@ export class TmuxMonitorService {
   }
 
   removeHost(userId: number, hostId: number) {
+    this.sessionStream.removeHost(userId, hostId);
     this.repository.deleteHost(userId, hostId);
   }
 

@@ -1,6 +1,5 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
 import type {
-  AppServerThread,
   GatewayEvent,
   ProjectRecord,
   RealtimeClientMessage,
@@ -10,6 +9,7 @@ import type {
   ThreadTokenUsageState,
 } from "../../../shared/types";
 import { parseRealtimeClientMessage } from "../../../shared/runtime/realtime";
+import { gatewayThreadFixture, type GatewayThreadFixture } from "../fixtures/gateway-thread";
 
 export interface MockThreadSnapshotInput {
   hostId?: number;
@@ -17,7 +17,7 @@ export interface MockThreadSnapshotInput {
   snapshots: Record<
     string,
     {
-      thread?: AppServerThread;
+      thread?: GatewayThreadFixture;
       history?: ThreadHistoryState;
       projectId?: number | null;
       project?: ProjectRecord | null;
@@ -205,13 +205,17 @@ function handleThreadActivate(
   if (!snapshot) {
     throw new Error(`Missing mocked thread snapshot for ${message.threadId}`);
   }
-  const respond = () =>
+  const respond = () => {
+    const thread = gatewayThreadFixture(snapshot.thread ?? { id: message.threadId }, {
+      hostId: message.hostId ?? input.hostId ?? 1,
+      projectId: snapshot.projectId ?? null,
+    });
     send(connection, {
       type: "thread.snapshot",
       requestId: message.requestId,
       hostId: message.hostId ?? input.hostId ?? 1,
       threadId: message.threadId,
-      thread: snapshot.thread ?? { id: message.threadId },
+      thread,
       history: snapshot.history ?? { thread: { id: message.threadId, turns: [] } },
       runtimeStatus: snapshot.runtimeStatus ?? null,
       projectId: snapshot.projectId ?? null,
@@ -223,6 +227,7 @@ function handleThreadActivate(
       lastEventId: snapshot.lastEventId ?? 0,
       eventEpoch: snapshot.eventEpoch ?? "e2e-event-epoch",
     });
+  };
   if (input.responseDelayMs !== undefined && input.responseDelayMs > 0) {
     setTimeout(respond, input.responseDelayMs);
   } else respond();

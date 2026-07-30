@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import { recordFromUnknown, stringFromUnknown } from "../../utils/records";
 import type { ThreadFileChange } from "../types";
+import { itemLifecycleTimestampMs, type ItemLifecyclePhase } from "../item-lifecycle-timing";
 
 let fileChangeSequence = 0;
 
@@ -56,19 +57,21 @@ export const itemLifecycleReducers = {
 function upsertStartedOrCompletedItem(
   input: ApplyAppServerEventInput,
   params: AppServerEventParams,
-  phase: "started" | "completed",
+  phase: ItemLifecyclePhase,
 ) {
   const item = itemParam(params);
   if (item === null) {
     return input.history;
   }
-  const eventIso = input.createdAt ?? new Date().toISOString();
+  // App-server 0.146 reports the actual lifecycle instant. Envelope emission can happen later,
+  // especially over slow SSH, so it must not be used to calculate item durations.
+  const lifecycleTimestamp = itemLifecycleTimestampMs(params, phase);
   return mergeItemIntoLatestTurn(input.history, input.currentThread, input.threadId, {
     ...item,
     turnId: idParam(params.turnId),
     status: item.status ?? (phase === "started" ? "inProgress" : "completed"),
-    ...(phase === "started" && item.startedAt == null ? { startedAt: eventIso } : {}),
-    ...(phase === "completed" && item.completedAt == null ? { completedAt: eventIso } : {}),
+    ...(phase === "started" ? { startedAt: lifecycleTimestamp } : {}),
+    ...(phase === "completed" ? { completedAt: lifecycleTimestamp } : {}),
   });
 }
 

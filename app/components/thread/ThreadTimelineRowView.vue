@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import IntermediateStepsToggle from "@/components/thread/IntermediateStepsToggle.vue";
 import ThreadItemView from "@/components/thread/ThreadItemView.vue";
+import TurnDurationRow from "@/components/thread/TurnDurationRow.vue";
 import type { ThreadTimelineRow } from "@/components/thread/timeline-rows";
 
 const props = defineProps<{
@@ -26,10 +27,17 @@ const emit = defineEmits<{
     @toggle="emit('intermediateToggle', props.row.turnId, $event)"
   />
   <ThreadItemView
-    v-else
+    v-else-if="props.row.type === 'item'"
     :item="props.row.item"
     :host-id="hostId"
     :thread-id="threadId"
     :user-message-variant="props.row.userMessageVariant"
+  />
+  <TurnDurationRow
+    v-else
+    :started-at="props.row.startedAt"
+    :completed-at="props.row.completedAt"
+    :duration-ms="props.row.durationMs"
+    :active="props.row.active"
   />
 </template>

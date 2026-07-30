@@ -1,15 +1,17 @@
 import { watchDebounced } from "@vueuse/core";
 import type { MaybeRefOrGetter } from "vue";
-import type { AppServerThread } from "~~/shared/types";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
-import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
+import {
+  useGatewayThreadActivityStore,
+  type ThreadActivityMetadata,
+} from "@/stores/gateway-thread-activity";
 import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 import { gatewayApi } from "@/utils/gateway-api";
 import { captureSessionEpoch } from "@/utils/session-epoch";
 import type { ActiveSubAgent } from "./active-subagents";
 
 interface ThreadMetadataResponse {
-  data: AppServerThread[];
+  data: ThreadActivityMetadata[];
 }
 
 export function useActiveSubAgentMetadata(
@@ -43,7 +45,7 @@ export function useActiveSubAgentMetadata(
       })
         .then((response) => {
           if (sessionIsCurrent())
-            activity.ingestThreads(currentHostId, response.data, catalog.projects);
+            activity.ingestMetadata(currentHostId, response.data, catalog.projects);
         })
         .catch(() => {
           // Metadata is advisory. A later activity update/remount can retry; the Agent timeline and
