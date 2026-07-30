@@ -1,9 +1,9 @@
 import type { GatewayConfig, GatewayNotificationSettings } from "./types";
 
-// Load the complete initial viewport in one thread activation. Do not reintroduce a smaller
-// first page followed by a client-side prepend: dynamic Agent rows are measured after paint, so
-// that two-phase path makes an already visible viewport move while the background page settles.
-export const INITIAL_TURN_PAGE_LIMIT = 5;
+// Keep first paint bounded for item-heavy Codex 0.146 histories. Older turns are fetched only by
+// explicit history navigation; do not silently prepend a background page after the Agent viewport
+// mounts. A same-page cached view may retain a wider depth that the user already loaded.
+export const INITIAL_TURN_PAGE_LIMIT = 2;
 export const OLDER_TURN_PAGE_LIMIT = 5;
 export const SERVER_TURN_CACHE_LIMIT = 50;
 export const SERVER_THREAD_CACHE_LIMIT = 100;

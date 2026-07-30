@@ -1,5 +1,6 @@
-import type { GatewayEvent } from "~~/shared/types";
+import type { GatewayEvent, ThreadHistoryState } from "~~/shared/types";
 import { CLIENT_THREAD_CACHE_LIMIT } from "~~/shared/config";
+import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "../thread-utils/identity";
@@ -53,7 +54,14 @@ export function patchThreadView(hostId: number, threadId: string, patch: Partial
   const views = useGatewayThreadViewStore();
   const key = threadViewKey(hostId, threadId);
   const existing = views.threadViews[key] ?? emptyThreadView(hostId, threadId);
-  const next = { ...existing, ...patch, hostId, threadId };
+  // history and timelineTurns are one cache invariant. Realtime events also update background
+  // threads, so accepting a history-only patch without rebuilding its projection would make the
+  // next route switch restore stale rows. Patches unrelated to history preserve both references.
+  const projectedPatch =
+    "history" in patch
+      ? projectionFields(patch.history ?? null)
+      : { history: existing.history, timelineTurns: existing.timelineTurns };
+  const next = { ...existing, ...patch, ...projectedPatch, hostId, threadId };
   upsertThreadView(next);
   if (navigation.selectedHostId === hostId && navigation.selectedThreadId === threadId) {
     activateThreadViewFromCache(hostId, threadId);
@@ -61,16 +69,23 @@ export function patchThreadView(hostId: number, threadId: string, patch: Partial
   return next;
 }
 
+export function setSelectedThreadHistory(history: ThreadHistoryState | null) {
+  useGatewayThreadViewStore().setHistory(history);
+}
+
 export function activateThreadViewFromCache(hostId: number, threadId: string) {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   const view = views.threadViews[threadViewKey(hostId, threadId)];
   if (view === undefined) return false;
+  // Route changes are selection only: restore the already-projected Pinia references. Do not call
+  // setHistory() here, because remounting Agent for Dockview must not rescan a large cached thread.
   navigation.selectedHostId = view.hostId;
   navigation.selectedProjectId = view.projectId;
   navigation.selectedThreadId = view.threadId;
   views.currentThread = view.currentThread;
   views.history = view.history;
+  views.timelineTurns = view.timelineTurns;
   views.events = [...view.events];
   views.olderTurnsCursor = view.olderTurnsCursor;
   views.newerTurnsCursor = view.newerTurnsCursor;
@@ -96,6 +111,7 @@ export function saveSelectedThreadView() {
     threadId: navigation.selectedThreadId,
     currentThread: views.currentThread,
     history: views.history,
+    timelineTurns: views.timelineTurns,
     events: [...views.events],
     olderTurnsCursor: views.olderTurnsCursor,
     newerTurnsCursor: views.newerTurnsCursor,
@@ -145,6 +161,7 @@ function emptyThreadView(hostId: number, threadId: string): ThreadViewState {
     threadId,
     currentThread: null,
     history: null,
+    timelineTurns: [],
     events: [],
     olderTurnsCursor: null,
     newerTurnsCursor: null,
@@ -153,4 +170,10 @@ function emptyThreadView(hostId: number, threadId: string): ThreadViewState {
     loading: false,
     error: null,
   };
+}
+
+function projectionFields(history: ThreadHistoryState | null) {
+  if (history === null) return { history: null, timelineTurns: [] };
+  const projected = projectThreadTimelineHistory(history);
+  return { history: projected, timelineTurns: projected.thread.turns };
 }

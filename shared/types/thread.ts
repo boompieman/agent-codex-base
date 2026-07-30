@@ -1,5 +1,5 @@
 import type { GatewayEvent, ProjectRecord } from "./records";
-import type { ThreadHistoryItem, ThreadHistoryState } from "../thread-history/types";
+import type { ThreadHistoryItem, ThreadTimelineHistoryState } from "../thread-history/types";
 
 export type ThreadRuntimeStatus = "idle" | "running" | "completed" | "failed" | "interrupted";
 export type ThreadGoalStatus =
@@ -38,7 +38,7 @@ export interface ThreadGoalTimelineItem extends Record<string, unknown> {
 export interface ThreadOpenResult {
   hostId: number;
   thread: GatewayThread;
-  history: ThreadHistoryState;
+  history: ThreadTimelineHistoryState;
   lastEventId: number;
   eventEpoch: string;
   runtimeStatus?: ThreadRuntimeStatus | null;
@@ -54,7 +54,7 @@ export interface ThreadOpenResult {
 }
 
 export interface ThreadTurnsPageResult {
-  history: ThreadHistoryState;
+  history: ThreadTimelineHistoryState;
   turnsPage: {
     nextCursor: string | null;
     backwardsCursor: string | null;

@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import type { RealtimeServerMessage } from "../../../shared/types";
+import type { RealtimeServerMessage, ThreadHistoryState } from "../../../shared/types";
 import {
   installRealtimeThreadTurnsLoadRoute,
   realtimeThreadTurnsLoadRequests,
@@ -57,7 +57,9 @@ export async function threadTurnCount(page: Page) {
 
 export async function installDeferredThreadTurnsLoadStub(
   page: Page,
-  response: Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
+  response: Omit<Extract<RealtimeServerMessage, { type: "thread.turns.page" }>, "history"> & {
+    history: ThreadHistoryState;
+  },
 ) {
   installRealtimeThreadTurnsLoadRoute(page, response, true);
 }

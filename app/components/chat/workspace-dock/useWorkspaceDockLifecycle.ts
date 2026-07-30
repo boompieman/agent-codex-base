@@ -22,13 +22,13 @@ export function useWorkspaceDockLifecycle(options: {
   const workspaceLayout = useGatewayWorkspaceLayoutStore();
   const fileWorkspace = useGatewayFileWorkspaceStore();
   const api = shallowRef<DockviewApi | null>(null);
-  let activeScopeKey = options.scopeKey.value;
-  let switchingScope = false;
+  // ChatWorkspace keys this composable's owner by scope. Capture the key once so unmount always
+  // persists the layout being left, even after navigation refs already point at the next thread.
+  const activeScopeKey = options.scopeKey.value;
   let disposables: Array<{ dispose(): void }> = [];
   const persistence = useDockLayoutPersistence({
     api,
     activeScopeKey: () => activeScopeKey,
-    isSwitchingScope: () => switchingScope,
   });
 
   function activate(panelId: string) {
@@ -40,7 +40,6 @@ export function useWorkspaceDockLifecycle(options: {
 
   function ready(event: DockviewReadyEvent) {
     api.value = event.api;
-    activeScopeKey = options.scopeKey.value;
     initializeScope(activeScopeKey);
     disposables = [
       event.api.onDidLayoutChange(persistence.scheduleLayoutSave),
@@ -49,7 +48,6 @@ export function useWorkspaceDockLifecycle(options: {
         if (mutation.kind === "popout") persistence.captureBeforePopout();
       }),
       event.api.onDidMovePanel(({ panel }) => {
-        if (switchingScope) return;
         if (
           panel.id === FILES_WORKSPACE_PANEL_ID &&
           panel.api.group.panels.some(({ id }) => id === AGENT_WORKSPACE_PANEL_ID)
@@ -58,7 +56,7 @@ export function useWorkspaceDockLifecycle(options: {
         }
       }),
       event.api.onDidActivePanelChange(({ panel }) => {
-        if (!panel || switchingScope) return;
+        if (!panel) return;
         const request = workspaceLayout.panelActivationRequest;
         if (request) {
           if (panel.id === request.panelId) {
@@ -71,7 +69,6 @@ export function useWorkspaceDockLifecycle(options: {
         workspaceLayout.setActivePanel(activeScopeKey, panel.id);
       }),
       event.api.onDidRemovePanel((panel) => {
-        if (switchingScope) return;
         if (panel.id === AGENT_WORKSPACE_PANEL_ID || panel.id === FILES_WORKSPACE_PANEL_ID) {
           void restorePermanentPanels();
         } else {
@@ -91,59 +88,37 @@ export function useWorkspaceDockLifecycle(options: {
     if (!api.value) return;
     const saved = workspaceLayout.layoutFor(scopeKey);
     if (saved) {
-      restoreScope(scopeKey, false);
+      restoreScope(scopeKey);
       return;
     }
 
     // During DockviewVue's ready callback the Vue renderer registry is initialized, but content
     // adapters created through fromJSON are not yet attached by the wrapper. The documented
-    // addPanel path used by reconcile performs that first mount. Later scope changes can safely use
-    // fromJSON({ reuseExistingPanels: true }) because the permanent Agent adapter already exists.
+    // addPanel path used by reconcile performs that first mount for a new unsaved scope.
     persistence.setDockedLayout(null);
     options.reconcile(api.value);
     activate(workspaceLayout.activePanelFor(scopeKey));
   }
 
-  function restoreScope(scopeKey: string, replaceAgentRenderer: boolean) {
+  function restoreScope(scopeKey: string) {
     if (!api.value) return;
     const saved = workspaceLayout.layoutFor(scopeKey);
     const dockedLayoutState = saved ? dockedLayout(saved) : null;
     persistence.setDockedLayout(dockedLayoutState);
-    if (replaceAgentRenderer) disposeAgentRenderer(api.value);
     try {
-      // Reuse store-backed Files and dynamic panels so editors and terminals keep their page-level
-      // state. The scope-bound Agent panel was removed above, so Dockview deserializes a fresh Vue
-      // adapter for the target thread while still reusing every other matching panel.
-      api.value.fromJSON(dockedLayoutState ?? options.defaultLayout(api.value), {
-        reuseExistingPanels: true,
-      });
+      // Every scope owns a fresh Dockview API, so deserialization cannot reuse an overlay from a
+      // different thread. Store-backed editor/terminal data survives independently of panel DOM.
+      api.value.fromJSON(dockedLayoutState ?? options.defaultLayout(api.value));
     } catch (error) {
       console.error("[workspace] failed to restore dock layout", error);
-      api.value.fromJSON(options.defaultLayout(api.value), { reuseExistingPanels: true });
+      api.value.fromJSON(options.defaultLayout(api.value));
     }
     options.reconcile(api.value);
     activate(workspaceLayout.activePanelFor(scopeKey));
   }
 
-  function switchScope(scopeKey: string) {
-    if (!api.value || scopeKey === activeScopeKey || switchingScope) return;
-    switchingScope = true;
-    try {
-      // Persist before changing the key. A delayed layout event must never save the target scope's
-      // geometry under the thread being left.
-      persistence.persistLayout(activeScopeKey);
-      for (const popout of api.value.getPopouts()) popout.window.close();
-      activeScopeKey = scopeKey;
-      restoreScope(scopeKey, true);
-    } finally {
-      switchingScope = false;
-    }
-    void restoreRequestedPanel();
-  }
-
   async function restoreRequestedPanel() {
     await nextTick();
-    if (switchingScope) return;
     const request = workspaceLayout.panelActivationRequest;
     if (request) activate(request.panelId);
     const activePanel = api.value?.activePanel;
@@ -154,7 +129,7 @@ export function useWorkspaceDockLifecycle(options: {
 
   async function restorePermanentPanels() {
     await nextTick();
-    if (!api.value || switchingScope) return;
+    if (!api.value) return;
     const hasAgent = Boolean(api.value.getPanel(AGENT_WORKSPACE_PANEL_ID));
     const needsFiles = Boolean(options.fileRequestScopeKey.value);
     const hasFiles = Boolean(api.value.getPanel(FILES_WORKSPACE_PANEL_ID));
@@ -166,11 +141,10 @@ export function useWorkspaceDockLifecycle(options: {
     await restoreRequestedPanel();
   }
 
-  watch(options.scopeKey, switchScope, { flush: "sync" });
   watch(
     options.panelIds,
     async () => {
-      if (!api.value || switchingScope) return;
+      if (!api.value) return;
       options.reconcile(api.value);
       const request = workspaceLayout.panelActivationRequest;
       if (request) activate(request.panelId);
@@ -194,25 +168,13 @@ export function useWorkspaceDockLifecycle(options: {
 
   onBeforeUnmount(() => {
     persistence.persistLayout(activeScopeKey);
+    for (const popout of api.value?.getPopouts() ?? []) popout.window.close();
     disposables.forEach((disposable) => disposable.dispose());
     disposables = [];
     api.value = null;
   });
 
   return { ready };
-}
-
-function disposeAgentRenderer(api: DockviewApi) {
-  const panel = api.getPanel(AGENT_WORKSPACE_PANEL_ID);
-  if (panel === undefined) return;
-  // Dockview's reuse transaction moves renderer="always" overlays through a temporary group.
-  // That is correct for tab/group movement inside one thread, but a thread switch also replaces a
-  // large asynchronous timeline. Reusing the overlay across those two lifecycle changes can leave
-  // its queued position update bound to the previous group; the pane then stays partially tall
-  // until a page reload destroys the renderer. Remove only Agent through Dockview's public API so
-  // the target scope creates a clean adapter. Do not add a second ResizeObserver or delayed layout
-  // call here: those race the same queued overlay update and only mask the stale renderer.
-  api.removePanel(panel);
 }
 
 function dockedLayout(layout: SerializedDockview): SerializedDockview {

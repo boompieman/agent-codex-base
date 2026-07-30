@@ -5,7 +5,7 @@ import type {
   ReasoningEffort,
   ThreadSettingsState,
   ThreadTokenUsageState,
-  ThreadHistoryState,
+  ThreadTimelineHistoryState,
   ThreadHistoryTurn,
   RpcEnvelope,
 } from "~~/shared/types";
@@ -21,7 +21,8 @@ export interface TurnsPage {
 
 export interface ThreadOpenSnapshot {
   thread: AppServerThread;
-  history: ThreadHistoryState;
+  /** Materialized once at the app-server/event boundary; cache hits return this object directly. */
+  history: ThreadTimelineHistoryState;
   projectId: number | null;
   turnsPage: {
     nextCursor: string | null;

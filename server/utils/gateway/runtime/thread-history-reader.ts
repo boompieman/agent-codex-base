@@ -3,6 +3,7 @@ import type { ControllerRegistry } from "./controller-registry";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
 import { DEFAULT_TURN_PAGE_LIMIT } from "./types";
 import { parseTurnsPage } from "~~/shared/runtime/app-server";
+import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 
 export interface ThreadTurnsListInput {
   cursor?: string | null;
@@ -29,7 +30,7 @@ export class ThreadHistoryReader {
     );
 
     return {
-      history: pageToFullHistory({ id: threadId }, page),
+      history: projectThreadTimelineHistory(pageToFullHistory({ id: threadId }, page)),
       turnsPage: pageCursorState(page),
     };
   }

@@ -1,16 +1,10 @@
-import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
-import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
-import type { ThreadHistoryState, ThreadTimelineTurn } from "~~/shared/types";
+import type { ThreadTimelineTurn } from "~~/shared/types";
 
 export function subAgentOwnedTurns(
   thread: { createdAt: number } | null,
-  history: ThreadHistoryState | null,
-  parentHistory: ThreadHistoryState | null = null,
+  turns: ThreadTimelineTurn[],
+  parentTurns: ThreadTimelineTurn[] = [],
 ): ThreadTimelineTurn[] {
-  const turns = threadTurnsFromHistory(history).flatMap((turn) => {
-    const timelineTurn = asThreadTimelineTurn(turn);
-    return timelineTurn ? [timelineTurn] : [];
-  });
   const threadCreatedAt = timestampMs(thread?.createdAt);
   if (threadCreatedAt === null) return turns;
   const firstOwnedTurnIndex = turns.findIndex((turn) => {
@@ -18,7 +12,6 @@ export function subAgentOwnedTurns(
     return startedAt !== null && startedAt >= threadCreatedAt;
   });
   if (firstOwnedTurnIndex < 0) {
-    const parentTurns = threadTurnsFromHistory(parentHistory);
     if (parentTurns.length > 0) {
       const parentTurnIds = new Set(parentTurns.map((turn) => String(turn.id)));
       const parentItemIds = new Set(

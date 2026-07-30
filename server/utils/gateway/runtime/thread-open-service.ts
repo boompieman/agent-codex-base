@@ -1,6 +1,7 @@
 import type { AppServerThread, HostRecord } from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
+import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 import {
   runtimeStatusFromSnapshotState,
   runtimeStatusFromThreadState,
@@ -84,9 +85,9 @@ export class ThreadOpenService {
     const threadId = String(thread.id);
     threadMetadataStore.record(host.id, projectId, thread);
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
-    const history = {
+    const history = projectThreadTimelineHistory({
       thread: { id: thread.id, turns: thread.turns },
-    };
+    });
     const turnsPage = {
       nextCursor: null,
       backwardsCursor: null,
@@ -225,7 +226,7 @@ export class ThreadOpenService {
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
     const snapshot = {
       thread,
-      history: pageToFullHistory(thread, initialTurnsPage),
+      history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
       threadSettings: extractThreadSettings(resume),
@@ -239,6 +240,10 @@ export class ThreadOpenService {
 type ReturnTypeResult = Awaited<ReturnType<ThreadOpenService["performThreadStateRefresh"]>>;
 
 function snapshotSatisfiesTurnLimit(snapshot: ThreadOpenSnapshot, limit: number) {
+  // A cache wider than the caller's first-page preference is still a valid hit. Truncating it
+  // would require a different app-server cursor at the new oldest row, and cursors are deliberately
+  // opaque; refreshing merely to shrink a valid cache would add SSH/RPC latency. New pages start at
+  // INITIAL_TURN_PAGE_LIMIT, while same-page Pinia views ask for the depth they already retained.
   return (
     threadTurnsFromHistory(snapshot.history).length >= limit ||
     snapshot.turnsPage.nextCursor === null

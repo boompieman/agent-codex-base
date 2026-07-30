@@ -2,6 +2,8 @@ import {
   threadTimelineItemTypes,
   type ThreadHistoryItem,
   type ThreadHistoryTurn,
+  type ThreadHistoryState,
+  type ThreadTimelineHistoryState,
   type ThreadTimelineItem,
   type ThreadTimelineItemType,
   type ThreadTimelineTurn,
@@ -34,5 +36,25 @@ export function asThreadTimelineTurn(turn: ThreadHistoryTurn): ThreadTimelineTur
       const timelineItem = asThreadTimelineItem(item);
       return timelineItem ? [timelineItem] : [];
     }),
+  };
+}
+
+/**
+ * Projects an app-server/Gateway reducer snapshot once at its transport or event boundary.
+ * Components must consume the projected array stored in Pinia instead of calling this during
+ * setup: thread switches remount the Agent workspace and would otherwise rescan every item even
+ * though the cached history object did not change.
+ */
+export function projectThreadTimelineHistory(
+  history: ThreadHistoryState,
+): ThreadTimelineHistoryState {
+  return {
+    thread: {
+      id: history.thread.id,
+      turns: history.thread.turns.flatMap((turn) => {
+        const timelineTurn = asThreadTimelineTurn(turn);
+        return timelineTurn === null ? [] : [timelineTurn];
+      }),
+    },
   };
 }

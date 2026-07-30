@@ -2,6 +2,7 @@ import type {
   GatewayThread,
   GatewayEvent,
   ThreadHistoryState,
+  ThreadTimelineTurn,
   TerminalOpenTarget,
   TerminalSessionSnapshot,
   ThreadRuntimeStatus,
@@ -32,6 +33,7 @@ export interface ThreadViewState {
   threadId: string;
   currentThread: GatewayThread | null;
   history: ThreadHistoryState | null;
+  timelineTurns: ThreadTimelineTurn[];
   events: GatewayEvent[];
   olderTurnsCursor: string | null;
   newerTurnsCursor: string | null;

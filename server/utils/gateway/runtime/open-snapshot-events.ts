@@ -1,7 +1,13 @@
 import { SERVER_TURN_CACHE_LIMIT } from "~~/shared/config";
 import { applyAppServerEventToHistory } from "~~/shared/thread-history/app-server-events";
+import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
-import type { ApprovalPolicy, RpcEnvelope, ThreadHistoryState } from "~~/shared/types";
+import type {
+  ApprovalPolicy,
+  RpcEnvelope,
+  ThreadHistoryState,
+  ThreadTimelineHistoryState,
+} from "~~/shared/types";
 import { appServerThreadStatusFromUnknown } from "~~/shared/runtime/app-server";
 import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
 import type { ThreadOpenSnapshot } from "./types";
@@ -49,7 +55,12 @@ export function applyEventToOpenSnapshot(
     payload: { id: payload.id, params },
     createdAt,
   });
-  const history = trimSnapshotHistory(reducedHistory ?? snapshot.history);
+  // Snapshot history is the backend's materialized timeline cache. Re-project only after an
+  // app-server event changed that data; ordinary thread opens then return this cached value without
+  // rescanning every item on either side of the transport.
+  const history = projectThreadTimelineHistory(
+    trimSnapshotHistory(reducedHistory ?? snapshot.history),
+  );
   let nextSnapshot = withSnapshotHistory(snapshot, history);
   nextSnapshot = snapshotEventReducers[method]?.(nextSnapshot, params) ?? nextSnapshot;
   return nextSnapshot;
@@ -85,7 +96,7 @@ function updateSnapshotThreadStatus(snapshot: ThreadOpenSnapshot, status: unknow
 
 function withSnapshotHistory(
   snapshot: ThreadOpenSnapshot,
-  history: ThreadHistoryState,
+  history: ThreadTimelineHistoryState,
 ): ThreadOpenSnapshot {
   return {
     ...snapshot,

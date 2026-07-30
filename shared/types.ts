@@ -82,6 +82,7 @@ export type {
   ThreadHistoryTurn,
 } from "./thread-history/types";
 export type {
+  ThreadTimelineHistoryState,
   ThreadTimelineItem,
   ThreadTimelineItemType,
   ThreadTimelineTurn,
