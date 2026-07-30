@@ -31,7 +31,9 @@ test("parses current Codex CLI and app-server user-agent versions", () => {
   );
 });
 
-test("upgrades empty, legacy Node, and legacy Codex SSH hosts serially", async ({ page }) => {
+test("upgrades empty, legacy Node, and legacy Codex SSH hosts with bounded concurrency", async ({
+  page,
+}) => {
   test.setTimeout(10 * 60_000);
   const environments = await readUpgradeRemoteEnvs();
   const remote = environments.find(({ runtimeFixture }) => runtimeFixture === "empty-runtime")!;

@@ -12,6 +12,7 @@ import { parseCodexVersion } from "./codex-version";
 import { remoteLoginShellCommand } from "../ssh/remote-command";
 import type { SshConnectionPool } from "../ssh/ssh-connection";
 import type { CommandResult, HostWithSecret } from "../ssh/ssh-types";
+import { codexUpgradeError, codexUpgradeLog } from "./codex-upgrade-log";
 
 const UPGRADE_ATTEMPTS = 3;
 const UPGRADE_IDLE_TIMEOUT_MS = 90_000;
@@ -37,13 +38,41 @@ export class CodexUpgrader {
     version: string,
     callback: (install: () => Promise<string>) => Promise<T>,
   ) {
+    const platformProbeStartedAt = Date.now();
+    codexUpgradeLog("remote platform probe started", host, { targetVersion: version });
     const platform = await this.readRemotePlatform(host);
+    codexUpgradeLog("remote platform probe completed", host, {
+      targetVersion: version,
+      platformPackage: platform.packageName,
+      durationMs: Date.now() - platformProbeStartedAt,
+    });
+    const nodeProbeStartedAt = Date.now();
+    codexUpgradeLog("remote Node.js probe started", host, { targetVersion: version });
     const includeNode = await this.requiresNodeBootstrap(host);
+    codexUpgradeLog("remote Node.js probe completed", host, {
+      targetVersion: version,
+      bootstrapRequired: includeNode,
+      durationMs: Date.now() - nodeProbeStartedAt,
+    });
+    const artifactStartedAt = Date.now();
+    codexUpgradeLog("artifact preparation started", host, {
+      targetVersion: version,
+      platformPackage: platform.packageName,
+      includeNode,
+    });
     return await artifactProvider.withArtifacts(
       version,
       platform,
       { includeNode },
-      async (artifacts) => callback(() => this.installWithRetries(host, version, artifacts)),
+      async (artifacts) => {
+        codexUpgradeLog("artifact preparation completed", host, {
+          targetVersion: version,
+          durationMs: Date.now() - artifactStartedAt,
+          codexArchiveBytes: artifacts.cacheArchive.size,
+          nodeArchiveBytes: artifacts.nodeArchive?.size ?? 0,
+        });
+        return await callback(() => this.installWithRetries(host, version, artifacts));
+      },
     );
   }
 
@@ -71,38 +100,53 @@ export class CodexUpgrader {
     version: string,
     artifacts: CodexArtifactBundle,
   ) {
-    return await pRetry(() => this.installOnce(host, version, artifacts), {
-      retries: UPGRADE_ATTEMPTS - 1,
-      minTimeout: 1_000,
-      factor: 2,
-      shouldRetry: ({ error }) => isTransientUpgradeError(error),
-      onFailedAttempt: ({ error, attemptNumber, retriesLeft }) => {
-        console.info("[gateway-upgrade] retrying transient Codex offline installation", {
-          hostId: host.id,
-          hostName: host.name,
-          attempt: attemptNumber,
-          retriesLeft,
-          message: error instanceof Error ? error.message : String(error),
-        });
+    return await pRetry(
+      (attemptNumber) => this.installOnce(host, version, artifacts, attemptNumber),
+      {
+        retries: UPGRADE_ATTEMPTS - 1,
+        minTimeout: 1_000,
+        factor: 2,
+        shouldRetry: ({ error }) => isTransientUpgradeError(error),
+        onFailedAttempt: ({ error, attemptNumber, retriesLeft }) => {
+          codexUpgradeLog("installation retry scheduled", host, {
+            attempt: attemptNumber,
+            retriesLeft,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
       },
-    });
+    );
   }
 
-  private async installOnce(host: HostWithSecret, version: string, artifacts: CodexArtifactBundle) {
+  private async installOnce(
+    host: HostWithSecret,
+    version: string,
+    artifacts: CodexArtifactBundle,
+    attempt: number,
+  ) {
+    const attemptStartedAt = Date.now();
+    codexUpgradeLog("installation attempt started", host, { targetVersion: version, attempt });
     const stagePath = await this.createRemoteStage(host);
     try {
-      if (artifacts.nodeArchive !== null) {
-        await this.ssh.uploadFileResumable(
-          host,
-          artifacts.nodeArchive.localPath,
-          `${stagePath}/${artifacts.nodeArchive.fileName}`,
+      const nodeArtifact = artifacts.nodeArchive;
+      if (nodeArtifact !== null) {
+        await this.uploadArtifact(host, "node runtime", nodeArtifact.size, () =>
+          this.ssh.uploadFileResumable(
+            host,
+            nodeArtifact.localPath,
+            `${stagePath}/${nodeArtifact.fileName}`,
+          ),
         );
       }
-      await this.ssh.uploadFileResumable(
-        host,
-        artifacts.cacheArchive.localPath,
-        `${stagePath}/${artifacts.cacheArchive.fileName}`,
+      await this.uploadArtifact(host, "Codex npm cache", artifacts.cacheArchive.size, () =>
+        this.ssh.uploadFileResumable(
+          host,
+          artifacts.cacheArchive.localPath,
+          `${stagePath}/${artifacts.cacheArchive.fileName}`,
+        ),
       );
+      const remoteInstallStartedAt = Date.now();
+      codexUpgradeLog("remote npm install started", host, { targetVersion: version, attempt });
       const result = await this.execInstallCommand(
         host,
         remoteLoginShellCommand(
@@ -110,14 +154,48 @@ export class CodexUpgrader {
         ),
       );
       if (result.code !== 0) throw new Error(upgradeFailureMessage(result));
+      codexUpgradeLog("remote npm install completed", host, {
+        targetVersion: version,
+        attempt,
+        durationMs: Date.now() - remoteInstallStartedAt,
+      });
       const parsed = parseCodexVersion(result.stdout);
       if (!parsed) {
         throw new Error(`Unable to parse upgraded remote Codex version: ${result.stdout.trim()}`);
       }
+      codexUpgradeLog("installation attempt completed", host, {
+        targetVersion: version,
+        installedVersion: parsed.version,
+        attempt,
+        durationMs: Date.now() - attemptStartedAt,
+      });
       return parsed.version;
+    } catch (error: unknown) {
+      codexUpgradeError("installation attempt failed", host, error, {
+        targetVersion: version,
+        attempt,
+        durationMs: Date.now() - attemptStartedAt,
+      });
+      throw error;
     } finally {
       await this.cleanupRemoteStage(host, stagePath);
     }
+  }
+
+  private async uploadArtifact(
+    host: HostWithSecret,
+    artifact: string,
+    bytes: number,
+    upload: () => Promise<string>,
+  ) {
+    const startedAt = Date.now();
+    codexUpgradeLog("artifact upload started", host, { artifact, bytes });
+    await upload();
+    codexUpgradeLog("artifact upload completed", host, {
+      artifact,
+      bytes,
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   private async createRemoteStage(host: HostWithSecret) {
@@ -141,11 +219,7 @@ export class CodexUpgrader {
         remoteLoginShellCommand(codexRemoteCleanupUpgradeStagePayload(stagePath)),
       );
     } catch (error) {
-      console.warn("[gateway-upgrade] deferred remote staging cleanup", {
-        hostId: host.id,
-        hostName: host.name,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      codexUpgradeError("remote staging cleanup failed", host, error);
     }
   }
 
