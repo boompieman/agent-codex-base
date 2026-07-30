@@ -91,7 +91,7 @@ export function useWorkspaceDockLifecycle(options: {
     if (!api.value) return;
     const saved = workspaceLayout.layoutFor(scopeKey);
     if (saved) {
-      restoreScope(scopeKey);
+      restoreScope(scopeKey, false);
       return;
     }
 
@@ -104,16 +104,16 @@ export function useWorkspaceDockLifecycle(options: {
     activate(workspaceLayout.activePanelFor(scopeKey));
   }
 
-  function restoreScope(scopeKey: string) {
+  function restoreScope(scopeKey: string, replaceAgentRenderer: boolean) {
     if (!api.value) return;
     const saved = workspaceLayout.layoutFor(scopeKey);
     const dockedLayoutState = saved ? dockedLayout(saved) : null;
     persistence.setDockedLayout(dockedLayoutState);
+    if (replaceAgentRenderer) disposeAgentRenderer(api.value);
     try {
-      // Dockview owns renderer="always" Vue subtrees. Its reuse mode moves matching panels to a
-      // temporary group while replacing the layout, so the Agent DOM and virtualizer survive a
-      // thread switch without hidden duplicates or a destroy/recreate race. Do not replace this
-      // with clear()+nextTick(): clearing disposes the adapter before Vue can commit the new panel.
+      // Reuse store-backed Files and dynamic panels so editors and terminals keep their page-level
+      // state. The scope-bound Agent panel was removed above, so Dockview deserializes a fresh Vue
+      // adapter for the target thread while still reusing every other matching panel.
       api.value.fromJSON(dockedLayoutState ?? options.defaultLayout(api.value), {
         reuseExistingPanels: true,
       });
@@ -123,20 +123,6 @@ export function useWorkspaceDockLifecycle(options: {
     }
     options.reconcile(api.value);
     activate(workspaceLayout.activePanelFor(scopeKey));
-    void layoutRestoredScope(scopeKey);
-  }
-
-  async function layoutRestoredScope(scopeKey: string) {
-    await nextTick();
-    const currentApi = api.value;
-    if (currentApi === null || activeScopeKey !== scopeKey) return;
-    // fromJSON(reuseExistingPanels) moves Dockview's always-mounted Agent renderer between groups.
-    // The outer element may keep the same dimensions, so Dockview's ResizeObserver has no reason
-    // to fire even when the reused panel inherited the previous group's stale content height.
-    // Re-run Dockview's documented layout transaction after Vue commits the move; do not add a
-    // competing ResizeObserver or patch the Agent timeline's height, because Dockview already owns
-    // group geometry and the timeline must only measure rows inside the size it receives.
-    currentApi.layout(currentApi.width, currentApi.height, true);
   }
 
   function switchScope(scopeKey: string) {
@@ -148,7 +134,7 @@ export function useWorkspaceDockLifecycle(options: {
       persistence.persistLayout(activeScopeKey);
       for (const popout of api.value.getPopouts()) popout.window.close();
       activeScopeKey = scopeKey;
-      restoreScope(scopeKey);
+      restoreScope(scopeKey, true);
     } finally {
       switchingScope = false;
     }
@@ -214,6 +200,19 @@ export function useWorkspaceDockLifecycle(options: {
   });
 
   return { ready };
+}
+
+function disposeAgentRenderer(api: DockviewApi) {
+  const panel = api.getPanel(AGENT_WORKSPACE_PANEL_ID);
+  if (panel === undefined) return;
+  // Dockview's reuse transaction moves renderer="always" overlays through a temporary group.
+  // That is correct for tab/group movement inside one thread, but a thread switch also replaces a
+  // large asynchronous timeline. Reusing the overlay across those two lifecycle changes can leave
+  // its queued position update bound to the previous group; the pane then stays partially tall
+  // until a page reload destroys the renderer. Remove only Agent through Dockview's public API so
+  // the target scope creates a clean adapter. Do not add a second ResizeObserver or delayed layout
+  // call here: those race the same queued overlay update and only mask the stale renderer.
+  api.removePanel(panel);
 }
 
 function dockedLayout(layout: SerializedDockview): SerializedDockview {

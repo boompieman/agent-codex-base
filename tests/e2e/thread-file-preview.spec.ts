@@ -451,6 +451,8 @@ done
   const restoredDockRatio =
     restoredAgentDockBox!.width / (restoredAgentDockBox!.width + restoredFilesDockBox!.width);
   expect(Math.abs(restoredDockRatio - dockWidthRatio)).toBeLessThan(0.08);
+  const restoredAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
+  if (restoredAgentRenderer === null) throw new Error("Restored Agent renderer is missing");
   await expect(page.getByTestId("file-workspace-tab")).toHaveCount(6);
   await expect(panel.getByText("codex-gateway-nested-python")).toBeVisible();
 
@@ -497,10 +499,20 @@ done
     page.getByTestId("chat-main-pane").boundingBox(),
     panel.boundingBox(),
   ]);
-  // Both panels belong to the restored horizontal split. A reused Agent renderer must be laid out
-  // again after fromJSON; otherwise it can retain a previous group's partial height until reload
-  // while the adjacent Files panel already occupies the full Dockview height.
+  const returnedAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
+  if (returnedAgentRenderer === null) throw new Error("Returned Agent renderer is missing");
+  const reusedAgentRenderer = await restoredAgentRenderer.evaluate(
+    (previous, current) => previous === current,
+    returnedAgentRenderer,
+  );
+  // renderer="always" is valuable while tabs move inside one thread, but reusing the same Agent
+  // subtree across thread-scoped layouts can leave Dockview's overlay attached to the old group.
+  // A large history makes that asynchronous move visible as a half-height pane that only reload
+  // repairs. Cross-thread restoration must create a fresh Agent renderer, then fill its new group.
+  expect(reusedAgentRenderer).toBe(false);
   expect(Math.abs(returnedAgentBox!.height - returnedFilesBox!.height)).toBeLessThan(2);
+  await restoredAgentRenderer.dispose();
+  await returnedAgentRenderer.dispose();
   await page.waitForTimeout(300);
   expect(reopenedPopouts).toBe(0);
 });

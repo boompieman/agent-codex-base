@@ -21,6 +21,7 @@ const props = withDefaults(
 
 const scrollFrameRef = ref<InstanceType<typeof ChatVirtualScrollFrame> | null>(null);
 const contentRef = ref<HTMLElement | null>(null);
+const viewportRef = ref<HTMLElement | null>(null);
 
 const sticky = useStickToBottom({
   getViewport: scrollViewport,
@@ -31,10 +32,17 @@ const sticky = useStickToBottom({
 });
 
 function scrollViewport() {
-  return scrollFrameRef.value?.getViewport() ?? null;
+  return viewportRef.value ?? scrollFrameRef.value?.getViewport() ?? null;
 }
 
 useResizeObserver(contentRef, () => sticky.followContentChange());
+// Content observation covers streaming rows and virtual measurements, but it cannot see a Dockview
+// group or mobile visual viewport resize when the content height itself is unchanged. Observe the
+// actual scroll viewport as well so an attached reader is corrected in the first ResizeObserver
+// delivery instead of waiting for a later virtual-row reflow. Reuse the same stick-to-bottom state:
+// followContentChange() is deliberately a no-op after the user detaches, so this must not become a
+// separate resize-specific follow flag or scroll compensation path.
+useResizeObserver(viewportRef, () => sticky.followContentChange());
 
 watch(
   () => props.followKey,
@@ -51,7 +59,8 @@ onMounted(() => {
   void sticky.settleAndStick();
 });
 
-function handleViewportReady() {
+function handleViewportReady(viewport: HTMLElement) {
+  viewportRef.value = viewport;
   sticky.bindInputListeners();
   sticky.stickIfFollowing();
 }
