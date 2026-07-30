@@ -2,6 +2,7 @@ import { SERVER_TURN_CACHE_LIMIT } from "~~/shared/config";
 import { applyAppServerEventToHistory } from "~~/shared/thread-history/app-server-events";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
 import type { ApprovalPolicy, RpcEnvelope, ThreadHistoryState } from "~~/shared/types";
+import { appServerThreadStatusFromUnknown } from "~~/shared/runtime/app-server";
 import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
 import type { ThreadOpenSnapshot } from "./types";
 
@@ -69,17 +70,17 @@ function trimSnapshotHistory(history: ThreadHistoryState): ThreadHistoryState {
 }
 
 function updateSnapshotThreadStatus(snapshot: ThreadOpenSnapshot, status: unknown) {
-  const value = statusValue(status);
+  const value = appServerThreadStatusFromUnknown(status);
   if (value === null) {
     return snapshot;
   }
-  return withSnapshotHistory(snapshot, {
-    ...snapshot.history,
+  return {
+    ...snapshot,
     thread: {
-      ...snapshot.history.thread,
+      ...snapshot.thread,
       status: value,
     },
-  });
+  };
 }
 
 function withSnapshotHistory(
@@ -89,27 +90,11 @@ function withSnapshotHistory(
   return {
     ...snapshot,
     history,
-    thread: {
-      ...snapshot.thread,
-      ...history.thread,
-    },
   };
 }
 
 function snapshotThread(snapshot: ThreadOpenSnapshot) {
   return snapshot.history.thread;
-}
-
-function statusValue(status: unknown) {
-  if (typeof status === "string") {
-    return status;
-  }
-  const record = recordFromUnknown(status);
-  if (record !== null) {
-    const type = record.type;
-    return typeof type === "string" ? type : null;
-  }
-  return null;
 }
 
 function fieldFromRecord(value: unknown, key: string) {

@@ -2,7 +2,7 @@ import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
-import type { AppServerThread, ThreadHistoryState } from "~~/shared/types";
+import type { GatewayThread, ThreadHistoryState } from "~~/shared/types";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
@@ -59,7 +59,7 @@ export function useChatWorkspaceState() {
 
 function isSelectedThreadViewReady(input: {
   selectedThreadId: string | null;
-  currentThread: AppServerThread | null;
+  currentThread: GatewayThread | null;
   history: ThreadHistoryState | null;
 }) {
   if (input.selectedThreadId === null) return true;

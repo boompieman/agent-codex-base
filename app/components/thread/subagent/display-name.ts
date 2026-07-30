@@ -1,8 +1,8 @@
-import type { AppServerThread } from "~~/shared/types";
+import type { GatewayThread } from "~~/shared/types";
 import { trimmedOrNull } from "~~/shared/utils/strings";
 
 interface SubAgentDisplayNameInput {
-  thread?: Pick<AppServerThread, "agentNickname" | "agentRole"> | null;
+  thread?: Pick<GatewayThread, "agentNickname" | "agentRole"> | null;
   agentPath?: unknown;
   titleCandidate?: unknown;
   threadId?: string | null;

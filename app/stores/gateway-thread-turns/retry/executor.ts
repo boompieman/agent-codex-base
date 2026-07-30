@@ -19,6 +19,7 @@ import {
 } from "./messages";
 import { upsertHistoryItem } from "../history";
 import { createRetryTimer, waitForRetry } from "./scheduler";
+import type { ThreadHistoryTurn } from "~~/shared/thread-history/types";
 import {
   clearPendingTurnRequest,
   clearThreadScopedError,
@@ -75,7 +76,7 @@ export function retryAfterFailedTurn(
   t: Translate,
   hostId: number,
   threadId: string,
-  turn: Record<string, unknown>,
+  turn: ThreadHistoryTurn,
 ) {
   const turnId = typeof turn.id === "string" || typeof turn.id === "number" ? String(turn.id) : "";
   if (!turnId) {
@@ -86,12 +87,12 @@ export function retryAfterFailedTurn(
     return;
   }
   if (request.pendingRetryTurnId !== turnId) {
-    if (isTerminalTurnStatus(turn?.status)) {
+    if (isTerminalTurnStatus(turn.status)) {
       clearPendingTurnRequest(hostId, threadId);
     }
     return;
   }
-  if (turn?.status !== "failed") {
+  if (turn.status !== "failed") {
     clearPendingTurnRequest(hostId, threadId);
     return;
   }

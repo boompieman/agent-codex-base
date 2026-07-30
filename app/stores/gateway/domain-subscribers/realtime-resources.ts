@@ -4,10 +4,14 @@ import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayTerminalStore } from "@/stores/gateway-terminal";
 import { useGatewayHostMetricsDataStore } from "@/stores/gateway-host-metrics/data";
+import { useGatewayTmuxStore } from "@/stores/gateway-tmux";
 import { gatewayDomainEvents } from "../domain-events";
 import { notificationAction, projectPublishedNotification } from "../notifications/actions";
 
 export function registerRealtimeResourceSubscribers() {
+  gatewayDomainEvents.on("realtime-tmux-sessions", (snapshot) => {
+    useGatewayTmuxStore().applySessionsSnapshot(snapshot);
+  });
   gatewayDomainEvents.on("realtime-host-metrics-snapshot", (snapshot) => {
     useGatewayHostMetricsDataStore().applySnapshot(snapshot);
   });

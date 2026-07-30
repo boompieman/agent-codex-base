@@ -1,7 +1,7 @@
 import { defineStore, skipHydrate } from "pinia";
 import { ref } from "vue";
 import { useAccountLocalStorage } from "@/composables/storage/useAccountLocalStorage";
-import type { AppServerThread } from "~~/shared/types";
+import type { GatewayThread } from "~~/shared/types";
 import type { GatewayRouteSelection } from "@/stores/gateway/route-state";
 import { createThreadListActions } from "./actions/thread-list";
 import { createThreadPinningActions } from "./actions/thread-pinning";
@@ -17,7 +17,7 @@ export const useGatewayNavigationStore = defineStore("gateway-navigation", () =>
     "last-open-thread",
     emptySelection(),
   );
-  const threads = ref<AppServerThread[]>([]);
+  const threads = ref<GatewayThread[]>([]);
   const selectedHostId = ref<number | null>(null);
   const selectedProjectId = ref<number | null>(null);
   const selectedThreadId = ref<string | null>(null);

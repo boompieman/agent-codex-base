@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import type {
-  AppServerThread,
+  GatewayThread,
   GatewayEvent,
   HostRecord,
   ProjectRecord,
@@ -13,6 +13,7 @@ import {
   defaultGatewayProject,
   emptyThreadHistory,
 } from "../fixtures/thread-history";
+import { gatewayThreadFixture, type GatewayThreadFixture } from "../fixtures/gateway-thread";
 import {
   installRealtimeInterruptRoute,
   installRealtimeServerRequestResponseRoute,
@@ -29,9 +30,9 @@ interface SeedGatewayThreadInput {
   threadId?: string | null;
   host?: HostRecord;
   project?: ProjectRecord | null;
-  currentThread?: AppServerThread | null;
+  currentThread?: GatewayThreadFixture | null;
   history?: ThreadHistoryState | null;
-  threads?: AppServerThread[];
+  threads?: GatewayThreadFixture[];
   status?: "idle" | "running" | "completed" | "failed" | "interrupted";
   loading?: boolean;
   olderTurnsCursor?: string | null;
@@ -42,17 +43,32 @@ interface SeedGatewayThreadInput {
   threadViews?: Record<string, ThreadViewState>;
 }
 
-type SeedGatewayThreadRuntimeInput = SeedGatewayThreadInput & {
+type SeedGatewayThreadRuntimeInput = Omit<SeedGatewayThreadInput, "currentThread" | "threads"> & {
+  currentThread: GatewayThread | null;
+  threads: GatewayThread[];
   defaultHost: HostRecord;
   defaultProject: ProjectRecord;
   defaultHistory: ThreadHistoryState | null;
 };
 
 export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInput) {
+  const hostId = input.hostId ?? 1;
+  const projectId = input.projectId ?? null;
+  const threadId = input.threadId ?? null;
   const runtimeInput: SeedGatewayThreadRuntimeInput = {
     ...input,
-    defaultHost: defaultGatewayHost(input.hostId ?? 1),
-    defaultProject: defaultGatewayProject(input.hostId ?? 1, input.projectId ?? 1),
+    currentThread:
+      input.currentThread === null
+        ? null
+        : gatewayThreadFixture(input.currentThread ?? { id: threadId ?? "e2e-thread" }, {
+            hostId,
+            projectId,
+          }),
+    threads: (input.threads ?? []).map((thread) =>
+      gatewayThreadFixture(thread, { hostId, projectId }),
+    ),
+    defaultHost: defaultGatewayHost(hostId),
+    defaultProject: defaultGatewayProject(hostId, input.projectId ?? 1),
     defaultHistory:
       input.threadId !== null && input.threadId !== undefined && input.threadId !== ""
         ? emptyThreadHistory(input.threadId)
@@ -77,7 +93,7 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     navigation.selectedProjectId = projectId;
     navigation.selectedThreadId = threadId;
     const hasThread = threadId !== null && threadId !== "";
-    views.currentThread = input.currentThread ?? (hasThread ? { id: threadId } : null);
+    views.currentThread = hasThread ? input.currentThread : null;
     views.history = input.history ?? (hasThread ? input.defaultHistory : null);
     views.events = input.events ?? [];
     views.lastEventId = input.lastEventId ?? views.lastEventId;
@@ -313,19 +329,26 @@ export async function cacheSelectedThreadAndOpenThread(
     otherThreadName: string;
   },
 ) {
-  await page.evaluate(async (input) => {
-    const driver = window.__codexGatewayE2e;
-    if (!driver) throw new Error("Gateway E2E driver is unavailable");
-    const { navigation, views } = driver;
-    views.cacheSelectedThreadView();
-    navigation.selectedThreadId = input.otherThreadId;
-    views.currentThread = { id: input.otherThreadId, name: input.otherThreadName };
-    views.history = { thread: { id: input.otherThreadId, turns: [] } };
-    await views.openThread(input.threadId, {
-      hostId: input.hostId,
-      projectId: input.projectId ?? null,
-    });
-  }, input);
+  const otherThread = gatewayThreadFixture(
+    { id: input.otherThreadId, name: input.otherThreadName },
+    { hostId: input.hostId, projectId: input.projectId ?? null },
+  );
+  await page.evaluate(
+    async ({ input, otherThread }) => {
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      const { navigation, views } = driver;
+      views.cacheSelectedThreadView();
+      navigation.selectedThreadId = input.otherThreadId;
+      views.currentThread = otherThread;
+      views.history = { thread: { id: input.otherThreadId, turns: [] } };
+      await views.openThread(input.threadId, {
+        hostId: input.hostId,
+        projectId: input.projectId ?? null,
+      });
+    },
+    { input, otherThread },
+  );
 }
 
 export async function setThreadViewHistoryAndStatus(
@@ -338,32 +361,39 @@ export async function setThreadViewHistoryAndStatus(
     turnId?: string | null;
   },
 ) {
-  await page.evaluate((input) => {
-    const driver = window.__codexGatewayE2e;
-    if (!driver) throw new Error("Gateway E2E driver is unavailable");
-    const { runtime, views } = driver;
-    const key = `${input.hostId}:${input.threadId}`;
-    const previous = views.threadViews[key];
-    views.threadViews[key] = {
-      hostId: input.hostId,
-      projectId: previous?.projectId ?? null,
-      threadId: input.threadId,
-      currentThread: previous?.currentThread ?? { id: input.threadId },
-      history: input.history,
-      events: previous?.events ?? [],
-      olderTurnsCursor: previous?.olderTurnsCursor ?? null,
-      newerTurnsCursor: previous?.newerTurnsCursor ?? null,
-      lastEventId: previous?.lastEventId ?? 0,
-      eventEpoch: previous?.eventEpoch ?? "e2e-event-epoch",
-      loading: previous?.loading ?? false,
-      error: previous?.error ?? null,
-    };
-    if (input.status) {
-      runtime.setThreadStatus(input.hostId, input.threadId, input.status, {
-        turnId: input.turnId ?? null,
-      });
-    }
-  }, input);
+  const currentThread = gatewayThreadFixture(
+    { id: input.threadId },
+    { hostId: input.hostId, projectId: null },
+  );
+  await page.evaluate(
+    ({ input, currentThread }) => {
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      const { runtime, views } = driver;
+      const key = `${input.hostId}:${input.threadId}`;
+      const previous = views.threadViews[key];
+      views.threadViews[key] = {
+        hostId: input.hostId,
+        projectId: previous?.projectId ?? null,
+        threadId: input.threadId,
+        currentThread: previous?.currentThread ?? currentThread,
+        history: input.history,
+        events: previous?.events ?? [],
+        olderTurnsCursor: previous?.olderTurnsCursor ?? null,
+        newerTurnsCursor: previous?.newerTurnsCursor ?? null,
+        lastEventId: previous?.lastEventId ?? 0,
+        eventEpoch: previous?.eventEpoch ?? "e2e-event-epoch",
+        loading: previous?.loading ?? false,
+        error: previous?.error ?? null,
+      };
+      if (input.status) {
+        runtime.setThreadStatus(input.hostId, input.threadId, input.status, {
+          turnId: input.turnId ?? null,
+        });
+      }
+    },
+    { input, currentThread },
+  );
 }
 
 export function subAgentRuntimeFlags(

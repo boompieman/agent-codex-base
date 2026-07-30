@@ -1,4 +1,3 @@
-import { useDocumentVisibility, useElementVisibility, useIntervalFn } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 import { toast } from "vue-sonner";
 import type { TmuxMonitor, TmuxMonitorMode, TmuxPaneSnapshot } from "~~/shared/types";
@@ -8,6 +7,7 @@ import type { TmuxRemoteHostState } from "@/stores/gateway-tmux";
 import { paneSnapshotFromMonitor } from "@/stores/gateway-tmux/pane";
 import { gatewayErrorMessage } from "@/utils/gateway-error";
 import { trimmedOrFallback } from "~~/shared/utils/strings";
+import { useTmuxSessionSubscriptions } from "./useTmuxSessionSubscriptions";
 
 const EMPTY_REMOTE_STATE: TmuxRemoteHostState = {
   sessions: [],
@@ -23,8 +23,6 @@ export function useTmuxMonitorPanel() {
   const promotingMonitorId = ref<number | null>(null);
   const expandedHostIds = ref(new Set<number>());
   const panelRoot = ref<HTMLElement | null>(null);
-  const panelVisible = useElementVisibility(panelRoot);
-  const documentVisibility = useDocumentVisibility();
   const preview = ref<{ hostId: number; pane: TmuxPaneSnapshot } | null>(null);
   const previewHostTitle = computed(() =>
     preview.value
@@ -52,28 +50,11 @@ export function useTmuxMonitorPanel() {
     if (expanded) next.add(hostId);
     else next.delete(hostId);
     expandedHostIds.value = next;
-    if (expanded) void tmux.refreshSessions(hostId);
   }
 
-  async function refreshExpandedHosts() {
-    await Promise.all([...expandedHostIds.value].map((hostId) => tmux.refreshSessions(hostId)));
-  }
-
-  const sessionRefresh = useIntervalFn(() => void refreshExpandedHosts(), 15_000, {
-    immediate: false,
-    immediateCallback: false,
-  });
-
-  watch(
-    [panelVisible, documentVisibility],
-    ([visible, documentState]) => {
-      // Dockview keeps inactive panels mounted. The interval must follow actual element and
-      // document visibility, otherwise a background tmux panel would keep opening SSH channels.
-      if (visible && documentState === "visible") sessionRefresh.resume();
-      else sessionRefresh.pause();
-    },
-    { immediate: true },
-  );
+  // Dockview keeps inactive renderers mounted. The subscription composable owns visibility,
+  // reconnect and disposal as one lifecycle so no hidden panel can retain a server-side scanner.
+  useTmuxSessionSubscriptions(panelRoot, expandedHostIds);
 
   watch(
     [() => tmux.panelOpen, dashboard.currentHostId],

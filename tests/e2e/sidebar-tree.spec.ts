@@ -148,7 +148,7 @@ test("keeps non-pinned main threads in recent activity for the page session", as
           title: "Already pinned",
         },
       ];
-      activity.ingestThreads(
+      activity.ingestMetadata(
         host.id,
         [
           {
@@ -156,12 +156,25 @@ test("keeps non-pinned main threads in recent activity for the page session", as
             title: "Recent main thread",
             projectId: project.id,
             cwd: project.remotePath,
+            parentThreadId: null,
+            agentNickname: null,
+            agentRole: null,
+            name: null,
+            preview: null,
+            recencyAt: null,
             updatedAt: 3,
           },
           {
             id: "already-pinned",
             title: "Already pinned",
             projectId: project.id,
+            cwd: null,
+            parentThreadId: null,
+            agentNickname: null,
+            agentRole: null,
+            name: null,
+            preview: null,
+            recencyAt: null,
             updatedAt: 2,
           },
           {
@@ -169,6 +182,12 @@ test("keeps non-pinned main threads in recent activity for the page session", as
             title: "Spawned child",
             projectId: project.id,
             parentThreadId: "recent-main",
+            cwd: null,
+            agentNickname: null,
+            agentRole: null,
+            name: null,
+            preview: null,
+            recencyAt: null,
             updatedAt: 1,
           },
           {
@@ -177,6 +196,11 @@ test("keeps non-pinned main threads in recent activity for the page session", as
             projectId: project.id,
             agentRole: "explorer",
             agentNickname: "Scout",
+            cwd: null,
+            parentThreadId: null,
+            name: null,
+            preview: null,
+            recencyAt: null,
             updatedAt: 4,
           },
         ],

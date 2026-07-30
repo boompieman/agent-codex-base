@@ -1,10 +1,14 @@
 import { ensureHistoryThread } from "./shape";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryItem, ThreadHistoryState, ThreadHistoryTurn } from "./types";
+import type {
+  ThreadHistoryItem,
+  ThreadHistorySeed,
+  ThreadHistoryState,
+  ThreadHistoryTurn,
+} from "./types";
 
 export function resolveServerRequestInHistory(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   requestIdValue: string | number,
 ): ThreadHistoryState {

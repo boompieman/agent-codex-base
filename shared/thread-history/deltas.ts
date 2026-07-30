@@ -1,13 +1,12 @@
 import { paramsTurnId } from "./item-identity";
 import { ensureHistoryThread } from "./shape";
 import { updateItemInTurnById } from "./turn-item-mutations";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
+import type { ThreadHistoryItem, ThreadHistorySeed, ThreadHistoryState } from "./types";
 import { stringFromUnknown } from "../utils/records";
 
 export function appendAgentDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {
@@ -38,7 +37,7 @@ export function appendAgentDelta(
 
 export function appendPlanDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {
@@ -50,7 +49,7 @@ export function appendPlanDelta(
 
 export function appendReasoningSummaryDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {
@@ -64,7 +63,7 @@ export function appendReasoningSummaryDelta(
 
 export function appendReasoningTextDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {
@@ -78,7 +77,7 @@ export function appendReasoningTextDelta(
 
 function appendTextDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
   itemType: string,
@@ -105,7 +104,7 @@ function appendTextDelta(
 
 export function appendCommandOutputDelta(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {

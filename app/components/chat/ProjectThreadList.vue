@@ -22,7 +22,7 @@ import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
-import type { AppServerThread } from "~~/shared/types";
+import type { GatewayThread } from "~~/shared/types";
 
 const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
@@ -40,9 +40,9 @@ const sortedThreads = computed(() => {
   );
 });
 
-function titleFor(thread: AppServerThread) {
+function titleFor(thread: GatewayThread) {
   if (String(thread.id) === String(selectedThreadId.value) && currentThread.value) {
-    return titleForThread({ ...thread, ...(currentThread.value as Record<string, unknown>) });
+    return titleForThread({ ...thread, ...currentThread.value });
   }
   return titleForThread(thread);
 }

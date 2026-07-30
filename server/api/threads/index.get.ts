@@ -10,13 +10,14 @@ import { threadListSchema } from "../../utils/gateway/http/validation/threads";
 import { hostStore } from "../../utils/gateway/state/hosts";
 import { projectStore } from "../../utils/gateway/state/projects";
 import { threadMetadataStore } from "../../utils/gateway/state/thread-metadata";
+import { threadSnapshotStore } from "../../utils/gateway/state/thread-snapshots";
 import { remoteFiles } from "../../utils/gateway/infra/host-services";
 import { withAllThreadSources } from "../../utils/gateway/protocol/thread-list";
 import { threadProjectDiscovery } from "../../utils/gateway/runtime/thread-project-discovery";
-import type { AppServerThread } from "~~/shared/types";
+import type { AppServerThread, GatewayThread, ProjectRecord } from "~~/shared/types";
 import type { HostWithSecret } from "../../utils/gateway/infra/ssh/ssh-types";
-import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
 import { trimmedOrNull } from "~~/shared/utils/strings";
+import { gatewayThreadFromAppServer } from "../../utils/gateway/protocol/gateway-thread";
 
 export default defineGatewayEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (body) => threadListSchema.parse(body));
@@ -42,9 +43,6 @@ export default defineGatewayEventHandler(async (event) => {
     useStateDbOnly: query.useRemoteStateIndexOnly ?? false,
   });
   const page = await threadBroker.listThreads(host, listParams);
-  const threads = page.data
-    .map(appServerThreadFromUnknown)
-    .filter((thread): thread is AppServerThread => thread !== null);
   if (userId !== undefined && discoveryGeneration !== null) {
     const current = threadProjectDiscovery.indexPageIfCurrent(
       userId,
@@ -56,19 +54,23 @@ export default defineGatewayEventHandler(async (event) => {
       threadProjectDiscovery.schedule(userId, host, page, listParams, discoveryGeneration);
     }
   }
-  const mergedThreads = mergeThreads(
-    threads,
-    threadMetadataStore.list(host.id, {
-      projectId: query.projectId ?? null,
-      cwd: query.cwd ?? null,
-    }),
+  const projects = projectStore.list(host.id);
+  const indexedThreads = threadMetadataStore.list(host.id, {
+    projectId: query.projectId ?? null,
+    cwd: query.cwd ?? null,
+  });
+  const gatewayThreads = gatewayThreadsForList(
+    host.id,
+    page.data,
+    threadSnapshotStore.listForHost(host.id).map((record) => record.snapshot.thread),
+    indexedThreads,
+    projects,
     query.searchTerm ?? null,
   );
-  const projects = projectStore.list(host.id);
   const projectDirectoryAvailability = await inspectProjectAvailability(host, projects);
   return {
     ...page,
-    data: mergedThreads,
+    data: gatewayThreads,
     projects,
     projectDirectoryAvailability,
   };
@@ -114,25 +116,34 @@ function shouldDiscoverHostProjects(query: {
   );
 }
 
-function mergeThreads(
+function gatewayThreadsForList(
+  hostId: number,
   remoteThreads: AppServerThread[],
-  indexedThreads: AppServerThread[],
+  cachedThreads: AppServerThread[],
+  indexedThreads: ReturnType<typeof threadMetadataStore.list>,
+  projects: ProjectRecord[],
   searchTerm: string | null,
 ) {
-  const byId = new Map<string, AppServerThread>();
-  for (const thread of indexedThreads) {
-    byId.set(String(thread.id), thread);
+  const metadataById = new Map(indexedThreads.map((thread) => [thread.id, thread]));
+  const threadsById = new Map(remoteThreads.map((thread) => [thread.id, thread]));
+  for (const thread of cachedThreads) {
+    if (metadataById.has(thread.id) && !threadsById.has(thread.id)) {
+      // A freshly started thread can precede rollout materialization and therefore be absent from
+      // thread/list briefly. The open snapshot is the complete official DTO returned by
+      // thread/start; never synthesize an AppServerThread from the metadata index.
+      threadsById.set(thread.id, thread);
+    }
   }
-  for (const thread of remoteThreads) {
-    const id = String(thread.id);
-    byId.set(id, {
-      ...byId.get(id),
-      ...thread,
-    });
-  }
-
   const normalizedSearch = searchTerm?.trim().toLowerCase() ?? "";
-  return Array.from(byId.values())
+  return [...threadsById.values()]
+    .map((thread) => {
+      const metadata = metadataById.get(thread.id);
+      const projectId =
+        metadata?.projectId ??
+        projects.find((project) => project.remotePath === thread.cwd)?.id ??
+        null;
+      return gatewayThreadFromAppServer(hostId, projectId, thread);
+    })
     .filter((thread) => {
       if (!normalizedSearch) {
         return true;
@@ -145,5 +156,5 @@ function mergeThreads(
       (left, right) =>
         Number(right.recencyAt ?? right.updatedAt ?? 0) -
         Number(left.recencyAt ?? left.updatedAt ?? 0),
-    );
+    ) satisfies GatewayThread[];
 }

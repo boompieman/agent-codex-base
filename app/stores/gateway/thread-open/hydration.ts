@@ -82,7 +82,7 @@ function applyCommonThreadResult(
   const views = useGatewayThreadViewStore();
   const hostId = result.hostId ?? navigation.selectedHostId;
   if (hostId === null) return;
-  useGatewayThreadActivityStore().upsertThread(hostId, result.thread, gateway.projects);
+  useGatewayThreadActivityStore().upsertGatewayThread(result.thread, gateway.projects);
   views.events = result.recentEvents;
   views.olderTurnsCursor = result.turnsPage.nextCursor;
   views.newerTurnsCursor = result.turnsPage.backwardsCursor;

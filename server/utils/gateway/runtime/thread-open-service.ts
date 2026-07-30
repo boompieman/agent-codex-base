@@ -17,6 +17,7 @@ import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
 import { currentGatewayUserId } from "../state/memory";
 import { parseThreadResumeResult, parseThreadStartResult } from "~~/shared/runtime/app-server";
+import { gatewayThreadFromAppServer } from "../protocol/gateway-thread";
 
 export class ThreadOpenService {
   private readonly pendingRefreshes = new Map<
@@ -77,24 +78,14 @@ export class ThreadOpenService {
     return this.refreshThreadState(host, threadId, projectId, limit);
   }
 
-  startedThreadResult(
-    host: HostRecord,
-    projectId: number | null,
-    rawResult: unknown,
-    defaultCwd: unknown,
-  ) {
+  startedThreadResult(host: HostRecord, projectId: number | null, rawResult: unknown) {
     const parsed = parseThreadStartResult(rawResult);
-    const thread: AppServerThread = {
-      ...parsed.thread,
-      cwd:
-        (typeof parsed.thread.cwd === "string" ? parsed.thread.cwd : null) ??
-        (typeof defaultCwd === "string" ? defaultCwd : null),
-    };
+    const thread: AppServerThread = parsed.thread;
     const threadId = String(thread.id);
     threadMetadataStore.record(host.id, projectId, thread);
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
     const history = {
-      thread: { ...thread, turns: Array.isArray(thread.turns) ? thread.turns : [] },
+      thread: { id: thread.id, turns: thread.turns },
     };
     const turnsPage = {
       nextCursor: null,
@@ -113,7 +104,7 @@ export class ThreadOpenService {
       snapshot,
       result: {
         hostId: host.id,
-        thread,
+        thread: gatewayThreadFromAppServer(host.id, projectId, thread),
         history,
         lastEventId: gatewayEventStore.latestId(host.id, threadId),
         runtimeStatus: runtimeStatusFromThreadState(thread, history, recentEvents) ?? "running",
@@ -180,7 +171,7 @@ export class ThreadOpenService {
     });
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
     return {
-      thread: snapshot.thread,
+      thread: gatewayThreadFromAppServer(host.id, resolvedProjectId, snapshot.thread),
       history: snapshot.history,
       runtimeStatus: runtimeStatusFromThreadState(snapshot.thread, snapshot.history, recentEvents),
       projectId: resolvedProjectId,
@@ -206,7 +197,7 @@ export class ThreadOpenService {
       projectId: resolvedProjectId,
     });
     return {
-      thread: snapshot.thread,
+      thread: gatewayThreadFromAppServer(host.id, resolvedProjectId, snapshot.thread),
       history: snapshot.history,
       runtimeStatus: runtimeStatusFromThreadState(snapshot.thread, snapshot.history, recentEvents),
       projectId: resolvedProjectId,

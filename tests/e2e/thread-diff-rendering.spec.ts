@@ -4,6 +4,7 @@ import { appendFileDiffLines, seedGatewayThread } from "./helpers/gateway-store"
 import { diffScrollLeft, setDiffScrollLeft } from "./helpers/scroll";
 import type { ThreadHistoryState } from "../../shared/types";
 import type { ThreadViewState } from "../../app/stores/gateway/types";
+import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 
 test("file diff blocks can collapse and expand after virtual timeline measurement", async ({
   page,
@@ -110,10 +111,11 @@ test("short command output uses natural height instead of a fixed minimum", asyn
 
   await openIntermediateSteps(page);
   await page.getByRole("button", { name: /pwd/ }).click();
-  await expect(page.getByText("/tmp/e2e")).toBeVisible();
+  const commandOutput = page.getByTestId("chat-scroll-area").getByText("/tmp/e2e");
+  await expect(commandOutput).toBeVisible();
   await expect
     .poll(async () =>
-      page.getByText("/tmp/e2e").evaluate((element: HTMLElement) => {
+      commandOutput.evaluate((element: HTMLElement) => {
         const scrollArea = element.closest('[data-slot="scroll-area"]');
         if (!(scrollArea instanceof HTMLElement)) {
           throw new Error("Missing command output scroll area");
@@ -281,7 +283,7 @@ function cachedThreadView(threadId: string, history: ThreadHistoryState): Thread
     hostId: 1,
     projectId: 1,
     threadId,
-    currentThread: { id: threadId },
+    currentThread: gatewayThreadFixture({ id: threadId }, { projectId: 1 }),
     history,
     events: [],
     olderTurnsCursor: null,

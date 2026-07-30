@@ -12,8 +12,13 @@ export type {
 } from "./types/records";
 export type {
   ApprovalPolicy,
+  AppServerSessionSource,
+  AppServerSubAgentSource,
   AppServerThread,
+  AppServerThreadStatus,
+  AppServerTurn,
   ComposerTurnOptions,
+  GatewayThread,
   ThreadGoal,
   ThreadGoalStatus,
   ThreadGoalTimelineItem,
@@ -37,6 +42,7 @@ export type {
   TmuxPaneSnapshot,
   TmuxPaneOutput,
   TmuxSessionSnapshot,
+  TmuxSessionsSnapshot,
   TmuxMonitorThreadBinding,
 } from "./types/tmux";
 export type { RealtimeClientMessage, RealtimeServerMessage } from "./types/realtime";
@@ -69,6 +75,7 @@ export type {
 } from "./types/files";
 export type {
   ThreadHistoryItem,
+  ThreadHistorySeed,
   ThreadFileChange,
   ThreadHistoryState,
   ThreadHistoryStatus,

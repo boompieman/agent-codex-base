@@ -1,10 +1,9 @@
 import { ensureHistoryThread } from "./shape";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryState } from "./types";
+import type { ThreadHistorySeed, ThreadHistoryState } from "./types";
 
 export function updateTurnDiff(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   params: Record<string, unknown>,
 ): ThreadHistoryState {

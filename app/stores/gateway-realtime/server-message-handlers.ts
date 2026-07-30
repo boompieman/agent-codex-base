@@ -8,6 +8,7 @@ import { createBrowserRealtimeHandlers } from "./handlers/browser";
 import { createTerminalRealtimeHandlers } from "./handlers/terminal";
 import { createThreadRealtimeHandlers } from "./handlers/thread";
 import { createHostMetricsRealtimeHandlers } from "./handlers/host-metrics";
+import { createTmuxSessionsRealtimeHandlers } from "./handlers/tmux-sessions";
 import type {
   RealtimeServerMessageHandlerContext,
   RealtimeServerMessageMap,
@@ -26,6 +27,7 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
   const browser = createBrowserRealtimeHandlers(ctx);
   const notifications = createNotificationRealtimeHandlers(ctx);
   const hostMetrics = createHostMetricsRealtimeHandlers(ctx);
+  const tmuxSessions = createTmuxSessionsRealtimeHandlers(ctx);
 
   return (message: RealtimeServerMessage) =>
     match(message)
@@ -50,6 +52,8 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "host.metrics.snapshot" }, hostMetrics["host.metrics.snapshot"])
       .with({ type: "host.metrics.sample" }, hostMetrics["host.metrics.sample"])
       .with({ type: "host.metrics.status" }, hostMetrics["host.metrics.status"])
+      .with({ type: "tmux.sessions.snapshot" }, tmuxSessions["tmux.sessions.snapshot"])
+      .with({ type: "tmux.sessions.updated" }, tmuxSessions["tmux.sessions.updated"])
       .with({ type: "ready" }, () => handleReady(ctx))
       .with({ type: "config.pinnedThreads.changed" }, () =>
         gatewayDomainEvents.emit("pinned-threads-invalidated", {}),

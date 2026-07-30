@@ -29,6 +29,11 @@ import {
   openBrowserPreview,
 } from "./handlers/browser-preview";
 import { subscribeHostMetrics, unsubscribeHostMetrics } from "./handlers/host-metrics";
+import {
+  refreshTmuxSessions,
+  subscribeTmuxSessions,
+  unsubscribeTmuxSessions,
+} from "./handlers/tmux-sessions";
 
 export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "auth.authenticate": { auth: "public", handler: authenticatePeer },
@@ -36,6 +41,9 @@ export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "host.lifecycle.unsubscribe": unsubscribeHostLifecycle,
   "host.metrics.subscribe": subscribeHostMetrics,
   "host.metrics.unsubscribe": unsubscribeHostMetrics,
+  "tmux.sessions.subscribe": subscribeTmuxSessions,
+  "tmux.sessions.refresh": refreshTmuxSessions,
+  "tmux.sessions.unsubscribe": unsubscribeTmuxSessions,
   "thread.activate": activateThread,
   "thread.start": startThread,
   "thread.subscribe": subscribeThread,

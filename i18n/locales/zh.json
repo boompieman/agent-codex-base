@@ -190,6 +190,7 @@
     "loadOlder": "加载更早消息",
     "loadingOlder": "正在加载更早消息",
     "thinking": "思考中",
+    "turnDuration": "本轮用时 {duration}",
     "history": "历史",
     "liveEvents": "实时事件",
     "noEvents": "这个会话还没有网关事件",

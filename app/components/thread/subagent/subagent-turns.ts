@@ -1,9 +1,9 @@
 import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
 import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
-import type { AppServerThread, ThreadHistoryState, ThreadTimelineTurn } from "~~/shared/types";
+import type { ThreadHistoryState, ThreadTimelineTurn } from "~~/shared/types";
 
 export function subAgentOwnedTurns(
-  thread: AppServerThread | null,
+  thread: { createdAt: number } | null,
   history: ThreadHistoryState | null,
   parentHistory: ThreadHistoryState | null = null,
 ): ThreadTimelineTurn[] {

@@ -1,12 +1,11 @@
 import { mergeTurnItems } from "./item-merge";
 import { ensureHistoryThread } from "./shape";
 import { terminalTurnStatus } from "../thread-runtime-status";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryState, ThreadHistoryTurn } from "./types";
+import type { ThreadHistorySeed, ThreadHistoryState, ThreadHistoryTurn } from "./types";
 
 export function mergeThreadTurns(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   turns: ThreadHistoryTurn[],
   direction: "prepend" | "append",
@@ -37,7 +36,7 @@ export function mergeThreadTurns(
 
 export function syncCompletedTurn(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   turn: ThreadHistoryTurn,
 ): ThreadHistoryState {

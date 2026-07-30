@@ -7,6 +7,7 @@ import {
   stateFor,
   type RealtimePeer,
 } from "../peer-state";
+import { removeSubscription, replaceSubscription } from "../subscription-map";
 
 export function subscribeHostMetrics(
   peer: RealtimePeer,
@@ -15,9 +16,7 @@ export function subscribeHostMetrics(
   const userId = authenticatedUserId(peer);
   if (hostStore.get(request.hostId) === null) throw new Error(`Host ${request.hostId} not found`);
   const subscriptions = stateFor(peer).hostMetricsUnsubscribers;
-  subscriptions.get(request.hostId)?.();
-  subscriptions.set(
-    request.hostId,
+  replaceSubscription(subscriptions, request.hostId, () =>
     hostMetricsManager.events.subscribe(userId, request.hostId, (event) => {
       if (event.type === "sample") {
         sendRealtimePeerMessage(peer, {
@@ -47,6 +46,5 @@ export function unsubscribeHostMetrics(
   request: Extract<RealtimeClientMessage, { type: "host.metrics.unsubscribe" }>,
 ) {
   const subscriptions = stateFor(peer).hostMetricsUnsubscribers;
-  subscriptions.get(request.hostId)?.();
-  subscriptions.delete(request.hostId);
+  removeSubscription(subscriptions, request.hostId);
 }

@@ -1,20 +1,13 @@
 export function itemTimestampMs(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value > 1_000_000_000_000 ? value : value * 1000;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function itemStartedAtMs(item: ThreadHistoryItem) {
-  return itemTimestampMs(item.startedAt ?? item.createdAt ?? item.startTime);
+  return itemTimestampMs(item.startedAt);
 }
 
 export function itemCompletedAtMs(item: ThreadHistoryItem) {
-  return itemTimestampMs(item.completedAt ?? item.updatedAt ?? item.endTime);
+  return itemTimestampMs(item.completedAt);
 }
 
 export function formatDurationMs(value: number) {

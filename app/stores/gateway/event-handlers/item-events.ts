@@ -4,6 +4,10 @@ import { idFromUnknown, stringFromUnknown, stringIdFromUnknown } from "~~/shared
 import { gatewayDomainEvents } from "../domain-events";
 import { tagFileChanges } from "./file-change-sequence";
 import type { AppServerEventParams, GatewayEventHandlerRegistry } from "./types";
+import {
+  itemLifecycleTimestampMs,
+  type ItemLifecyclePhase,
+} from "~~/shared/thread-history/item-lifecycle-timing";
 
 export const itemEventHandlers: GatewayEventHandlerRegistry = {
   "item/started": (event, params, threadId) => {
@@ -117,12 +121,12 @@ function upsertStartedOrCompletedItem(
   event: GatewayEvent,
   params: AppServerEventParams,
   threadId: string,
-  phase: "started" | "completed",
+  phase: ItemLifecyclePhase,
 ) {
   const item = threadHistoryItemFromUnknown(params.item);
   if (item === null) return;
   const turnId = idFromUnknown(params.turnId);
-  const eventIso = event.createdAt === "" ? new Date().toISOString() : event.createdAt;
+  const lifecycleTimestamp = itemLifecycleTimestampMs(params, phase);
   gatewayDomainEvents.emit("history-item-upsert", {
     hostId: event.hostId,
     threadId,
@@ -130,12 +134,8 @@ function upsertStartedOrCompletedItem(
       ...item,
       turnId,
       status: item.status ?? (phase === "started" ? "inProgress" : "completed"),
-      ...(phase === "started" && (item.startedAt === null || item.startedAt === undefined)
-        ? { startedAt: eventIso }
-        : {}),
-      ...(phase === "completed" && (item.completedAt === null || item.completedAt === undefined)
-        ? { completedAt: eventIso }
-        : {}),
+      ...(phase === "started" ? { startedAt: lifecycleTimestamp } : {}),
+      ...(phase === "completed" ? { completedAt: lifecycleTimestamp } : {}),
     },
   });
 }

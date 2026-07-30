@@ -1,5 +1,5 @@
 import type { GatewayEvent, ProjectRecord } from "./records";
-import type { ThreadHistoryState, ThreadHistoryTurn } from "../thread-history/types";
+import type { ThreadHistoryItem, ThreadHistoryState } from "../thread-history/types";
 
 export type ThreadRuntimeStatus = "idle" | "running" | "completed" | "failed" | "interrupted";
 export type ThreadGoalStatus =
@@ -37,7 +37,7 @@ export interface ThreadGoalTimelineItem extends Record<string, unknown> {
 
 export interface ThreadOpenResult {
   hostId: number;
-  thread: AppServerThread;
+  thread: GatewayThread;
   history: ThreadHistoryState;
   lastEventId: number;
   eventEpoch: string;
@@ -79,35 +79,90 @@ export interface TokenUsageBreakdown {
   reasoningOutputTokens: number;
 }
 
-export interface AppServerThread extends Record<string, unknown> {
+export type AppServerThreadStatus =
+  | { type: "notLoaded" }
+  | { type: "idle" }
+  | { type: "systemError" }
+  | { type: "active"; activeFlags: Array<"waitingOnApproval" | "waitingOnUserInput"> };
+
+export type AppServerSessionSource =
+  | "cli"
+  | "vscode"
+  | "exec"
+  | "appServer"
+  | "unknown"
+  | { custom: string }
+  | { subAgent: AppServerSubAgentSource };
+
+export type AppServerSubAgentSource =
+  | "review"
+  | "compact"
+  | "memory_consolidation"
+  | { other: string }
+  | {
+      thread_spawn: {
+        parent_thread_id: string;
+        depth: number;
+        agent_path: string | null;
+        agent_nickname: string | null;
+        agent_role: string | null;
+      };
+    };
+
+export interface AppServerTurn {
   id: string;
-  title?: string | null;
-  name?: string | null;
-  preview?: string | null;
-  projectId?: number | null;
-  cwd?: string | null;
-  status?: import("../thread-history/types").ThreadHistoryStatus;
-  pinned?: boolean;
-  recencyAt?: number | null;
-  updatedAt?: number;
-  createdAt?: number;
-  parentThreadId?: string | null;
-  source?:
-    | "cli"
-    | "vscode"
-    | "exec"
-    | "appServer"
-    | "unknown"
-    | { custom: string }
-    | { subAgent: unknown };
-  /** Human-readable identity assigned by AgentControl for a spawned sub-agent. */
-  agentNickname?: string | null;
-  /** Functional role paired with agentNickname, for example `explorer`. */
-  agentRole?: string | null;
-  /** False for parent-managed sub-agents that cannot accept direct turns. */
-  canAcceptDirectInput?: boolean | null;
-  /** Populated by resume/read responses; list/start responses may omit persisted turns. */
-  turns?: ThreadHistoryTurn[];
+  items: ThreadHistoryItem[];
+  itemsView: "notLoaded" | "summary" | "full";
+  status: "completed" | "interrupted" | "failed" | "inProgress";
+  error: {
+    message: string;
+    codexErrorInfo: unknown;
+    additionalDetails: string | null;
+  } | null;
+  startedAt: number | null;
+  completedAt: number | null;
+  durationMs: number | null;
+}
+
+/** Exact Codex 0.146 Thread DTO for the experimental API negotiated by Gateway. */
+export interface AppServerThread {
+  id: string;
+  extra: Record<never, never> | null;
+  sessionId: string;
+  forkedFromId: string | null;
+  parentThreadId: string | null;
+  preview: string;
+  ephemeral: boolean;
+  isPinned: boolean;
+  historyMode: "legacy" | "paginated";
+  modelProvider: string;
+  createdAt: number;
+  updatedAt: number;
+  recencyAt: number | null;
+  status: AppServerThreadStatus;
+  path: string | null;
+  cwd: string;
+  cliVersion: string;
+  source: AppServerSessionSource;
+  canAcceptDirectInput: boolean | null;
+  threadSource: string | null;
+  agentNickname: string | null;
+  agentRole: string | null;
+  gitInfo: {
+    sha: string | null;
+    branch: string | null;
+    originUrl: string | null;
+  } | null;
+  name: string | null;
+  turns: AppServerTurn[];
+}
+
+/** Browser/server projection with user-scoped Gateway navigation metadata. */
+export interface GatewayThread extends AppServerThread {
+  hostId: number;
+  projectId: number | null;
+  pinned: boolean;
+  title: string | null;
 }
 
 export interface ThreadTokenUsageState {

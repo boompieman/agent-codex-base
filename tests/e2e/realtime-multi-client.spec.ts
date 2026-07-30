@@ -186,6 +186,11 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
       timeout: 120_000,
     });
+    // Assistant text and a transient completed button can precede app-server's terminal turn event.
+    // Starting the interrupt case before the authoritative active turn clears legitimately sends
+    // turn.steer and tests a different operation. Wait on runtime identity rather than adding a
+    // sleep or weakening the protocol assertion below.
+    await expect.poll(async () => activeRemoteTurnId(page), { timeout: 120_000 }).toBe("");
     await revealVirtualizedChatLocator(
       page,
       page.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),

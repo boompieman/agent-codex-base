@@ -1,12 +1,11 @@
 import { findTurnForItem, sameItem, syntheticTurnIdForItem, turnId } from "./item-identity";
 import { mergeThreadItem } from "./item-merge";
 import { ensureHistoryThread } from "./shape";
-import type { AppServerThread } from "../types/thread";
-import type { ThreadHistoryItem, ThreadHistoryState } from "./types";
+import type { ThreadHistoryItem, ThreadHistorySeed, ThreadHistoryState } from "./types";
 
 export function mergeItemIntoLatestTurn(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   item: ThreadHistoryItem,
 ): ThreadHistoryState {
@@ -76,7 +75,7 @@ function isActiveItemStatus(status: unknown) {
 
 export function insertSteerItemIntoActiveTurn(
   history: ThreadHistoryState | null,
-  currentThread: AppServerThread | null,
+  currentThread: ThreadHistorySeed | null,
   threadId: string,
   turnIdValue: string,
   item: ThreadHistoryItem,

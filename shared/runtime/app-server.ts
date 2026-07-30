@@ -62,9 +62,21 @@ export const threadTurnSchema = z
   .object({
     id: z.string().min(1),
     items: z.array(threadItemSchema),
-    status: z.union([z.string(), z.object({ type: z.unknown().optional() }), z.null()]).optional(),
+    itemsView: z.enum(["notLoaded", "summary", "full"]),
+    status: z.enum(["completed", "interrupted", "failed", "inProgress"]),
+    error: z
+      .object({
+        message: z.string(),
+        codexErrorInfo: z.unknown().nullable(),
+        additionalDetails: z.string().nullable(),
+      })
+      .loose()
+      .nullable(),
+    startedAt: z.number().nullable(),
+    completedAt: z.number().nullable(),
+    durationMs: z.number().nullable(),
   })
-  .loose();
+  .strict();
 
 export const turnsPageSchema = z
   .object({
@@ -78,33 +90,90 @@ export function parseTurnsPage(value: unknown) {
   return turnsPageSchema.parse(value);
 }
 
+export const appServerThreadStatusSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("notLoaded") }).strict(),
+  z.object({ type: z.literal("idle") }).strict(),
+  z.object({ type: z.literal("systemError") }).strict(),
+  z
+    .object({
+      type: z.literal("active"),
+      activeFlags: z.array(z.enum(["waitingOnApproval", "waitingOnUserInput"])),
+    })
+    .strict(),
+]);
+
+export function appServerThreadStatusFromUnknown(value: unknown) {
+  const parsed = appServerThreadStatusSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 export const appServerThreadSchema = z
   .object({
     id: z.string().min(1),
-    cwd: z.string().nullable().optional(),
-    name: z.string().nullable().optional(),
-    title: z.string().nullable().optional(),
-    preview: z.string().nullable().optional(),
-    parentThreadId: z.string().nullable().optional(),
-    source: z
-      .union([
-        z.enum(["cli", "vscode", "exec", "appServer", "unknown"]),
-        z.object({ custom: z.string() }).strict(),
-        z.object({ subAgent: z.unknown() }).strict(),
-      ])
-      .optional(),
-    agentNickname: z.string().nullable().optional(),
-    agentRole: z.string().nullable().optional(),
-    projectId: z.number().nullable().optional(),
-    status: z.union([z.string(), z.object({ type: z.unknown().optional() }), z.null()]).optional(),
-    pinned: z.boolean().optional(),
-    recencyAt: z.number().nullable().optional(),
-    updatedAt: z.number().optional(),
-    createdAt: z.number().optional(),
-    canAcceptDirectInput: z.boolean().nullable().optional(),
-    turns: z.array(threadTurnSchema).optional(),
+    extra: z.object({}).strict().nullable(),
+    sessionId: z.string().min(1),
+    forkedFromId: z.string().nullable(),
+    parentThreadId: z.string().nullable(),
+    preview: z.string(),
+    ephemeral: z.boolean(),
+    isPinned: z.boolean(),
+    historyMode: z.enum(["legacy", "paginated"]),
+    modelProvider: z.string(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    recencyAt: z.number().nullable(),
+    status: appServerThreadStatusSchema,
+    path: z.string().nullable(),
+    cwd: z.string(),
+    cliVersion: z.string(),
+    name: z.string().nullable(),
+    source: z.union([
+      z.enum(["cli", "vscode", "exec", "appServer", "unknown"]),
+      z.object({ custom: z.string() }).strict(),
+      z
+        .object({
+          subAgent: z.union([
+            z.enum(["review", "compact", "memory_consolidation"]),
+            z.object({ other: z.string() }).strict(),
+            z
+              .object({
+                thread_spawn: z
+                  .object({
+                    parent_thread_id: z.string(),
+                    depth: z.number(),
+                    agent_path: z.string().nullable(),
+                    agent_nickname: z.string().nullable(),
+                    agent_role: z.string().nullable(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+          ]),
+        })
+        .strict(),
+    ]),
+    canAcceptDirectInput: z.boolean().nullable(),
+    threadSource: z.string().nullable(),
+    agentNickname: z.string().nullable(),
+    agentRole: z.string().nullable(),
+    gitInfo: z
+      .object({
+        sha: z.string().nullable(),
+        branch: z.string().nullable(),
+        originUrl: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    turns: z.array(threadTurnSchema),
   })
-  .loose();
+  .strict();
+
+export const gatewayThreadSchema = appServerThreadSchema.extend({
+  hostId: z.number().int().positive(),
+  projectId: z.number().int().positive().nullable(),
+  pinned: z.boolean(),
+  title: z.string().nullable(),
+});
 
 export function parseAppServerThread(value: unknown): AppServerThread {
   return appServerThreadSchema.parse(value);

@@ -10,6 +10,7 @@ import { hostStore } from "../state/hosts";
 import { browserPreviewManager } from "../browser-preview/browser-preview-manager";
 import { recordFromUnknown } from "~~/shared/utils/records";
 import { runPeerScoped, sendRealtimePeerMessage, stateFor, type RealtimePeer } from "./peer-state";
+import { clearSubscriptions } from "./subscription-map";
 
 export function openRealtimePeer(peer: RealtimePeer) {
   const state = stateFor(peer);
@@ -69,12 +70,9 @@ export function cleanupRealtimePeer(peer: RealtimePeer) {
   if (state.browserOwnerId !== undefined) browserPreviewManager.closeOwner(state.browserOwnerId);
   state.sessionRevocationUnsubscribe?.();
   state.sessionRevocationUnsubscribe = undefined;
-  for (const unsubscribe of state.threadUnsubscribers.values()) {
-    unsubscribe();
-  }
-  state.threadUnsubscribers.clear();
-  for (const unsubscribe of state.hostMetricsUnsubscribers.values()) unsubscribe();
-  state.hostMetricsUnsubscribers.clear();
+  clearSubscriptions(state.threadUnsubscribers);
+  clearSubscriptions(state.hostMetricsUnsubscribers);
+  clearSubscriptions(state.tmuxSessionUnsubscribers);
 }
 
 function rejectUnauthenticatedPeer(peer: RealtimePeer, request: RealtimeClientMessage | undefined) {

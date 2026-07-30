@@ -190,6 +190,7 @@
     "loadOlder": "Load earlier messages",
     "loadingOlder": "Loading earlier messages",
     "thinking": "Thinking",
+    "turnDuration": "Turn duration {duration}",
     "history": "History",
     "liveEvents": "Live events",
     "noEvents": "No gateway events for this thread yet",

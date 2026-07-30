@@ -204,6 +204,7 @@ test("terminal wait notifications mention the command being watched", async ({ p
       params: {
         threadId: "e2e-terminal-wait-thread",
         turnId: "turn-terminal",
+        startedAtMs: Date.now(),
         item: {
           id: "cmd-watch",
           type: "commandExecution",

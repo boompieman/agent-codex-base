@@ -66,6 +66,10 @@ export interface ThreadHistoryItem extends Record<string, unknown> {
   requestId?: string | number | null;
   pendingApproval?: ThreadPendingApproval | null;
   command?: string | null;
+  /** Trusted first-party plugin that resolved this command, when present. */
+  pluginId?: string | null;
+  /** Safe plugin-relative script path paired with pluginId. */
+  scriptPath?: string | null;
   aggregatedOutput?: string | null;
   result?: string | { text?: string | null } | null;
   exitCode?: number | null;
@@ -130,13 +134,29 @@ export type ThreadTimelineTurn = Omit<ThreadHistoryTurn, "id" | "items"> & {
   items: ThreadTimelineItem[];
 };
 
-export interface ThreadHistoryTurn extends Record<string, unknown> {
+export interface ThreadHistoryTurn {
   id?: string | number | null;
   status?: ThreadHistoryStatus;
   items?: ThreadHistoryItem[];
+  itemsView?: "notLoaded" | "summary" | "full";
+  error?: {
+    message?: string | null;
+    codexErrorInfo?: unknown;
+    additionalDetails?: string | null;
+  } | null;
+  startedAt?: number | string | null;
+  completedAt?: number | string | null;
+  durationMs?: number | null;
+  diff?: string | null;
 }
 
-export interface ThreadHistoryThread extends Record<string, unknown> {
+/** Minimal thread shape reducers need while constructing a timeline. */
+export interface ThreadHistorySeed {
+  id: string;
+  turns?: ThreadHistoryTurn[];
+}
+
+export interface ThreadHistoryThread {
   id: string;
   turns: ThreadHistoryTurn[];
 }

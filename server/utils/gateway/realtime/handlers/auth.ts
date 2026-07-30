@@ -31,6 +31,7 @@ export function authenticatePeer(
     userId: user.id,
     threadUnsubscribers: new Map(),
     hostMetricsUnsubscribers: new Map(),
+    tmuxSessionUnsubscribers: new Map(),
     browserOwnerId: connectionId,
     sessionRevocationUnsubscribe: sessionRevocationEvents.subscribe(hashToken(token), () => {
       peer.close(1008, "Session revoked");

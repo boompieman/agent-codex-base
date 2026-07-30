@@ -30,7 +30,7 @@ class ThreadBroker {
   async startThread(host: HostRecord, params: Record<string, unknown>, projectId: number | null) {
     const client = await this.registry.getHostClient(host);
     const result = await client.request("thread/start", params);
-    const started = this.openService.startedThreadResult(host, projectId, result, params.cwd);
+    const started = this.openService.startedThreadResult(host, projectId, result);
     const controller = await this.registry.attachStartedThread(host, started.threadId, client);
     controller.setOpenSnapshot(started.snapshot);
     return started.result;
