@@ -9,7 +9,6 @@ export default defineNuxtConfig({
     server: false,
   },
   experimental: {
-    buildCache: true,
     checkOutdatedBuildInterval: 5 * 60_000,
     emitRouteChunkError: "automatic-immediate",
     // Nuxt 4.5 reuses Vite's watcher instead of opening a second watcher tree.
