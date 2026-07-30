@@ -5,6 +5,7 @@ import type { AppServerRuntimeProbe } from "./app-server-runtime-probe";
 import type { CodexUpgrader } from "./codex-upgrader";
 import { CodexUpgradeQueue } from "./codex-upgrade-queue";
 import type { CodexVersionChecker } from "./codex-version-checker";
+import { codexUpgradeLog } from "./codex-upgrade-log";
 
 export class CodexUpgradeWorkflow {
   private readonly queue = new CodexUpgradeQueue();
@@ -49,6 +50,12 @@ export class CodexUpgradeWorkflow {
         currentRuntimeVersion,
         supportedVersion,
       );
+      codexUpgradeLog("remote version inspected", host, {
+        observedVersion: beforeVersion,
+        appServerVersion: runtimeState.appServerVersion,
+        targetVersion: supportedVersion,
+        runtimeRunning: runtimeState.running,
+      });
 
       if (runtimeState.running && !runtimeVersionSupported) {
         if (await this.runtime.hasActiveLoadedThread(host)) {
@@ -68,6 +75,12 @@ export class CodexUpgradeWorkflow {
           message: runtimeVersionSupported
             ? `${hostDisplayName(host)} 的远端 Codex 已是最新版本 ${beforeVersion}`
             : `${hostDisplayName(host)} 的远端 Codex CLI 已是 ${beforeVersion}，正在重启旧 app-server ${currentRuntimeVersion}`,
+        });
+        codexUpgradeLog("installation skipped", host, {
+          observedVersion: beforeVersion,
+          appServerVersion: runtimeState.appServerVersion,
+          targetVersion: supportedVersion,
+          runtimeRestartRequired: runtimeState.running && !runtimeVersionSupported,
         });
         return {
           version: beforeVersion,
@@ -90,6 +103,10 @@ export class CodexUpgradeWorkflow {
   }
 
   private async install(host: HostWithSecret, supportedVersion: string, beforeVersion: string) {
+    codexUpgradeLog("upgrade required", host, {
+      observedVersion: beforeVersion,
+      targetVersion: supportedVersion,
+    });
     hostLifecycleBus.emit({
       hostId: host.id,
       status: "upgrading",
@@ -138,7 +155,7 @@ export class CodexUpgradeWorkflow {
         message: `${hostDisplayName(host)} 正在等待 Codex 升级队列`,
       });
     }
-    return await this.queue.run(work);
+    return await this.queue.run(host, work);
   }
 
   private async readVersionForRepair(host: HostWithSecret) {

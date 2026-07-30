@@ -30,6 +30,7 @@ interface NodeArtifact {
   directoryName: string;
   version: string;
   sha256: string;
+  size: number;
 }
 
 interface SharedBundle {
@@ -154,7 +155,14 @@ async function prepareNodeArtifact(
   if (downloadedHash !== sha256) {
     throw new Error(`Official Node.js archive checksum mismatch for ${fileName}`);
   }
-  return { localPath, fileName, directoryName, version, sha256 };
+  return {
+    localPath,
+    fileName,
+    directoryName,
+    version,
+    sha256,
+    size: (await stat(localPath)).size,
+  };
 }
 
 async function readOfficialPlatformSpec(version: string, packageName: string) {
