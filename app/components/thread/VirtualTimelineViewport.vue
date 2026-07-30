@@ -2,8 +2,12 @@
 import type { VirtualItem } from "@tanstack/virtual-core";
 import { useDocumentVisibility, useElementVisibility, useEventListener } from "@vueuse/core";
 import type { ComponentPublicInstance } from "vue";
-import { computed, ref, watch } from "vue";
-import { ChatVirtualScrollFrame, useChatVirtualizer } from "@/components/common/chat-virtualizer";
+import { computed, inject, ref, watch } from "vue";
+import {
+  CHAT_VIEWPORT_LAYOUT_REVISION,
+  ChatVirtualScrollFrame,
+  useChatVirtualizer,
+} from "@/components/common/chat-virtualizer";
 
 interface TimelineViewportRow {
   key: string;
@@ -54,6 +58,7 @@ const virtualRows = chatVirtualizer.virtualItems;
 const viewportElement = computed(() => scrollViewport());
 const viewportVisible = useElementVisibility(viewportElement);
 const documentVisibility = useDocumentVisibility();
+const workspaceLayoutRevision = inject(CHAT_VIEWPORT_LAYOUT_REVISION, null);
 
 // An underfilled first page is both at the start and at the end, so Chat mode correctly remains
 // bottom-following and cannot infer that an upward wheel means "load history" from scrollOffset.
@@ -109,6 +114,22 @@ watch(viewportVisible, (visible, previous) => {
 watch(documentVisibility, (visibility, previous) => {
   if (visibility === "visible" && previous !== "visible") chatVirtualizer.refresh();
 });
+
+if (workspaceLayoutRevision !== null) {
+  watch(workspaceLayoutRevision, () => {
+    // A keyed Dockview workspace deliberately creates a fresh Agent DOM for each thread. On
+    // mobile WebKit the Vue child can finish mounting before Dockview commits the restored panel
+    // height, leaving the official initial scrollToEnd aligned to transient geometry. Re-run the
+    // same public TanStack operation at Dockview's semantic layout boundary while Chat mode still
+    // owns the end. If the reader detached, refresh measurements only: never override reading.
+    //
+    // Do not replace this with timeouts, rAF loops, scrollTop writes, or a second ResizeObserver.
+    // Those mechanisms cannot distinguish Dockview layout from row streaming and would race
+    // virtual-core's prepend, iOS momentum, and dynamic-row compensation.
+    chatVirtualizer.refresh();
+    if (chatVirtualizer.followLatest.value) resetFollowLatest();
+  });
+}
 
 watch(
   () => chatVirtualizer.userDetached.value,

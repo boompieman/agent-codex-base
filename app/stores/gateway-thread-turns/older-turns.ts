@@ -5,6 +5,7 @@ import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { cacheSelectedThreadView } from "@/stores/gateway/thread-open/view-state";
+import { setSelectedThreadHistory } from "@/stores/gateway/thread-open/thread-view-cache";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 import { isStaleThreadCursorError } from "./stale-cursor";
 import { requestThreadTurnsPage } from "./transport";
@@ -45,12 +46,8 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
       return;
     }
     const turns = threadTurnsFromHistory(result.history);
-    views.history = mergeThreadTurns(
-      views.history,
-      views.currentThread,
-      threadId,
-      turns,
-      "prepend",
+    setSelectedThreadHistory(
+      mergeThreadTurns(views.history, views.currentThread, threadId, turns, "prepend"),
     );
     views.olderTurnsCursor = result.turnsPage.nextCursor;
     views.newerTurnsCursor = result.turnsPage.backwardsCursor ?? views.newerTurnsCursor;

@@ -9,6 +9,7 @@ import type {
   ThreadTokenUsageState,
 } from "../../../shared/types";
 import { parseRealtimeClientMessage } from "../../../shared/runtime/realtime";
+import { projectThreadTimelineHistory } from "../../../shared/thread-history/timeline";
 import { gatewayThreadFixture, type GatewayThreadFixture } from "../fixtures/gateway-thread";
 
 export interface MockThreadSnapshotInput {
@@ -61,6 +62,11 @@ interface ThreadTurnsLoadRouteState {
   }>;
   response: Extract<RealtimeServerMessage, { type: "thread.turns.page" }>;
 }
+
+type ThreadTurnsLoadResponseInput = Omit<
+  Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
+  "history"
+> & { history: ThreadHistoryState };
 
 const routes = new WeakMap<Page, RealtimeRouteState>();
 
@@ -117,11 +123,15 @@ export function realtimeInterruptRequest(page: Page) {
 
 export function installRealtimeThreadTurnsLoadRoute(
   page: Page,
-  response: Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
+  response: ThreadTurnsLoadResponseInput,
   deferred: boolean,
 ) {
   const state = requireRealtimeRoute(page);
-  state.threadTurnsLoad = { deferred, requests: [], response };
+  state.threadTurnsLoad = {
+    deferred,
+    requests: [],
+    response: { ...response, history: projectThreadTimelineHistory(response.history) },
+  };
 }
 
 export function releaseRealtimeThreadTurnsLoadRoute(page: Page) {
@@ -216,7 +226,9 @@ function handleThreadActivate(
       hostId: message.hostId ?? input.hostId ?? 1,
       threadId: message.threadId,
       thread,
-      history: snapshot.history ?? { thread: { id: message.threadId, turns: [] } },
+      history: projectThreadTimelineHistory(
+        snapshot.history ?? { thread: { id: message.threadId, turns: [] } },
+      ),
       runtimeStatus: snapshot.runtimeStatus ?? null,
       projectId: snapshot.projectId ?? null,
       project: snapshot.project ?? null,

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { ThreadHistoryState } from "../../shared/types";
 import type { ThreadViewState } from "../../app/stores/gateway/types";
+import { projectThreadTimelineHistory } from "../../shared/thread-history/timeline";
 import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 import { openApp } from "./helpers/app";
 import {
@@ -78,8 +79,8 @@ test("history stays stable until an explicit older-page request prepends turns",
   await expect(page.getByText("background turn 004")).toBeVisible();
   await expect(page.getByText("background turn 005")).toBeVisible();
   await expect(page.getByTestId("load-older-turns-button")).toHaveCount(0);
-  // Initial activation now asks for five turns atomically. A cached or synthetic two-turn view
-  // must remain untouched instead of silently starting the old background prepend path.
+  // Initial activation asks for two turns. The view must remain untouched instead of silently
+  // starting the old background prepend-to-five path.
   await page.waitForTimeout(250);
   expect(await threadTurnsLoadRequests(page)).toHaveLength(0);
   await startElementTopTracking(page, "background turn 004");
@@ -140,8 +141,10 @@ test("same-page thread switches retain the loaded history depth", async ({ page 
 
   await page.getByTestId(`thread-button-${secondThreadId}`).click();
   await expect(page.getByText("cached second turn 005")).toBeVisible();
+  expect(await selectedTimelineUsesCachedReference(page, secondThreadId)).toBe(true);
   await page.getByTestId(`thread-button-${firstThreadId}`).click();
   await expect(page.getByText("cached first turn 005")).toBeVisible();
+  expect(await selectedTimelineUsesCachedReference(page, firstThreadId)).toBe(true);
   await startTimelineRowCountTracking(page);
 
   await expect.poll(() => threadActivateRequests(page).then((requests) => requests.length)).toBe(2);
@@ -153,6 +156,16 @@ test("same-page thread switches retain the loaded history depth", async ({ page 
     expect.objectContaining({ type: "thread.activate", threadId: firstThreadId, limit: 5 }),
   ]);
 });
+
+function selectedTimelineUsesCachedReference(page: Page, threadId: string) {
+  return page.evaluate((threadId) => {
+    const views = window.__codexGatewayE2e?.views;
+    if (views === undefined) throw new Error("Gateway E2E driver is unavailable");
+    // A route switch is only a Pinia selection. Object identity is intentional here: rebuilding an
+    // equivalent array would rescan every item and remount virtual rows for large 0.146 histories.
+    return views.timelineTurns === views.threadViews[`1:${threadId}`]?.timelineTurns;
+  }, threadId);
+}
 
 test("streaming output stays pinned when the user is already at the latest content", async ({
   page,
@@ -645,12 +658,14 @@ function buildMeasuredTurns(threadId: string, lineCount: number) {
 }
 
 function cachedThreadView(threadId: string, history: ThreadHistoryState): ThreadViewState {
+  const timelineTurns = projectThreadTimelineHistory(history).thread.turns;
   return {
     hostId: 1,
     projectId: 1,
     threadId,
     currentThread: gatewayThreadFixture({ id: threadId }, { projectId: 1 }),
     history,
+    timelineTurns,
     events: [],
     olderTurnsCursor: null,
     newerTurnsCursor: null,

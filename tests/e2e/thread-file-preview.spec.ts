@@ -453,6 +453,8 @@ done
   expect(Math.abs(restoredDockRatio - dockWidthRatio)).toBeLessThan(0.08);
   const restoredAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
   if (restoredAgentRenderer === null) throw new Error("Restored Agent renderer is missing");
+  const restoredDockRenderer = await page.locator(".gateway-dockview").elementHandle();
+  if (restoredDockRenderer === null) throw new Error("Restored Dockview renderer is missing");
   await expect(page.getByTestId("file-workspace-tab")).toHaveCount(6);
   await expect(panel.getByText("codex-gateway-nested-python")).toBeVisible();
 
@@ -470,49 +472,79 @@ done
   await popup.waitForLoadState("domcontentloaded");
   await expect(popup.getByTestId("workspace-file-panel")).toBeVisible();
 
-  const alternateThreadId = `${threadId}-alternate`;
-  await seedGatewayThread(page, {
-    hostId: host.id,
-    projectId: project.id,
-    host: { ...host },
-    project: { ...project },
-    threadId: alternateThreadId,
-    currentThread: { id: alternateThreadId, name: "Alternate File Thread", cwd: projectPath },
-  });
-  await expect.poll(() => popup.isClosed()).toBe(true);
-  await expect(page.getByTestId("chat-main-pane")).toBeVisible();
-
   let reopenedPopouts = 0;
   page.on("popup", () => reopenedPopouts++);
-  await seedGatewayThread(page, {
-    hostId: host.id,
-    projectId: project.id,
-    host: { ...host },
-    project: { ...project },
-    threadId,
-    currentThread: { id: threadId, name: "File Preview Thread", cwd: projectPath },
-    history: latestHistory,
-  });
-  await expect(page.getByTestId("chat-main-pane")).toBeVisible();
-  await expect(panel).toBeVisible();
-  const [returnedAgentBox, returnedFilesBox] = await Promise.all([
-    page.getByTestId("chat-main-pane").boundingBox(),
-    panel.boundingBox(),
-  ]);
-  const returnedAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
-  if (returnedAgentRenderer === null) throw new Error("Returned Agent renderer is missing");
-  const reusedAgentRenderer = await restoredAgentRenderer.evaluate(
-    (previous, current) => previous === current,
-    returnedAgentRenderer,
-  );
-  // renderer="always" is valuable while tabs move inside one thread, but reusing the same Agent
-  // subtree across thread-scoped layouts can leave Dockview's overlay attached to the old group.
-  // A large history makes that asynchronous move visible as a half-height pane that only reload
-  // repairs. Cross-thread restoration must create a fresh Agent renderer, then fill its new group.
-  expect(reusedAgentRenderer).toBe(false);
-  expect(Math.abs(returnedAgentBox!.height - returnedFilesBox!.height)).toBeLessThan(2);
-  await restoredAgentRenderer.dispose();
-  await returnedAgentRenderer.dispose();
+  let previousAgentRenderer = restoredAgentRenderer;
+  let previousDockRenderer = restoredDockRenderer;
+  const alternateThreadId = `${threadId}-alternate`;
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    await seedGatewayThread(page, {
+      hostId: host.id,
+      projectId: project.id,
+      host: { ...host },
+      project: { ...project },
+      threadId: alternateThreadId,
+      currentThread: { id: alternateThreadId, name: "Alternate File Thread", cwd: projectPath },
+    });
+    if (cycle === 0) await expect.poll(() => popup.isClosed()).toBe(true);
+    await expect(page.getByTestId("chat-main-pane")).toBeVisible();
+
+    const alternateDockRenderer = await page.locator(".gateway-dockview").elementHandle();
+    if (alternateDockRenderer === null) throw new Error("Alternate Dockview renderer is missing");
+    expect(
+      await previousDockRenderer.evaluate(
+        (previous, current) => previous === current,
+        alternateDockRenderer,
+      ),
+    ).toBe(false);
+    await previousDockRenderer.dispose();
+    previousDockRenderer = alternateDockRenderer;
+
+    await seedGatewayThread(page, {
+      hostId: host.id,
+      projectId: project.id,
+      host: { ...host },
+      project: { ...project },
+      threadId,
+      currentThread: { id: threadId, name: "File Preview Thread", cwd: projectPath },
+      history: latestHistory,
+    });
+    await expect(page.getByTestId("chat-main-pane")).toBeVisible();
+    await expect(panel).toBeVisible();
+    const [returnedAgentBox, returnedFilesBox] = await Promise.all([
+      page.getByTestId("chat-main-pane").boundingBox(),
+      panel.boundingBox(),
+    ]);
+    const returnedAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
+    if (returnedAgentRenderer === null) throw new Error("Returned Agent renderer is missing");
+    const returnedDockRenderer = await page.locator(".gateway-dockview").elementHandle();
+    if (returnedDockRenderer === null) throw new Error("Returned Dockview renderer is missing");
+
+    // A workspace scope owns its entire Dockview renderer, not just the Agent subtree. Reusing the
+    // root lets Dockview's renderer="always" overlay queue survive a thread change, so alternating
+    // switches can attach the new Agent to stale group geometry. Requiring a fresh root on every
+    // scope transition exercises Vue's normal unmount boundary and catches that race deterministically.
+    expect(
+      await previousDockRenderer.evaluate(
+        (previous, current) => previous === current,
+        returnedDockRenderer,
+      ),
+    ).toBe(false);
+    expect(
+      await previousAgentRenderer.evaluate(
+        (previous, current) => previous === current,
+        returnedAgentRenderer,
+      ),
+    ).toBe(false);
+    expect(Math.abs(returnedAgentBox!.height - returnedFilesBox!.height)).toBeLessThan(2);
+
+    await previousAgentRenderer.dispose();
+    await previousDockRenderer.dispose();
+    previousAgentRenderer = returnedAgentRenderer;
+    previousDockRenderer = returnedDockRenderer;
+  }
+  await previousAgentRenderer.dispose();
+  await previousDockRenderer.dispose();
   await page.waitForTimeout(300);
   expect(reopenedPopouts).toBe(0);
 });

@@ -6,7 +6,9 @@ import type {
   ProjectRecord,
   ThreadGoalStatus,
   ThreadHistoryState,
+  ThreadTimelineTurn,
 } from "../../../shared/types";
+import { projectThreadTimelineHistory } from "../../../shared/thread-history/timeline";
 import type { ThreadViewState } from "../../../app/stores/gateway/types";
 import {
   defaultGatewayHost,
@@ -40,21 +42,32 @@ interface SeedGatewayThreadInput {
   events?: GatewayEvent[];
   lastEventId?: number;
   eventEpoch?: string;
-  threadViews?: Record<string, ThreadViewState>;
+  threadViews?: Record<
+    string,
+    Omit<ThreadViewState, "timelineTurns"> & { timelineTurns?: ThreadTimelineTurn[] }
+  >;
 }
 
-type SeedGatewayThreadRuntimeInput = Omit<SeedGatewayThreadInput, "currentThread" | "threads"> & {
+type SeedGatewayThreadRuntimeInput = Omit<
+  SeedGatewayThreadInput,
+  "currentThread" | "threads" | "threadViews"
+> & {
   currentThread: GatewayThread | null;
   threads: GatewayThread[];
   defaultHost: HostRecord;
   defaultProject: ProjectRecord;
   defaultHistory: ThreadHistoryState | null;
+  threadViews?: Record<string, ThreadViewState>;
 };
 
 export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInput) {
   const hostId = input.hostId ?? 1;
   const projectId = input.projectId ?? null;
   const threadId = input.threadId ?? null;
+  const defaultHistory =
+    input.threadId !== null && input.threadId !== undefined && input.threadId !== ""
+      ? emptyThreadHistory(input.threadId)
+      : null;
   const runtimeInput: SeedGatewayThreadRuntimeInput = {
     ...input,
     currentThread:
@@ -69,10 +82,18 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     ),
     defaultHost: defaultGatewayHost(hostId),
     defaultProject: defaultGatewayProject(hostId, input.projectId ?? 1),
-    defaultHistory:
-      input.threadId !== null && input.threadId !== undefined && input.threadId !== ""
-        ? emptyThreadHistory(input.threadId)
-        : null,
+    defaultHistory,
+    threadViews: Object.fromEntries(
+      Object.entries(input.threadViews ?? {}).map(([key, view]) => [
+        key,
+        {
+          ...view,
+          timelineTurns:
+            view.timelineTurns ??
+            (view.history === null ? [] : projectThreadTimelineHistory(view.history).thread.turns),
+        },
+      ]),
+    ),
   };
   await page.evaluate((input: SeedGatewayThreadRuntimeInput) => {
     const driver = window.__codexGatewayE2e;
@@ -94,7 +115,7 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     navigation.selectedThreadId = threadId;
     const hasThread = threadId !== null && threadId !== "";
     views.currentThread = hasThread ? input.currentThread : null;
-    views.history = input.history ?? (hasThread ? input.defaultHistory : null);
+    views.setHistory(input.history ?? (hasThread ? input.defaultHistory : null));
     views.events = input.events ?? [];
     views.lastEventId = input.lastEventId ?? views.lastEventId;
     views.eventEpoch = input.eventEpoch ?? views.eventEpoch;
@@ -142,9 +163,9 @@ export async function appendAgentStreamLines(
         { length: input.count },
         (_, index) => `${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n\n");
-    views.history = {
+    views.setHistory({
       thread: { ...history.thread, turns: [...history.thread.turns] },
-    };
+    });
   }, input);
 }
 
@@ -168,9 +189,9 @@ export async function appendAgentTimelineItem(
         text: input.text,
       },
     ];
-    views.history = {
+    views.setHistory({
       thread: { ...history.thread, turns: [...history.thread.turns] },
-    };
+    });
   }, input);
 }
 
@@ -195,9 +216,9 @@ export async function appendFileDiffLines(
         { length: input.count },
         (_, index) => `+${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n");
-    views.history = {
+    views.setHistory({
       thread: { ...history.thread, turns: [...history.thread.turns] },
-    };
+    });
   }, input);
 }
 
@@ -221,9 +242,9 @@ export async function appendCommandOutputLines(
         { length: input.count },
         (_, index) => `${input.prefix} ${String(index + 1).padStart(3, "0")}`,
       ).join("\n");
-    views.history = {
+    views.setHistory({
       thread: { ...history.thread, turns: [...history.thread.turns] },
-    };
+    });
   }, input);
 }
 
@@ -254,9 +275,9 @@ export async function completeTurnWithFinalAgentMessage(
       text: input.finalText,
     });
     turn.items = items;
-    views.history = {
+    views.setHistory({
       thread: { ...history.thread, turns: [...history.thread.turns] },
-    };
+    });
   }, input);
 }
 
@@ -341,7 +362,7 @@ export async function cacheSelectedThreadAndOpenThread(
       views.cacheSelectedThreadView();
       navigation.selectedThreadId = input.otherThreadId;
       views.currentThread = otherThread;
-      views.history = { thread: { id: input.otherThreadId, turns: [] } };
+      views.setHistory({ thread: { id: input.otherThreadId, turns: [] } });
       await views.openThread(input.threadId, {
         hostId: input.hostId,
         projectId: input.projectId ?? null,
@@ -365,8 +386,9 @@ export async function setThreadViewHistoryAndStatus(
     { id: input.threadId },
     { hostId: input.hostId, projectId: null },
   );
+  const timelineTurns = projectThreadTimelineHistory(input.history).thread.turns;
   await page.evaluate(
-    ({ input, currentThread }) => {
+    ({ input, currentThread, timelineTurns }) => {
       const driver = window.__codexGatewayE2e;
       if (!driver) throw new Error("Gateway E2E driver is unavailable");
       const { runtime, views } = driver;
@@ -378,6 +400,7 @@ export async function setThreadViewHistoryAndStatus(
         threadId: input.threadId,
         currentThread: previous?.currentThread ?? currentThread,
         history: input.history,
+        timelineTurns,
         events: previous?.events ?? [],
         olderTurnsCursor: previous?.olderTurnsCursor ?? null,
         newerTurnsCursor: previous?.newerTurnsCursor ?? null,
@@ -392,7 +415,7 @@ export async function setThreadViewHistoryAndStatus(
         });
       }
     },
-    { input, currentThread },
+    { input, currentThread, timelineTurns },
   );
 }
 

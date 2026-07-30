@@ -14,7 +14,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { applyAppServerEvent } from "../event-handlers";
 import { gatewayDomainEvents } from "../domain-events";
-import { patchThreadView } from "../thread-open/thread-view-cache";
+import { patchThreadView, setSelectedThreadHistory } from "../thread-open/thread-view-cache";
 import { pinnedKey } from "../thread-utils/identity";
 
 type HistoryUpdate = (
@@ -124,9 +124,8 @@ function applyThreadHistoryUpdates(hostId: number, threadId: string, updates: Hi
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();
   if (navigation.selectedHostId === hostId && navigation.selectedThreadId === threadId) {
-    views.history = updates.reduce(
-      (history, update) => update(history, views.currentThread),
-      views.history,
+    setSelectedThreadHistory(
+      updates.reduce((history, update) => update(history, views.currentThread), views.history),
     );
     views.cacheSelectedThreadView();
     return;

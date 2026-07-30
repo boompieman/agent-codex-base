@@ -18,6 +18,7 @@ export function applyOpenedThreadResult(threadId: string, result: ThreadOpenResu
   const views = useGatewayThreadViewStore();
   views.currentThread = result.thread;
   views.history = result.history;
+  views.timelineTurns = result.history.thread.turns;
   if (result.projectId !== null && result.projectId !== undefined) {
     navigation.selectedProjectId = result.projectId;
   }
@@ -45,6 +46,7 @@ export function applyThreadSnapshotResult(threadId: string, result: ThreadSnapsh
   const views = useGatewayThreadViewStore();
   views.currentThread = result.thread;
   views.history = result.history;
+  views.timelineTurns = result.history.thread.turns;
   if (result.projectId !== null && result.projectId !== undefined) {
     navigation.selectedProjectId = result.projectId;
   }
@@ -65,6 +67,7 @@ export function applyStartedThreadResult(result: ThreadOpenResult) {
   const threadId = result.thread.id;
   views.currentThread = result.thread;
   views.history = result.history;
+  views.timelineTurns = result.history.thread.turns;
   navigation.selectedThreadId = threadId;
   applyCommonThreadResult(threadId, result, result.lastEventId);
   return threadId;

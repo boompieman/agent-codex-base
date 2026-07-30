@@ -8,7 +8,6 @@ import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layou
 export function useDockLayoutPersistence(options: {
   api: Ref<DockviewApi | null>;
   activeScopeKey: () => string;
-  isSwitchingScope: () => boolean;
 }) {
   const workspaceLayout = useGatewayWorkspaceLayoutStore();
   let lastDockedLayout: SerializedDockview | null = null;
@@ -33,13 +32,11 @@ export function useDockLayoutPersistence(options: {
   }
 
   function scheduleLayoutSave() {
-    if (options.isSwitchingScope()) return;
     const layout = captureDockedLayout();
     if (layout) void saveLayout(options.activeScopeKey(), layout);
   }
 
   function captureBeforePopout() {
-    if (options.isSwitchingScope()) return;
     const api = options.api.value;
     if (!api || api.getPopouts().length > 0) return;
     lastDockedLayout = api.toJSON();

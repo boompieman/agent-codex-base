@@ -165,6 +165,14 @@ export interface ThreadHistoryState {
   thread: ThreadHistoryThread;
 }
 
+/** History after the Gateway boundary has removed items without a registered timeline presenter. */
+export interface ThreadTimelineHistoryState extends ThreadHistoryState {
+  thread: {
+    id: string;
+    turns: ThreadTimelineTurn[];
+  };
+}
+
 export interface ThreadFileChange extends Record<string, unknown> {
   path?: string | null;
   filePath?: string | null;

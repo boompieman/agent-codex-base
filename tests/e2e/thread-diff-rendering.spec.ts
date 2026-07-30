@@ -4,6 +4,7 @@ import { appendFileDiffLines, seedGatewayThread } from "./helpers/gateway-store"
 import { diffScrollLeft, setDiffScrollLeft } from "./helpers/scroll";
 import type { ThreadHistoryState } from "../../shared/types";
 import type { ThreadViewState } from "../../app/stores/gateway/types";
+import { projectThreadTimelineHistory } from "../../shared/thread-history/timeline";
 import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 
 test("file diff blocks can collapse and expand after virtual timeline measurement", async ({
@@ -279,12 +280,14 @@ test("switching threads keeps asynchronously rendered diff content in normal flo
 });
 
 function cachedThreadView(threadId: string, history: ThreadHistoryState): ThreadViewState {
+  const timelineTurns = projectThreadTimelineHistory(history).thread.turns;
   return {
     hostId: 1,
     projectId: 1,
     threadId,
     currentThread: gatewayThreadFixture({ id: threadId }, { projectId: 1 }),
     history,
+    timelineTurns,
     events: [],
     olderTurnsCursor: null,
     newerTurnsCursor: null,

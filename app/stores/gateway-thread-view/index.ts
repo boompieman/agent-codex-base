@@ -1,6 +1,12 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import type { GatewayEvent, GatewayThread, ThreadHistoryState } from "~~/shared/types";
+import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
+import type {
+  GatewayEvent,
+  GatewayThread,
+  ThreadHistoryState,
+  ThreadTimelineTurn,
+} from "~~/shared/types";
 import type { SubAgentPanelState, ThreadViewState } from "@/stores/gateway/types";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { createThreadLiveEventActions } from "./actions/live-events";
@@ -13,6 +19,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
   const viewEpoch = ref(0);
   const currentThread = ref<GatewayThread | null>(null);
   const history = ref<ThreadHistoryState | null>(null);
+  const timelineTurns = ref<ThreadTimelineTurn[]>([]);
   const events = ref<GatewayEvent[]>([]);
   const loading = ref(false);
   const loadingOlderTurns = ref(false);
@@ -38,9 +45,25 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     );
   });
 
+  function setHistory(nextHistory: ThreadHistoryState | null) {
+    if (nextHistory === null) {
+      history.value = null;
+      timelineTurns.value = [];
+      return;
+    }
+    // Server snapshots and pages already arrive projected. Client reducers can still create a new
+    // generic history object for live deltas or optimistic input, so normalize only at that data
+    // mutation boundary. Thread activation restores both refs directly from threadViews and must
+    // not call this function merely because the selected route changed.
+    const projected = projectThreadTimelineHistory(nextHistory);
+    history.value = projected;
+    timelineTurns.value = projected.thread.turns;
+  }
+
   function resetCurrentView() {
     currentThread.value = null;
     history.value = null;
+    timelineTurns.value = [];
     events.value = [];
     loading.value = false;
     loadingOlderTurns.value = false;
@@ -65,6 +88,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     viewEpoch,
     currentThread,
     history,
+    timelineTurns,
     events,
     loading,
     loadingOlderTurns,
@@ -74,6 +98,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     eventEpoch,
     scrollToLatestToken,
     visibleSubAgentPanels,
+    setHistory,
     resetCurrentView,
     resetState,
     ...actions,

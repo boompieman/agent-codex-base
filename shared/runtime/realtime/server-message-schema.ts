@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { RealtimeServerMessage } from "../../types";
+import { threadTimelineItemTypes } from "../../thread-history/types";
 import { gatewayThreadSchema, rpcEnvelopeSchema, threadGoalSchema } from "../app-server";
 import { realtimeClientMessageSchema } from "./client-message-schema";
 import {
@@ -14,14 +15,14 @@ import {
 const projectedHistoryItemSchema = z
   .object({
     id: z.union([z.string(), z.number()]).nullish(),
-    type: z.string().nullish(),
+    type: z.enum(threadTimelineItemTypes),
   })
   .loose();
 const projectedHistoryTurnSchema = z
   .object({
-    id: z.union([z.string(), z.number()]).nullish(),
+    id: nonEmptyString,
     status: z.union([z.string(), z.object({ type: z.unknown().optional() }).loose()]).nullish(),
-    items: z.array(projectedHistoryItemSchema).optional(),
+    items: z.array(projectedHistoryItemSchema),
     itemsView: z.enum(["notLoaded", "summary", "full"]).optional(),
     startedAt: z.union([z.number(), z.string()]).nullish(),
     completedAt: z.union([z.number(), z.string()]).nullish(),

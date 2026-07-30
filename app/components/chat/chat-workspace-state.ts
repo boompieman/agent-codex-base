@@ -1,7 +1,5 @@
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
-import { threadTurnsFromHistory } from "~~/shared/thread-history/shape";
-import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
 import type { GatewayThread, ThreadHistoryState } from "~~/shared/types";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
@@ -13,12 +11,9 @@ export function useChatWorkspaceState() {
   const navigationRefs = storeToRefs(useGatewayNavigationStore());
   const runtime = useGatewayThreadRuntimeStore();
   const viewRefs = storeToRefs(useGatewayThreadViewStore());
-  const historyTurns = computed(() =>
-    threadTurnsFromHistory(viewRefs.history.value).flatMap((turn) => {
-      const timelineTurn = asThreadTimelineTurn(turn);
-      return timelineTurn ? [timelineTurn] : [];
-    }),
-  );
+  // The backend projects snapshot history once and realtime reducers update this Pinia array only
+  // when data changes. A thread switch must select the cached reference, not rescan every item.
+  const historyTurns = computed(() => viewRefs.timelineTurns.value);
   const selectedThreadViewReady = computed(() =>
     isSelectedThreadViewReady({
       selectedThreadId: navigationRefs.selectedThreadId.value,

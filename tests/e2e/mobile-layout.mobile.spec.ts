@@ -484,6 +484,8 @@ test("opens sidebar context actions with long press on mobile", async ({
 
 test("opens and closes the subagent side panel on mobile", async ({ page }) => {
   await openApp(page);
+  const threadId = "mobile-parent-thread";
+  const subThreadId = "mobile-subagent-thread";
   const parentThread = gatewayThreadFixture({ id: "mobile-parent-thread", name: "Mobile Parent" });
   const subAgentThread = gatewayThreadFixture({
     id: "mobile-subagent-thread",
@@ -491,80 +493,65 @@ test("opens and closes the subagent side panel on mobile", async ({ page }) => {
     agentNickname: "Scout",
     agentRole: "explorer",
   });
-  await page.evaluate(
-    ({ host, parentThread, subAgentThread }) => {
-      const driver = window.__codexGatewayE2e;
-      if (!driver) throw new Error("Gateway E2E driver is unavailable");
-      const { catalog, navigation, views } = driver;
-      const threadId = "mobile-parent-thread";
-      const subThreadId = "mobile-subagent-thread";
-      catalog.hosts = [host];
-      navigation.selectedHostId = 1;
-      navigation.selectedThreadId = threadId;
-      views.currentThread = parentThread;
-      views.history = {
-        thread: {
-          id: threadId,
-          turns: [
-            {
-              id: "mobile-parent-turn",
-              status: "running",
-              items: [
-                {
-                  id: "mobile-subagent-activity",
-                  type: "subAgentActivity",
-                  kind: "started",
-                  agentThreadId: subThreadId,
-                  agentPath: subThreadId,
-                },
-              ],
-            },
-          ],
-        },
-      };
-      views.threadViews = {
-        "1:mobile-subagent-thread": {
-          hostId: 1,
-          projectId: null,
-          threadId: subThreadId,
-          currentThread: subAgentThread,
-          history: {
-            thread: {
-              id: subThreadId,
-              turns: [
-                {
-                  id: "mobile-sub-turn",
-                  status: "completed",
-                  items: [
-                    {
-                      id: "mobile-sub-agent",
-                      type: "agentMessage",
-                      phase: "final_answer",
-                      text: "Mobile subagent timeline is readable.",
-                    },
-                  ],
-                },
-              ],
-            },
+  await seedGatewayThread(page, {
+    host: { ...defaultGatewayHost(1), name: "Mobile Host" },
+    threadId,
+    currentThread: parentThread,
+    history: {
+      thread: {
+        id: threadId,
+        turns: [
+          {
+            id: "mobile-parent-turn",
+            status: "running",
+            items: [
+              {
+                id: "mobile-subagent-activity",
+                type: "subAgentActivity",
+                kind: "started",
+                agentThreadId: subThreadId,
+                agentPath: subThreadId,
+              },
+            ],
           },
-          events: [],
-          olderTurnsCursor: null,
-          newerTurnsCursor: null,
-          lastEventId: 0,
-          eventEpoch: "e2e-event-epoch",
-          loading: false,
-          error: null,
+        ],
+      },
+    },
+    threadViews: {
+      "1:mobile-subagent-thread": {
+        hostId: 1,
+        projectId: null,
+        threadId: subThreadId,
+        currentThread: subAgentThread,
+        history: {
+          thread: {
+            id: subThreadId,
+            turns: [
+              {
+                id: "mobile-sub-turn",
+                status: "completed",
+                items: [
+                  {
+                    id: "mobile-sub-agent",
+                    type: "agentMessage",
+                    phase: "final_answer",
+                    text: "Mobile subagent timeline is readable.",
+                  },
+                ],
+              },
+            ],
+          },
         },
-      };
-      driver.bootstrap.initializing = false;
-      views.loading = false;
+        events: [],
+        olderTurnsCursor: null,
+        newerTurnsCursor: null,
+        lastEventId: 0,
+        eventEpoch: "e2e-event-epoch",
+        loading: false,
+        error: null,
+      },
     },
-    {
-      host: { ...defaultGatewayHost(1), name: "Mobile Host" },
-      parentThread,
-      subAgentThread,
-    },
-  );
+  });
 
   await openIntermediateSteps(page);
   await page.getByTestId("open-subagent-panel").click();
