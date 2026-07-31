@@ -2,10 +2,13 @@ import type { GatewayEvent, HostRecord, RealtimeClientMessage } from "~~/shared/
 import { requireRecord } from "../../http/validation/common";
 import { threadOpenSchema, threadStartSchema } from "../../http/validation/threads";
 import { threadBroker } from "../../runtime/broker";
+import type { ThreadSubscriptionLease } from "../../runtime/controller-registry";
 import { threadRuntimeEvents } from "../../runtime/thread-runtime-events";
 import { gatewayEventStore } from "../../state/gateway-events";
 import { hostStore } from "../../state/hosts";
 import { bindGatewayUser } from "../../state/memory";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { isThreadActiveStatus } from "~~/shared/thread-runtime-status";
 import {
   runPeerScoped,
   sendRealtimePeerMessage,
@@ -61,7 +64,14 @@ export async function activateThread(
     eventEpoch,
     ...result,
   });
-  subscribeThreadEvents(peer, host, input.threadId, lastEventId, eventEpoch);
+  subscribeThreadEvents(
+    peer,
+    host,
+    input.threadId,
+    lastEventId,
+    eventEpoch,
+    result.runtimeStatus === "running",
+  );
 }
 
 export async function startThread(
@@ -94,7 +104,6 @@ export async function startThread(
     lastEventId,
     eventEpoch,
   });
-  subscribeThreadEvents(peer, host, threadId, lastEventId, eventEpoch);
 }
 
 export function unsubscribeThread(
@@ -119,6 +128,7 @@ function subscribeThreadEvents(
   threadId: string,
   afterId: number,
   afterEpoch?: string,
+  initiallyRunning = threadBroker.isThreadRunning(host.id, threadId),
 ) {
   const hostId = host.id;
   const eventEpoch = gatewayEventStore.epoch(hostId);
@@ -126,7 +136,6 @@ function subscribeThreadEvents(
   const key = threadTopicKey(hostId, threadId);
   state.threadUnsubscribers.get(key)?.();
   state.threadUnsubscribers.delete(key);
-
   // A first subscription has no server epoch yet and starts at zero, so it may consume the
   // current retained stream directly. A non-zero cursor without an epoch cannot prove that its
   // ids belong to this Host generation and must refresh from an authoritative snapshot.
@@ -176,10 +185,37 @@ function subscribeThreadEvents(
 
   let replaying = true;
   const liveQueue: GatewayEvent[] = [];
+  let upstreamLease: ThreadSubscriptionLease | null = null;
+
+  const ensureUpstreamSubscription = () => {
+    if (upstreamLease !== null) return;
+    const lease = threadBroker.retainUpstreamSubscription(host, threadId, "browser");
+    upstreamLease = lease;
+    void runPeerScoped(peer, () =>
+      lease.ready.catch((error: unknown) => {
+        threadRuntimeEvents.record(hostId, threadId, "gateway/error", {
+          method: "gateway/error",
+          params: {
+            message: error instanceof Error ? error.message : "Failed to subscribe thread upstream",
+          },
+        });
+        if (upstreamLease === lease) releaseUpstreamSubscription();
+      }),
+    );
+  };
+
+  const releaseUpstreamSubscription = () => {
+    upstreamLease?.release();
+    upstreamLease = null;
+  };
+
+  if (initiallyRunning) ensureUpstreamSubscription();
+
   const unsubscribe = threadRuntimeEvents.subscribe(
     hostId,
     threadId,
     bindGatewayUser((event) => {
+      updateBrowserUpstreamLease(event, ensureUpstreamSubscription, releaseUpstreamSubscription);
       if (replaying) {
         liveQueue.push(event);
         return;
@@ -187,26 +223,14 @@ function subscribeThreadEvents(
       sendOnce(event);
     }),
   );
-  const upstreamLease = threadBroker.retainUpstreamSubscription(host, threadId);
   releaseSubscription = () => {
     unsubscribe();
-    upstreamLease.release();
+    releaseUpstreamSubscription();
     if (state.threadUnsubscribers.get(key) === releaseSubscription) {
       state.threadUnsubscribers.delete(key);
     }
   };
   state.threadUnsubscribers.set(key, releaseSubscription);
-
-  void runPeerScoped(peer, () =>
-    upstreamLease.ready.catch((error: unknown) => {
-      threadRuntimeEvents.record(hostId, threadId, "gateway/error", {
-        method: "gateway/error",
-        params: {
-          message: error instanceof Error ? error.message : "Failed to subscribe thread upstream",
-        },
-      });
-    }),
-  );
 
   // Each thread cache is bounded to 500 events. Replay the complete retained window rather than
   // silently stopping at an arbitrary first 200; selected views refresh their authoritative
@@ -219,4 +243,25 @@ function subscribeThreadEvents(
     sendOnce(event);
   }
   liveQueue.length = 0;
+}
+
+function updateBrowserUpstreamLease(event: GatewayEvent, retain: () => void, release: () => void) {
+  if (event.method === "turn/started") {
+    retain();
+    return;
+  }
+  if (event.method === "turn/completed") {
+    // The app-server emits turn/completed before it finishes persisting a first-turn rollout and
+    // before the authoritative thread status becomes idle. Keep the lease until
+    // thread/status/changed confirms the thread is no longer active so final persistence and Goal
+    // continuation notifications remain on the same uninterrupted subscription.
+    return;
+  }
+  if (event.method !== "thread/status/changed") return;
+  const params = recordFromUnknown(event.payload.params);
+  if (isThreadActiveStatus(params?.status)) {
+    retain();
+    return;
+  }
+  release();
 }

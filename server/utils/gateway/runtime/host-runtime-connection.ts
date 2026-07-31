@@ -2,7 +2,6 @@ import { hostLifecycleBus } from "../state/host-events";
 import { runWithGatewayUser } from "../state/memory";
 import { threadBroker } from "./broker";
 import type { HostRuntimeSlot } from "./host-runtime-slot";
-import { warmPinnedThreads } from "./pinned-thread-warmer";
 import { refreshRunningThreadsForHost } from "./running-thread-sync";
 import { runtimeLog } from "./runtime-log";
 import { activeMainThreadMonitor } from "./active-main-thread-monitor";
@@ -19,7 +18,6 @@ export async function connectHostRuntime(slot: HostRuntimeSlot, isCurrent: () =>
       userId: slot.userId,
       hostId: slot.hostId,
       hostName: slot.host.name,
-      pinnedThreads: slot.pinnedThreads.filter((thread) => thread.hostId === slot.hostId).length,
     });
     const client = await threadBroker.getHostClient(slot.host);
     if (!isCurrent()) return;
@@ -37,11 +35,6 @@ export async function connectHostRuntime(slot: HostRuntimeSlot, isCurrent: () =>
     await refreshRunningThreadsForHost({
       host: slot.host,
       reason: "host-connected",
-    });
-    if (!isCurrent()) return;
-    await warmPinnedThreads({
-      host: slot.host,
-      pinnedThreads: slot.pinnedThreads,
     });
     if (!isCurrent()) return;
     runtimeLog("host background ready", {

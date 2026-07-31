@@ -79,15 +79,11 @@ class ActiveMainThreadMonitor {
     if (method === "thread/started") {
       const thread = startedThread(message);
       if (thread !== null) threadMetadataStore.record(context.host.id, null, thread);
-      if (thread !== null && isAppServerSubAgentThread(thread)) return;
-      void this.observeThread(context, threadId).catch((error) => {
-        runtimeLog("active main thread subscribe failed", {
-          hostId: context.host.id,
-          hostName: context.host.name,
-          threadId,
-          message: messageFromError(error),
-        });
-      });
+      // `thread/started` also announces newly-created idle threads. Resuming every announcement
+      // would materialize conversations that no Gateway browser is using. Status broadcasts cover
+      // later turns, so only an already-active main thread is eligible for monitor ownership here.
+      if (thread === null || isAppServerSubAgentThread(thread) || !isActive(thread)) return;
+      this.scheduleObservation(context, threadId, "active main thread subscribe failed");
       return;
     }
 
@@ -97,23 +93,16 @@ class ActiveMainThreadMonitor {
         // Existing idle threads do not emit thread/started for every new turn. The global status
         // broadcast is therefore the ownership signal for work started by VS Code and other
         // app-server clients; resume validates main-vs-subagent before retaining the subscription.
-        void this.observeThread(context, threadId).catch((error) => {
-          runtimeLog("active main thread status subscribe failed", {
-            hostId: context.host.id,
-            hostName: context.host.name,
-            threadId,
-            message: messageFromError(error),
-          });
-        });
+        this.scheduleObservation(context, threadId, "active main thread status subscribe failed");
       } else {
         void this.releaseThread(context, threadId);
       }
       return;
     }
 
-    if (method === "turn/completed") {
-      void this.releaseThread(context, threadId);
-    }
+    // Do not release on turn/completed. App-server finalizes persistence before broadcasting the
+    // subsequent non-active thread/status/changed event; unsubscribing in between can miss the
+    // remaining persistence/Goal notifications. The status event is the ownership edge.
   }
 
   adoptSubscribedThread(context: MonitorContext, threadId: string) {
@@ -133,6 +122,18 @@ class ActiveMainThreadMonitor {
       hostName: context.host.name,
       threadId,
     });
+  }
+
+  observeKnownActiveThread(context: MonitorContext, threadId: string) {
+    return this.observeThread(context, threadId);
+  }
+
+  hasObservedThread(hostId: number, threadId: string) {
+    return this.observedByHost.get(this.hostKey(hostId))?.has(threadId) === true;
+  }
+
+  observedCount(hostId: number, userId = requiredUserId()) {
+    return this.observedByHost.get(this.hostKey(hostId, userId))?.size ?? 0;
   }
 
   reclaimSubscribedThread(hostId: number, threadId: string) {
@@ -188,6 +189,23 @@ class ActiveMainThreadMonitor {
     });
     this.pendingByThread.set(key, subscription);
     return subscription;
+  }
+
+  private scheduleObservation(context: MonitorContext, threadId: string, failureMessage: string) {
+    // The Host session first routes a global notification to this monitor and then records it in
+    // threadRuntimeEvents for browser peers. Deferring one microtask lets a browser's event
+    // listener acquire its explicit lease first; otherwise both paths can issue thread/resume for
+    // the same active thread on the shared RPC connection.
+    queueMicrotask(() => {
+      void this.observeThread(context, threadId).catch((error) => {
+        runtimeLog(failureMessage, {
+          hostId: context.host.id,
+          hostName: context.host.name,
+          threadId,
+          message: messageFromError(error),
+        });
+      });
+    });
   }
 
   private async resumeMonitorOnlyThread(

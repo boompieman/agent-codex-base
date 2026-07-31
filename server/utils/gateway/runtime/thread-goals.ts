@@ -18,39 +18,39 @@ export class ThreadGoalService {
       tokenBudget?: number | null;
     },
   ) {
-    const controller = await this.registry.getController(host, threadId);
-    await controller.ensureSubscribed();
     const params: Record<string, unknown> = { threadId };
     if ("objective" in input) params.objective = input.objective;
     if ("status" in input) params.status = input.status;
     if ("tokenBudget" in input) params.tokenBudget = input.tokenBudget;
-    return controller.enqueue(() =>
-      controller.client.request("thread/goal/set", params, 120_000, parseThreadGoalSetResponse),
+    return this.registry.withScopedSubscription(host, threadId, (controller) =>
+      controller.enqueue(() =>
+        controller.client.request("thread/goal/set", params, 120_000, parseThreadGoalSetResponse),
+      ),
     );
   }
 
   async getThreadGoal(host: HostRecord, threadId: string) {
-    const controller = await this.registry.getController(host, threadId);
-    await controller.ensureSubscribed();
-    return controller.enqueue(() =>
-      controller.client.request(
-        "thread/goal/get",
-        { threadId },
-        120_000,
-        parseThreadGoalGetResponse,
+    return this.registry.withScopedSubscription(host, threadId, (controller) =>
+      controller.enqueue(() =>
+        controller.client.request(
+          "thread/goal/get",
+          { threadId },
+          120_000,
+          parseThreadGoalGetResponse,
+        ),
       ),
     );
   }
 
   async clearThreadGoal(host: HostRecord, threadId: string) {
-    const controller = await this.registry.getController(host, threadId);
-    await controller.ensureSubscribed();
-    return controller.enqueue(() =>
-      controller.client.request(
-        "thread/goal/clear",
-        { threadId },
-        120_000,
-        parseThreadGoalClearResponse,
+    return this.registry.withScopedSubscription(host, threadId, (controller) =>
+      controller.enqueue(() =>
+        controller.client.request(
+          "thread/goal/clear",
+          { threadId },
+          120_000,
+          parseThreadGoalClearResponse,
+        ),
       ),
     );
   }

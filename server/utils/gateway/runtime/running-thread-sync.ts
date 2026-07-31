@@ -1,10 +1,10 @@
 import type { HostRecord } from "~~/shared/types";
-import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { runtimeStatusFromSnapshotState } from "~~/shared/thread-runtime-status";
 import { gatewayEventStore } from "../state/gateway-events";
 import { threadSnapshotStore } from "../state/thread-snapshots";
 import { threadBroker } from "./broker";
 import { runtimeLog } from "./runtime-log";
+import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 
 export const RUNNING_THREAD_STALE_MS = 90_000;
 
@@ -37,14 +37,20 @@ export async function refreshRunningThreadsForHost({
 
   let refreshed = 0;
   let failed = 0;
+  const client = await threadBroker.getHostClient(host);
   for (const candidate of candidates) {
     try {
-      await threadBroker.refreshThreadState(
-        host,
-        candidate.threadId,
-        candidate.projectId,
-        INITIAL_TURN_PAGE_LIMIT,
-      );
+      const result = await threadBroker.refreshThreadRuntimeStatus(host, candidate.threadId);
+      if (result.status === "running") {
+        await activeMainThreadMonitor.observeKnownActiveThread(
+          {
+            host,
+            client,
+            hasController: (threadId) => threadBroker.hasController(host.id, threadId),
+          },
+          candidate.threadId,
+        );
+      }
       refreshed += 1;
     } catch (error) {
       failed += 1;
