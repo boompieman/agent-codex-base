@@ -448,6 +448,7 @@ done
     page.getByTestId("chat-main-pane").boundingBox(),
     panel.boundingBox(),
   ]);
+  await assertDockviewPanelsFillHost(page);
   const restoredDockRatio =
     restoredAgentDockBox!.width / (restoredAgentDockBox!.width + restoredFilesDockBox!.width);
   expect(Math.abs(restoredDockRatio - dockWidthRatio)).toBeLessThan(0.08);
@@ -515,6 +516,7 @@ done
       page.getByTestId("chat-main-pane").boundingBox(),
       panel.boundingBox(),
     ]);
+    await assertDockviewPanelsFillHost(page);
     const returnedAgentRenderer = await page.getByTestId("chat-main-pane").elementHandle();
     if (returnedAgentRenderer === null) throw new Error("Returned Agent renderer is missing");
     const returnedDockRenderer = await page.locator(".gateway-dockview").elementHandle();
@@ -563,4 +565,21 @@ function filesWorkspaceTab(page: import("@playwright/test").Page) {
 
 function fileTab(page: import("@playwright/test").Page, path: string) {
   return page.locator(`[data-testid="file-workspace-tab"][data-file-path=${JSON.stringify(path)}]`);
+}
+
+async function assertDockviewPanelsFillHost(page: import("@playwright/test").Page) {
+  const host = page.locator(".gateway-dockview");
+  await expect
+    .poll(async () => {
+      const hostBox = await host.boundingBox();
+      const currentAgentBox = await page.getByTestId("chat-main-pane").boundingBox();
+      const currentFilesBox = await page.getByTestId("workspace-file-panel").boundingBox();
+      if (!hostBox || !currentAgentBox || !currentFilesBox) return false;
+      const hostBottom = hostBox.y + hostBox.height;
+      return (
+        Math.abs(currentAgentBox.y + currentAgentBox.height - hostBottom) < 2 &&
+        Math.abs(currentFilesBox.y + currentFilesBox.height - hostBottom) < 2
+      );
+    })
+    .toBe(true);
 }
