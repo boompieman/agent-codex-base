@@ -31,8 +31,7 @@ class ThreadBroker {
     const client = await this.registry.getHostClient(host);
     const result = await client.request("thread/start", params);
     const started = this.openService.startedThreadResult(host, projectId, result);
-    const controller = await this.registry.attachStartedThread(host, started.threadId, client);
-    controller.setOpenSnapshot(started.snapshot);
+    await this.registry.retainStartedThreadSubscription(host, started.threadId);
     return started.result;
   }
 
@@ -104,10 +103,6 @@ class ThreadBroker {
     return this.historyReader.listThreadTurns(host, threadId, params);
   }
 
-  async getController(host: HostRecord, threadId: string) {
-    return this.registry.getController(host, threadId);
-  }
-
   async getHostClient(host: HostRecord) {
     return this.registry.getHostClient(host);
   }
@@ -120,15 +115,12 @@ class ThreadBroker {
     return this.registry.hasController(hostId, threadId);
   }
 
-  async ensureUpstreamSubscribed(host: HostRecord, threadId: string) {
-    const controller = await this.registry.getController(host, threadId);
-    if (!controller.isSubscribed()) {
-      await controller.ensureSubscribed();
-    }
+  retainUpstreamSubscription(host: HostRecord, threadId: string, owner: "browser" | "scoped") {
+    return this.registry.retainSubscription(host, threadId, owner);
   }
 
-  retainUpstreamSubscription(host: HostRecord, threadId: string) {
-    return this.registry.retainSubscription(host, threadId);
+  isThreadRunning(hostId: number, threadId: string) {
+    return this.openService.isThreadRunning(hostId, threadId);
   }
 
   async restoreRetainedSubscriptions(host: HostRecord) {
@@ -154,6 +146,10 @@ class ThreadBroker {
     limit = INITIAL_TURN_PAGE_LIMIT,
   ) {
     return this.openService.refreshThreadState(host, threadId, projectId, limit);
+  }
+
+  async refreshThreadRuntimeStatus(host: HostRecord, threadId: string) {
+    return this.openService.refreshThreadRuntimeStatus(host, threadId);
   }
 }
 

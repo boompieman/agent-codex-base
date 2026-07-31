@@ -1,4 +1,4 @@
-import type { HostRecord, PinnedThreadRecord } from "~~/shared/types";
+import type { HostRecord } from "~~/shared/types";
 import { userStore } from "../auth/users";
 import {
   gatewayDatabaseExists,
@@ -66,7 +66,6 @@ class HostRuntimeSupervisor {
     const state = currentGatewayMemoryState();
     this.syncUserConfig(userId, {
       hosts: state.hosts,
-      pinnedThreads: state.pinnedThreads,
     });
   }
 
@@ -85,20 +84,16 @@ class HostRuntimeSupervisor {
         }
         this.syncUserConfig(user.id, {
           hosts: config.hosts,
-          pinnedThreads: config.pinnedThreads ?? [],
         });
       });
     }
   }
 
-  private syncUserConfig(
-    userId: number,
-    config: { hosts: HostRecord[]; pinnedThreads: PinnedThreadRecord[] },
-  ) {
+  private syncUserConfig(userId: number, config: { hosts: HostRecord[] }) {
     const activeHostIds = new Set<number>();
     for (const host of config.hosts) {
       activeHostIds.add(host.id);
-      this.upsertHost(userId, host, config.pinnedThreads);
+      this.upsertHost(userId, host);
     }
 
     for (const [key, slot] of this.slots) {
@@ -108,17 +103,17 @@ class HostRuntimeSupervisor {
     }
   }
 
-  private upsertHost(userId: number, host: HostRecord, pinnedThreads: PinnedThreadRecord[]) {
+  private upsertHost(userId: number, host: HostRecord) {
     const key = this.slotKey(userId, host.id);
     const existing = this.slots.get(key);
     if (existing) {
-      const update = updateHostRuntimeSlot(existing, host, pinnedThreads);
+      const update = updateHostRuntimeSlot(existing, host);
       if (!update.changedHost) {
-        this.scheduleExistingSlotIfNeeded(existing, update.changedPinnedThreads);
+        this.scheduleExistingSlotIfNeeded(existing);
         return;
       }
       this.removeSlot(key, existing);
-      const slot = createHostRuntimeSlot(userId, host, pinnedThreads);
+      const slot = createHostRuntimeSlot(userId, host);
       this.slots.set(key, slot);
       const replacedConnection = existing.connectPromise;
       if (replacedConnection !== null) {
@@ -134,16 +129,16 @@ class HostRuntimeSupervisor {
       return;
     }
 
-    const slot = createHostRuntimeSlot(userId, host, pinnedThreads);
+    const slot = createHostRuntimeSlot(userId, host);
     this.slots.set(key, slot);
     this.scheduleConnect(slot, 0);
   }
 
-  private scheduleExistingSlotIfNeeded(slot: HostRuntimeSlot, changedPinnedThreads: boolean) {
+  private scheduleExistingSlotIfNeeded(slot: HostRuntimeSlot) {
     if (slot.connecting || slot.timer) {
       return;
     }
-    if (changedPinnedThreads || slot.retryCount > 0) {
+    if (slot.retryCount > 0) {
       this.scheduleConnect(slot, 0);
     }
   }

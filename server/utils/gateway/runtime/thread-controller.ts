@@ -1,5 +1,4 @@
 import type { HostRecord, RpcEnvelope } from "~~/shared/types";
-import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
 import {
   runtimeStatusFromAppThreadStatus,
@@ -30,6 +29,7 @@ export class ThreadController {
     subscribed = false,
     private readonly ownsClient = true,
     private readonly onClose?: () => void,
+    private readonly onMaterialized?: () => void,
   ) {
     this.client = client ?? new CodexRpcClient(host);
     this.connected = connected;
@@ -81,6 +81,7 @@ export class ThreadController {
       message,
       createThreadNotificationResolvers(this.client, this.threadId),
     );
+    if (method === "turn/started") this.onMaterialized?.();
   }
 
   handleStderr(text: string) {
@@ -99,12 +100,14 @@ export class ThreadController {
     await this.ensureConnected();
     await this.enqueue(async () => {
       // Check and mutation must share the serialized critical section. Two browser peers can
-      // subscribe in the same tick; checking before enqueue would make both send thread/resume
-      // even though the RPC operations themselves execute sequentially.
+      // acquire the same explicit lease in one tick; checking before enqueue would make both send
+      // thread/resume even though the RPC operations themselves execute sequentially. Cold views
+      // never reach this controller path: they use thread/read plus thread/turns/list.
       if (this.subscribed) return;
-      if (!this.isFreshUnmaterializedThread()) {
-        await this.client.request("thread/resume", { threadId: this.threadId });
-      }
+      // Fresh threads never enter this branch: ControllerRegistry keeps thread/start's implicit
+      // subscription under a bootstrap owner until turn/started. Calling thread/resume before that
+      // point is invalid because app-server has not materialized a rollout yet.
+      await this.client.request("thread/resume", { threadId: this.threadId });
       this.subscribed = true;
     });
   }
@@ -113,25 +116,17 @@ export class ThreadController {
     return this.subscribed;
   }
 
+  adoptExistingSubscription() {
+    if (this.closed) throw new Error("Thread controller is closed");
+    this.subscribed = true;
+  }
+
   shouldTransferSubscriptionToMonitor() {
     return this.subscribed && this.activeMainThread && !this.subAgentThread;
   }
 
-  async resumeWithInitialTurns(limit = INITIAL_TURN_PAGE_LIMIT) {
-    await this.ensureConnected();
-    const resume = await this.enqueue(() =>
-      this.client.request("thread/resume", {
-        threadId: this.threadId,
-        excludeTurns: true,
-        initialTurnsPage: {
-          limit,
-          sortDirection: "desc",
-          itemsView: "full",
-        },
-      }),
-    );
-    this.subscribed = true;
-    return resume;
+  markActiveMainThread() {
+    this.activeMainThread = !this.subAgentThread;
   }
 
   setOpenSnapshot(snapshot: ThreadOpenSnapshot) {
@@ -141,11 +136,6 @@ export class ThreadController {
 
   getOpenSnapshot() {
     return threadSnapshotStore.get(this.host.id, this.threadId);
-  }
-
-  private isFreshUnmaterializedThread() {
-    const snapshot = this.getOpenSnapshot();
-    return Boolean(snapshot && snapshot.history.thread.turns.length === 0);
   }
 
   enqueue<T>(operation: () => Promise<T>) {
@@ -159,7 +149,7 @@ export class ThreadController {
       return;
     }
     this.closed = true;
-    if (this.connected) {
+    if (this.connected && this.subscribed) {
       void this.client
         .request("thread/unsubscribe", { threadId: this.threadId }, 5_000)
         .catch(() => {});
@@ -198,10 +188,10 @@ export class ThreadController {
       this.activeMainThread = !this.subAgentThread;
       return;
     }
-    if (method === "turn/completed") {
-      this.activeMainThread = false;
-      return;
-    }
+    // turn/completed precedes final rollout persistence and the authoritative idle status. Keeping
+    // active ownership until thread/status/changed prevents the zero-lease cleanup from issuing an
+    // early thread/unsubscribe while app-server is still finalizing the Turn.
+    if (method === "turn/completed") return;
     if (method !== "thread/status/changed") return;
     const params = recordFromUnknown(message.params);
     this.activeMainThread = runtimeStatusFromAppThreadStatus(params?.status) === "running";

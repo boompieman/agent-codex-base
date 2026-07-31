@@ -1,4 +1,4 @@
-import type { HostRecord, PinnedThreadRecord } from "~~/shared/types";
+import type { HostRecord } from "~~/shared/types";
 
 export function hostRuntimeFingerprint(host: HostRecord) {
   return JSON.stringify({
@@ -11,16 +11,4 @@ export function hostRuntimeFingerprint(host: HostRecord) {
     password: host.password,
     proxyUrl: host.proxyUrl,
   });
-}
-
-export function pinnedThreadFingerprint(hostId: number, threads: PinnedThreadRecord[]) {
-  return JSON.stringify(
-    threads
-      .filter((thread) => thread.hostId === hostId)
-      .map((thread) => ({
-        threadId: thread.threadId,
-        projectId: thread.projectId ?? null,
-        subtitle: thread.subtitle ?? null,
-      })),
-  );
 }

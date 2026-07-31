@@ -281,20 +281,7 @@ export function parseThreadStartResult(value: unknown) {
   return { raw: result, thread: result.thread };
 }
 
-export function parseThreadResumeResult(value: unknown) {
-  const result = z
-    .object({
-      thread: appServerThreadSchema,
-      initialTurnsPage: turnsPageSchema,
-    })
-    .loose()
-    .parse(value);
-  return {
-    ...result,
-    thread: result.thread,
-    initialTurnsPage: {
-      ...result.initialTurnsPage,
-      data: result.initialTurnsPage.data,
-    },
-  };
+export function parseThreadReadResult(value: unknown) {
+  const result = z.object({ thread: appServerThreadSchema }).loose().parse(value);
+  return { raw: result, thread: result.thread };
 }

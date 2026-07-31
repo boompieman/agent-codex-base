@@ -17,7 +17,11 @@ import { runtimeLog } from "./runtime-log";
 import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
 import { currentGatewayUserId } from "../state/memory";
-import { parseThreadResumeResult, parseThreadStartResult } from "~~/shared/runtime/app-server";
+import {
+  parseThreadReadResult,
+  parseThreadStartResult,
+  parseTurnsPage,
+} from "~~/shared/runtime/app-server";
 import { gatewayThreadFromAppServer } from "../protocol/gateway-thread";
 
 export class ThreadOpenService {
@@ -62,15 +66,6 @@ export class ThreadOpenService {
       return this.refreshThreadState(host, threadId, projectId, limit);
     }
 
-    const controller = await this.registry.getController(host, threadId);
-    const connectedSnapshot = controller.getOpenSnapshot();
-    if (connectedSnapshot) {
-      if (snapshotSatisfiesTurnLimit(connectedSnapshot, limit)) {
-        return this.snapshotResult(host, threadId, projectId, connectedSnapshot);
-      }
-      return this.refreshThreadState(host, threadId, projectId, limit);
-    }
-
     runtimeLog("thread cache miss", {
       hostId: host.id,
       threadId,
@@ -100,6 +95,7 @@ export class ThreadOpenService {
       threadSettings: extractThreadSettings(parsed.raw),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
+    threadSnapshotStore.set(host.id, threadId, snapshot);
     return {
       threadId,
       snapshot,
@@ -119,6 +115,15 @@ export class ThreadOpenService {
     };
   }
 
+  isThreadRunning(hostId: number, threadId: string) {
+    const snapshot = threadSnapshotStore.get(hostId, threadId);
+    if (snapshot === null) return false;
+    const recentEvents = gatewayEventStore.list(hostId, threadId, 0, 200);
+    return (
+      runtimeStatusFromThreadState(snapshot.thread, snapshot.history, recentEvents) === "running"
+    );
+  }
+
   async refreshThreadState(
     host: HostRecord,
     threadId: string,
@@ -128,10 +133,10 @@ export class ThreadOpenService {
     const key = refreshKey(host.id, threadId);
     const pending = this.pendingRefreshes.get(key);
     if (pending !== undefined) {
-      // A wider resume may reuse an equal/wider in-flight request, but it must
-      // never inherit a narrower one. Wait for the narrow refresh to settle,
-      // then retry so the server cache monotonically expands to the requested
-      // page depth instead of racing two snapshots into the same store entry.
+      // A wider cold read may reuse an equal/wider in-flight request, but it must never inherit a
+      // narrower one. Wait for the narrow refresh to settle, then retry so the server cache
+      // monotonically expands to the requested page depth instead of racing two snapshots into the
+      // same store entry.
       if (pending.limit >= limit) return pending.promise;
       await pending.promise;
       return this.refreshThreadState(host, threadId, projectId, limit);
@@ -146,6 +151,32 @@ export class ThreadOpenService {
         this.pendingRefreshes.delete(key);
       }
     }
+  }
+
+  async refreshThreadRuntimeStatus(host: HostRecord, threadId: string) {
+    const client = await this.registry.getHostClient(host);
+    const result = await client.request(
+      "thread/read",
+      { threadId, includeTurns: false },
+      120_000,
+      parseThreadReadResult,
+    );
+    threadMetadataStore.record(host.id, null, result.thread);
+    const cachedSnapshot = threadSnapshotStore.get(host.id, threadId);
+    if (cachedSnapshot !== null) {
+      const snapshot = { ...cachedSnapshot, thread: result.thread };
+      threadSnapshotStore.set(host.id, threadId, snapshot);
+    }
+    const status =
+      runtimeStatusFromSnapshotState(
+        result.thread,
+        cachedSnapshot?.history ?? { thread: { id: threadId, turns: [] } },
+      ) ?? "completed";
+    threadRuntimeEvents.record(host.id, threadId, "thread/status/changed", {
+      method: "thread/status/changed",
+      params: { threadId, status },
+    });
+    return { thread: result.thread, status };
   }
 
   private async performThreadStateRefresh(
@@ -216,10 +247,28 @@ export class ThreadOpenService {
     projectId: number | null,
     limit: number,
   ) {
-    const controller = await this.registry.getController(host, threadId);
-    const resume = parseThreadResumeResult(await controller.resumeWithInitialTurns(limit));
-    const thread = resume.thread;
-    const initialTurnsPage = resume.initialTurnsPage;
+    const client = await this.registry.getHostClient(host);
+    const [read, initialTurnsPage] = await Promise.all([
+      client.request(
+        "thread/read",
+        { threadId, includeTurns: false },
+        120_000,
+        parseThreadReadResult,
+      ),
+      client.request(
+        "thread/turns/list",
+        {
+          threadId,
+          cursor: null,
+          limit,
+          sortDirection: "desc",
+          itemsView: "full",
+        },
+        120_000,
+        parseTurnsPage,
+      ),
+    ]);
+    const thread = read.thread;
     const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
@@ -229,10 +278,10 @@ export class ThreadOpenService {
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
-      threadSettings: extractThreadSettings(resume),
+      threadSettings: extractThreadSettings(read.raw),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
-    controller.setOpenSnapshot(snapshot);
+    threadSnapshotStore.set(host.id, threadId, snapshot);
     return { snapshot, resolvedProjectId };
   }
 }
