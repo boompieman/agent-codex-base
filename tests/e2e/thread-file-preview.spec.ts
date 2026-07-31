@@ -580,6 +580,7 @@ async function assertDockviewPanelsFillHost(page: import("@playwright/test").Pag
       const frameBottom = frameBox.y + frameBox.height;
       const hostBottom = hostBox.y + hostBox.height;
       return (
+        Math.abs(frameBox.y) < 2 &&
         Math.abs(hostBottom - frameBottom) < 2 &&
         Math.abs(currentAgentBox.y + currentAgentBox.height - hostBottom) < 2 &&
         Math.abs(currentFilesBox.y + currentFilesBox.height - hostBottom) < 2

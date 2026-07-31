@@ -1,3 +1,4 @@
+import scrollIntoView from "scroll-into-view-if-needed";
 import { nextTick, ref, watch, type ComputedRef, type Ref } from "vue";
 import type { RemoteDirectoryEntry } from "~~/shared/types";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
@@ -52,12 +53,25 @@ export function useRemoteFileTreeReveal(options: {
       await nextTick();
       if (!node || sequence !== revealSequence.value) return;
 
-      // scrollIntoView delegates both axes to the native tree viewport. Using nearest avoids
-      // disturbing the user's position when the selected row is already visible.
-      const row = [
-        ...(options.viewport.value?.querySelectorAll<HTMLElement>("[data-file-path]") ?? []),
-      ].find((element) => element.dataset.filePath === path);
-      row?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const viewport = options.viewport.value?.querySelector<HTMLElement>(
+        "[data-testid='remote-file-tree-scroll']",
+      );
+      const row = [...(viewport?.querySelectorAll<HTMLElement>("[data-file-path]") ?? [])].find(
+        (element) => element.dataset.filePath === path,
+      );
+      if (!viewport || !row) return;
+
+      // Native scrollIntoView walks every scrollable ancestor up to document.scrollingElement.
+      // During a restored Dockview scope the browser can therefore reveal the file row by scrolling
+      // the entire application, moving the workspace above the viewport. The library boundary
+      // includes this tree viewport but stops before its parents, so only the file tree can move.
+      // Do not replace this with an unbounded native call, even with block/inline set to "nearest".
+      scrollIntoView(row, {
+        boundary: viewport,
+        block: "nearest",
+        inline: "nearest",
+        scrollMode: "if-needed",
+      });
     },
     { immediate: true },
   );
