@@ -10,7 +10,7 @@ import {
 } from "@/stores/gateway/workspace-panels";
 import { notifyPopoutBlocked } from "./actions";
 import { useDockLayoutPersistence } from "./useDockLayoutPersistence";
-import { useDockviewGeometryGuard } from "./useDockviewGeometryGuard";
+import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 export function useWorkspaceDockLifecycle(options: {
   scopeKey: ComputedRef<string>;
@@ -32,12 +32,6 @@ export function useWorkspaceDockLifecycle(options: {
     api,
     activeScopeKey: () => activeScopeKey,
   });
-  const geometry = useDockviewGeometryGuard({
-    host: options.host,
-    api,
-    scopeKey: () => activeScopeKey,
-  });
-
   function activate(panelId: string) {
     const panel = api.value?.getPanel(panelId);
     if (!panel) return;
@@ -45,10 +39,9 @@ export function useWorkspaceDockLifecycle(options: {
     panel.api.group.api.setActive();
   }
 
-  function ready(event: DockviewReadyEvent) {
+  async function ready(event: DockviewReadyEvent) {
     api.value = event.api;
     disposables = [
-      event.api.onDidLayoutFromJSON(() => void geometry.repair("restore")),
       event.api.onDidLayoutChange(persistence.scheduleLayoutSave),
       event.api.onWillMutateLayout((mutation) => {
         // Popouts are runtime windows. Capture the docked layout before Dockview removes the group.
@@ -89,8 +82,19 @@ export function useWorkspaceDockLifecycle(options: {
         }),
       ),
     ];
+
+    // Dockview's fromJSON() snapshots the API dimensions before rebuilding its grid. The Vue
+    // ready callback runs while a newly keyed Host/Project/Thread flex subtree is still committing,
+    // so restoring here synchronously records a transient height and can leave the workspace short
+    // after returning to a thread. Wait for that subtree's first layout frame, initialize Dockview
+    // with the host's final dimensions, and only then deserialize. This fixes the ordering race at
+    // its source; do not add post-restore observers, delayed repair loops, or panel-local sizing.
+    await nextTick();
+    await nextAnimationFrame();
+    const host = options.host.value;
+    if (api.value !== event.api || !host) return;
+    event.api.layout(host.clientWidth, host.clientHeight, true);
     initializeScope(activeScopeKey);
-    void geometry.repair("restore");
   }
 
   function initializeScope(scopeKey: string) {

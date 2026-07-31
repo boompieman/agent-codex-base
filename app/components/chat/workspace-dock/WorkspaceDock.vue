@@ -108,7 +108,10 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div
+    data-testid="workspace-dock-frame"
+    class="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden"
+  >
     <MobileWorkspaceHeader
       v-if="layout === 'mobile'"
       :can-open-terminal="workspace.canOpenTerminal.value"
@@ -120,7 +123,12 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
     >
       <template #start><slot name="mobile-header-start" /></template>
     </MobileWorkspaceHeader>
-    <div ref="dockviewHost" class="gateway-dockview min-h-0 flex-1">
+    <!--
+      h-0 + flex-1 gives the Dockview host a definite remaining height. Keeping an auto height here
+      lets a restored grid contribute its stale intrinsic height during a keyed thread switch,
+      which can shorten the whole workspace even though every panel agrees with its host.
+    -->
+    <div ref="dockviewHost" class="gateway-dockview h-0 min-h-0 w-full flex-1 overflow-hidden">
       <DockviewVue
         class="h-full w-full"
         :right-header-actions-component="

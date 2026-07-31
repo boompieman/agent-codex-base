@@ -568,15 +568,19 @@ function fileTab(page: import("@playwright/test").Page, path: string) {
 }
 
 async function assertDockviewPanelsFillHost(page: import("@playwright/test").Page) {
+  const frame = page.getByTestId("workspace-dock-frame");
   const host = page.locator(".gateway-dockview");
   await expect
     .poll(async () => {
+      const frameBox = await frame.boundingBox();
       const hostBox = await host.boundingBox();
       const currentAgentBox = await page.getByTestId("chat-main-pane").boundingBox();
       const currentFilesBox = await page.getByTestId("workspace-file-panel").boundingBox();
-      if (!hostBox || !currentAgentBox || !currentFilesBox) return false;
+      if (!frameBox || !hostBox || !currentAgentBox || !currentFilesBox) return false;
+      const frameBottom = frameBox.y + frameBox.height;
       const hostBottom = hostBox.y + hostBox.height;
       return (
+        Math.abs(hostBottom - frameBottom) < 2 &&
         Math.abs(currentAgentBox.y + currentAgentBox.height - hostBottom) < 2 &&
         Math.abs(currentFilesBox.y + currentFilesBox.height - hostBottom) < 2
       );
