@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GetTabContextMenuItemsParams } from "dockview-vue";
 import { DockviewVue, themeDark, themeLight } from "dockview-vue";
-import { computed, provide, toRefs } from "vue";
+import { computed, provide, ref, toRefs } from "vue";
 import BrowserOpenDialog from "@/components/browser/BrowserOpenDialog.vue";
 import { useTerminalTheme } from "@/composables/terminal/useTerminalTheme";
 import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceLaunchActions";
@@ -64,10 +64,12 @@ const panelIds = computed(() => [
   hostMetricsPanel.value.map(({ id }) => id),
 ]);
 const browserDialogOpen = ref(false);
+const dockviewHost = ref<HTMLElement | null>(null);
 const workspaceActions = useWorkspaceLaunchActions();
 const tmuxLauncher = useTmuxMonitorLauncher();
 const lifecycle = useWorkspaceDockLifecycle({
   scopeKey,
+  host: dockviewHost,
   fileRequestScopeKey,
   reconcile: panels.reconcile,
   defaultLayout: panels.defaultLayout,
@@ -118,19 +120,21 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
     >
       <template #start><slot name="mobile-header-start" /></template>
     </MobileWorkspaceHeader>
-    <DockviewVue
-      class="gateway-dockview min-h-0 flex-1"
-      :right-header-actions-component="
-        layout === 'desktop' ? 'WorkspaceDockGroupActions' : undefined
-      "
-      :theme="dockTheme"
-      floating-group-bounds="boundedWithinViewport"
-      :disable-floating-groups="layout === 'mobile'"
-      :locked="layout === 'mobile'"
-      :keyboard-navigation="true"
-      :get-tab-context-menu-items="layout === 'desktop' ? tabContextMenu : undefined"
-      @ready="lifecycle.ready"
-    />
+    <div ref="dockviewHost" class="gateway-dockview min-h-0 flex-1">
+      <DockviewVue
+        class="h-full w-full"
+        :right-header-actions-component="
+          layout === 'desktop' ? 'WorkspaceDockGroupActions' : undefined
+        "
+        :theme="dockTheme"
+        floating-group-bounds="boundedWithinViewport"
+        :disable-floating-groups="layout === 'mobile'"
+        :locked="layout === 'mobile'"
+        :keyboard-navigation="true"
+        :get-tab-context-menu-items="layout === 'desktop' ? tabContextMenu : undefined"
+        @ready="lifecycle.ready"
+      />
+    </div>
     <BrowserOpenDialog
       v-if="layout === 'mobile'"
       v-model:open="browserDialogOpen"

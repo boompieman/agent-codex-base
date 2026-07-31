@@ -1,6 +1,6 @@
 import type { DockviewApi, DockviewReadyEvent, SerializedDockview } from "dockview-vue";
 
-import type { ComputedRef } from "vue";
+import type { ComputedRef, Ref } from "vue";
 import { nextTick, onBeforeUnmount, shallowRef, watch } from "vue";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
@@ -10,9 +10,11 @@ import {
 } from "@/stores/gateway/workspace-panels";
 import { notifyPopoutBlocked } from "./actions";
 import { useDockLayoutPersistence } from "./useDockLayoutPersistence";
+import { useDockviewGeometryGuard } from "./useDockviewGeometryGuard";
 
 export function useWorkspaceDockLifecycle(options: {
   scopeKey: ComputedRef<string>;
+  host: Readonly<Ref<HTMLElement | null>>;
   fileRequestScopeKey: ComputedRef<string | null>;
   reconcile: (api: DockviewApi) => void;
   defaultLayout: (api: DockviewApi) => SerializedDockview;
@@ -30,6 +32,11 @@ export function useWorkspaceDockLifecycle(options: {
     api,
     activeScopeKey: () => activeScopeKey,
   });
+  const geometry = useDockviewGeometryGuard({
+    host: options.host,
+    api,
+    scopeKey: () => activeScopeKey,
+  });
 
   function activate(panelId: string) {
     const panel = api.value?.getPanel(panelId);
@@ -40,8 +47,8 @@ export function useWorkspaceDockLifecycle(options: {
 
   function ready(event: DockviewReadyEvent) {
     api.value = event.api;
-    initializeScope(activeScopeKey);
     disposables = [
+      event.api.onDidLayoutFromJSON(() => void geometry.repair("restore")),
       event.api.onDidLayoutChange(persistence.scheduleLayoutSave),
       event.api.onWillMutateLayout((mutation) => {
         // Popouts are runtime windows. Capture the docked layout before Dockview removes the group.
@@ -82,6 +89,8 @@ export function useWorkspaceDockLifecycle(options: {
         }),
       ),
     ];
+    initializeScope(activeScopeKey);
+    void geometry.repair("restore");
   }
 
   function initializeScope(scopeKey: string) {
