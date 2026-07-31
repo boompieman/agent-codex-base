@@ -43,4 +43,6 @@ COPY --from=build /app/.output ./.output
 COPY --from=build /app/scripts ./scripts
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", ".output/server/index.mjs"]
+# The 1 GiB container also hosts SSH/TLS/native buffers. Keep V8 old-space bounded to leave room
+# for those allocations, and expose GC only for Nitro's five-minute housekeeping service.
+CMD ["node", "--expose-gc", "--max-old-space-size=512", ".output/server/index.mjs"]
