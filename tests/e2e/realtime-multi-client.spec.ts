@@ -119,14 +119,50 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       .getByText(steerMarker),
   );
 
+  const backgroundThreadId = await remoteWorkspace.startThread(project.id);
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
   });
+  await openThreadFromProjectOrRestoredState(page, project.id, threadId);
   const secondPage = await secondContext.newPage();
   await installRealtimeSocketProbe(secondPage);
   await openApp(secondPage, { resetConfig: false });
   try {
     await expect.poll(() => activeRealtimeSocketCount(secondPage), { timeout: 10_000 }).toBe(1);
+    await expect
+      .poll(async () => currentSelectedThreadId(secondPage), { timeout: 30_000 })
+      .toBe(backgroundThreadId);
+    const backgroundStatusMarker = `E2E 跨浏览器侧边栏状态 ${Date.now()}`;
+    await page
+      .getByPlaceholder("输入后续修改要求")
+      .fill(
+        [
+          `请执行较长命令后回复：${backgroundStatusMarker}`,
+          "运行 python - <<'PY'",
+          "import time",
+          "time.sleep(8)",
+          `print('${backgroundStatusMarker}')`,
+          "PY",
+        ].join("\n"),
+      );
+    await page.getByTestId("send-turn-button").click();
+    await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "停止生成");
+    await expect(
+      secondPage.getByTestId(`thread-button-${threadId}`).getByLabel("运行中"),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      secondPage.getByTestId(`recent-thread-button-${threadId}`).getByLabel("运行中"),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() => threadRuntimeStatus(secondPage, host.id, threadId), { timeout: 30_000 })
+      .toBe("running");
+    await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
+      timeout: 120_000,
+    });
+    await expect
+      .poll(() => threadRuntimeStatus(secondPage, host.id, threadId), { timeout: 30_000 })
+      .toBe("completed");
+
     await openThreadFromProjectOrRestoredState(secondPage, project.id, threadId);
     await expect(secondPage.getByPlaceholder("输入后续修改要求")).toBeEnabled();
     await expect
@@ -324,4 +360,12 @@ async function activeRemoteTurnId(page: Page) {
         : "";
     return String(runtime.activeTerminalProcessByThreadKey[key]?.turnId ?? "");
   });
+}
+
+async function threadRuntimeStatus(page: Page, hostId: number, threadId: string) {
+  return page.evaluate(
+    ({ hostId, threadId }) =>
+      window.__codexGatewayE2e?.runtime.threadStatuses[`${hostId}:${threadId}`] ?? "idle",
+    { hostId, threadId },
+  );
 }

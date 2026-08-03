@@ -192,7 +192,9 @@ function runtimeStatusFromEvents(events: GatewayEvent[]): ThreadRuntimeStatus | 
   return null;
 }
 
-function runtimeStatusFromEvent(event: GatewayEvent | undefined): ThreadRuntimeStatus | null {
+export function runtimeStatusFromEvent(
+  event: GatewayEvent | undefined,
+): ThreadRuntimeStatus | null {
   if (!event) {
     return null;
   }

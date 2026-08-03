@@ -24,6 +24,7 @@ export type {
   ThreadGoalTimelineItem,
   ThreadOpenResult,
   ThreadRuntimeStatus,
+  ThreadRuntimeStatusUpdate,
   ThreadSettingsState,
   ThreadTokenUsageState,
   ThreadTurnsPageResult,

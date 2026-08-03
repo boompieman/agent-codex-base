@@ -95,6 +95,14 @@ const threadSettingsSchema = z
     approvalPolicy: z.enum(["untrusted", "on-request", "never"]).nullable().optional(),
   })
   .strict();
+const threadRuntimeStatusUpdateSchema = z
+  .object({
+    hostId: positiveId,
+    threadId: nonEmptyString,
+    status: z.enum(["idle", "running", "completed", "failed", "interrupted"]),
+    turnId: z.string().nullable().optional(),
+  })
+  .strict();
 const tokenUsageBreakdownSchema = z
   .object({
     totalTokens: nonNegativeId,
@@ -276,6 +284,18 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
       .object({ type: z.literal("notification.published"), notification: notificationSchema })
       .strict(),
     z.object({ type: z.literal("config.pinnedThreads.changed") }).strict(),
+    z
+      .object({
+        type: z.literal("thread.runtime.snapshot"),
+        statuses: z.array(threadRuntimeStatusUpdateSchema),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("thread.runtime.updated"),
+        update: threadRuntimeStatusUpdateSchema,
+      })
+      .strict(),
     z
       .object({
         type: z.literal("host.lifecycle"),

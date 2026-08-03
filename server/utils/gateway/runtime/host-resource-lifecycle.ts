@@ -12,6 +12,7 @@ import { activeMainThreadMonitor } from "./active-main-thread-monitor";
 import { threadProjectDiscovery } from "./thread-project-discovery";
 import { pendingServerRequests } from "./pending-server-requests";
 import { hostMetricsManager } from "../infra/host-services";
+import { threadRuntimeStatusHub } from "./thread-runtime-status-hub";
 
 export const hostResourceLifecycle = {
   changed(userId: number, previous: StoredHostRecord, next: StoredHostRecord) {
@@ -19,7 +20,7 @@ export const hostResourceLifecycle = {
     closeEphemeralResources(userId, previous.id);
     if (remoteIdentityFingerprint(previous) !== remoteIdentityFingerprint(next)) {
       threadProjectDiscovery.invalidateHost(userId, previous.id);
-      clearThreadRuntime(previous.id);
+      clearThreadRuntime(userId, previous.id);
       tmuxMonitorService.removeHost(userId, previous.id);
       hostMetricsManager.removeHost(userId, previous.id);
     }
@@ -30,7 +31,7 @@ export const hostResourceLifecycle = {
     // This hook is deliberately limited to ephemeral resources so it cannot create a
     // memory/SQLite split after the durable commit has already succeeded.
     threadProjectDiscovery.invalidateHost(userId, hostId);
-    clearThreadRuntime(hostId);
+    clearThreadRuntime(userId, hostId);
     closeEphemeralResources(userId, hostId);
     tmuxMonitorService.removeHost(userId, hostId);
     hostMetricsManager.removeHost(userId, hostId);
@@ -45,7 +46,8 @@ function closeEphemeralResources(userId: number, hostId: number) {
   browserPreviewManager.closeHost(userId, hostId);
 }
 
-function clearThreadRuntime(hostId: number) {
+function clearThreadRuntime(userId: number, hostId: number) {
+  threadRuntimeStatusHub.deleteHost(userId, hostId);
   threadMetadataStore.deleteForHost(hostId);
   threadSnapshotStore.deleteForHost(hostId);
   subAgentThreadStore.deleteForHost(hostId);
