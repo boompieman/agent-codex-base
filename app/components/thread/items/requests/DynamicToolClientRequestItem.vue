@@ -2,10 +2,10 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { WrenchIcon } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
+import { Textarea } from "@codex-gateway/ui/textarea";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 import { jsonPreview } from "@/utils/thread-items";
 

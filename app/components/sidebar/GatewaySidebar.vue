@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { SettingsIcon } from "@lucide/vue";
 import { computed, nextTick, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@codex-gateway/ui/dialog";
 import SettingsPanel from "@/components/settings/SettingsPanel.vue";
 import BrowserOpenDialog from "@/components/browser/BrowserOpenDialog.vue";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
@@ -21,7 +21,7 @@ import PinnedThreadList from "./thread-list/PinnedThreadList.vue";
 import RecentThreadList from "./thread-list/RecentThreadList.vue";
 import ThreadRenameDialog from "./thread-list/ThreadRenameDialog.vue";
 import SidebarScrollArea from "./SidebarScrollArea.vue";
-import { SidebarFooter } from "@/components/ui/sidebar";
+import { SidebarFooter } from "@codex-gateway/ui/sidebar";
 import { useSidebarTree } from "./host-tree/useSidebarTree";
 import { useThreadRename } from "./thread-list/useThreadRename";
 import { useRecentThreadActivity } from "./thread-list/useRecentThreadActivity";

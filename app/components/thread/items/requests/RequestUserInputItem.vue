@@ -2,9 +2,9 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { MessageSquareIcon } from "@lucide/vue";
 import { computed, reactive } from "vue";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Button } from "@codex-gateway/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Input } from "@codex-gateway/ui/input";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 
 const props = defineProps<{

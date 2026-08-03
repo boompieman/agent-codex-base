@@ -2,9 +2,9 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { ShieldQuestionIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 import { jsonPreview } from "@/utils/thread-items";
 

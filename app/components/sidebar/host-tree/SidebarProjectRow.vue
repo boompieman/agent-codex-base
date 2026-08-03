@@ -9,13 +9,13 @@ import {
   Trash2Icon,
 } from "@lucide/vue";
 import type { ProjectRecord } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@codex-gateway/ui/context-menu";
 import { selectedRowClass } from "../sidebar-utils";
 import SidebarRowLabel from "../SidebarRowLabel.vue";
 

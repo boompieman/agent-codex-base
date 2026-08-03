@@ -2,8 +2,8 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { AlertCircleIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@codex-gateway/ui/badge";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { jsonPreview } from "@/utils/thread-items";
 
 const props = defineProps<{ item: ThreadHistoryItem }>();

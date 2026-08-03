@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { FilesIcon } from "@lucide/vue";
 import { computed, ref, toRefs } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@codex-gateway/ui/sheet";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { useFileWorkspaceLifecycle } from "@/composables/files/useFileWorkspaceLifecycle";
 import { useFileDocumentGuards } from "@/composables/files/useFileDocumentGuards";

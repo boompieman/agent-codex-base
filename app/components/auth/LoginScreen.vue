@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Loader2Icon } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@codex-gateway/ui/button";
+import { Input } from "@codex-gateway/ui/input";
 import { useAuthStore } from "@/stores/auth";
 import { gatewayErrorMessage } from "@/utils/gateway-error";
 

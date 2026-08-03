@@ -12,6 +12,10 @@
         "rolldown.config.ts"
       ],
       "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "package.json", "tsconfig.json"]
     }
   }
 }

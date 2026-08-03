@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ChatWorkspace from "@/components/chat/ChatWorkspace.vue";
 import GatewaySidebar from "@/components/sidebar/GatewaySidebar.vue";
-import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "@/components/ui/sidebar";
+import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "@codex-gateway/ui/sidebar";
 </script>
 
 <template>

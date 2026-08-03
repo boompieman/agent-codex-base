@@ -9,8 +9,8 @@ import {
 } from "@lucide/vue";
 import { computed, type Component } from "vue";
 import type { ApprovalPolicy } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@codex-gateway/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@codex-gateway/ui/popover";
 
 const props = defineProps<{
   modelValue: ApprovalPolicy | "custom";

@@ -12,8 +12,8 @@ FROM base AS deps
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-# Keep the browser-runtime task graph in the dependency layer. Its heavy Office/Markdown graph
-# changes far less often than the Nuxt app, so normal application edits should reuse this layer.
+# Keep precompiled browser packages in the dependency layer. Their Office, Markdown, UI, and AI
+# dependency graphs change far less often than the Nuxt app, so normal edits reuse this layer.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages ./packages
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \

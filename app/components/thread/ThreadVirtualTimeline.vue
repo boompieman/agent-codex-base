@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, toRef, watch } from "vue";
 import type { ThreadRuntimeStatus, ThreadTimelineTurn } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import ThreadTimelineRowView from "@/components/thread/ThreadTimelineRowView.vue";
 import VirtualTimelineViewport from "@/components/thread/VirtualTimelineViewport.vue";
 import {

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { FilePreviewDocument } from "~~/shared/types";
 import CodeEditor from "@/components/common/CodeEditor.vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@codex-gateway/ui/dialog";
 import { codeEditorLanguageForPath } from "@/utils/code-editor-extensions";
 import { fetchRemoteFile } from "@/utils/remote-file-transport";
 

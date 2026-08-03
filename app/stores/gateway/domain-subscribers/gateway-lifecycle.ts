@@ -1,4 +1,4 @@
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";

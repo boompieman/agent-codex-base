@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { BotIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
 import { isItemInProgress } from "@/utils/thread-items";
 import { useOpenSubAgentPanel } from "@/composables/thread/useOpenSubAgentPanel";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";

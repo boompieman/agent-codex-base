@@ -5,7 +5,7 @@ import type {
   DockviewPanelApi,
   IDockviewPanel,
 } from "dockview-vue";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import { workspaceDockPanelParamsFromUnknown } from "./types";
 import { workspacePanelPolicy } from "./panel-registry";
 

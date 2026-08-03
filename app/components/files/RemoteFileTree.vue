@@ -3,7 +3,7 @@ import { FolderIcon, Loader2Icon, RefreshCwIcon } from "@lucide/vue";
 import { TreeRoot } from "reka-ui";
 import { computed, nextTick, ref, useTemplateRef } from "vue";
 import type { RemoteDirectoryEntry } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import RemoteFileDeleteDialog from "./RemoteFileDeleteDialog.vue";
 import RemoteFileTreeRow from "./RemoteFileTreeRow.vue";

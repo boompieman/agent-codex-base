@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@codex-gateway/ui/select";
 
 const { locale, setLocale } = useI18n();
 

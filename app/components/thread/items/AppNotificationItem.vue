@@ -2,9 +2,9 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { AlertTriangleIcon, BellIcon, InfoIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
+import { Button } from "@codex-gateway/ui/button";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 
 const props = defineProps<{ item: ThreadHistoryItem }>();

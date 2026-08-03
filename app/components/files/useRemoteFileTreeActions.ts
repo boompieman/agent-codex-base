@@ -1,6 +1,6 @@
 import { useClipboard } from "@vueuse/core";
 import { ref, toValue, type MaybeRefOrGetter } from "vue";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import ensureError from "ensure-error";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { downloadRemoteFile } from "@/utils/remote-file-transport";

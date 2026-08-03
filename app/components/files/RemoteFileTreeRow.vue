@@ -15,7 +15,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@codex-gateway/ui/context-menu";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
 
 interface FileTreeNode {

@@ -8,14 +8,14 @@ import {
 } from "@lucide/vue";
 import { ref } from "vue";
 import type { TmuxMonitor } from "~~/shared/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@codex-gateway/ui/dropdown-menu";
 import TmuxHostBadge from "./TmuxHostBadge.vue";
 import TmuxPermanentMonitorDialog from "./TmuxPermanentMonitorDialog.vue";
 

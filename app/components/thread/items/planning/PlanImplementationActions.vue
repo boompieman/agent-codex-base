@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";

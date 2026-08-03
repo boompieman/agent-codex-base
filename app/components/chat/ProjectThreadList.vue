@@ -8,14 +8,14 @@ import {
 } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@codex-gateway/ui/context-menu";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { projectById } from "@/stores/gateway-catalog/selectors";

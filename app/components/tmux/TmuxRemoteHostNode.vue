@@ -2,8 +2,8 @@
 import { ChevronRightIcon, LoaderCircleIcon, RefreshCwIcon, ServerIcon } from "@lucide/vue";
 import type { HostRecord, TmuxMonitor, TmuxMonitorMode, TmuxPaneSnapshot } from "~~/shared/types";
 import type { TmuxRemoteHostState } from "@/stores/gateway-tmux";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@codex-gateway/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import TmuxHostBadge from "./TmuxHostBadge.vue";
 import TmuxSessionList from "./TmuxSessionList.vue";
 

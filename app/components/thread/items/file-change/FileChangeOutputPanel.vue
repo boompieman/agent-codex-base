@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import HighlightedCode from "@/components/common/HighlightedCode.vue";
 
 defineProps<{

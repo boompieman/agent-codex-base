@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { Input } from "@/components/ui/input";
+import { Input } from "@codex-gateway/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "@codex-gateway/ui/select";
+import { Textarea } from "@codex-gateway/ui/textarea";
 import type { HostConnectionFormValue } from "./form";
 
 const model = defineModel<HostConnectionFormValue>({ required: true });

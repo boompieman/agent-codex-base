@@ -2,7 +2,7 @@
 import { FileWarningIcon, Loader2Icon } from "@lucide/vue";
 import { computed } from "vue";
 import type { FilePreviewDocument } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import FileTextEditor from "@/components/files/FileTextEditor.vue";
 import { useTerminalTheme } from "@/composables/terminal/useTerminalTheme";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";

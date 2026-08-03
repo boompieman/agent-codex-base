@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { FileIcon, ImageIcon, XIcon } from "@lucide/vue";
 import type { ComposerAttachment } from "@/composables/composer/useComposerDraft";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@codex-gateway/ui/badge";
 
 defineProps<{
   files: ComposerAttachment[];

@@ -3,14 +3,14 @@ import { RefreshCwIcon } from "@lucide/vue";
 import { useAsyncState } from "@vueuse/core";
 import { computed, nextTick, useTemplateRef, watch } from "vue";
 import type { TmuxPaneSnapshot } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@codex-gateway/ui/dialog";
 import { fetchTmuxPaneOutput } from "@/stores/gateway-tmux/transport";
 import { gatewayErrorMessage } from "@/utils/gateway-error";
 

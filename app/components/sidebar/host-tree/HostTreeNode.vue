@@ -8,13 +8,13 @@ import {
   ChartNoAxesCombinedIcon,
   Trash2Icon,
 } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@codex-gateway/ui/context-menu";
 import type { HostRecord } from "../sidebar-types";
 import { formatRelative, selectedRowClass } from "../sidebar-utils";
 import HostStatusIndicator from "./HostStatusIndicator.vue";

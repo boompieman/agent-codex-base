@@ -14,9 +14,9 @@
   "rtl": false,
   "pointer": false,
   "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils",
-    "ui": "@/components/ui",
+    "components": "packages/gateway-ui/src",
+    "utils": "packages/gateway-ui/src/utils",
+    "ui": "packages/gateway-ui/src",
     "lib": "@/lib",
     "composables": "@/composables"
   },

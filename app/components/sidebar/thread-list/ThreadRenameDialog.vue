@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@codex-gateway/ui/dialog";
+import { Input } from "@codex-gateway/ui/input";
+import { Label } from "@codex-gateway/ui/label";
 
 const props = defineProps<{
   open: boolean;

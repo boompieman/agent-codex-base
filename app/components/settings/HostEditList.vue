@@ -3,8 +3,8 @@ import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ServerIcon } from "@lucid
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import type { HostRecord } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@codex-gateway/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import HostConnectionFields from "./host-connection/HostConnectionFields.vue";
 import {
   hostConnectionFormFromRecord,
