@@ -14,7 +14,6 @@ export function useThreadSettingsControls() {
   const { models, defaultModel } = storeToRefs(gateway);
   const { selectedThreadSettings } = storeToRefs(composer);
   const { selectedThreadId } = storeToRefs(navigation);
-  const { t } = useI18n();
   const newThreadModel = ref("");
   const newThreadEffort = ref<ReasoningEffort>("default");
   const newThreadApprovalMode = ref<ApprovalPolicy | "custom">("custom");
@@ -70,17 +69,16 @@ export function useThreadSettingsControls() {
     },
   });
 
-  const activeModel = computed(
-    // This fallback is presentation-only for an existing thread whose metadata-only read cannot
-    // expose persisted settings. Turn submission uses selectedModel instead, because explicitly
-    // sending this catalog default makes app-server discard the thread's persisted model/effort.
-    () =>
+  const activeModel = computed(() => {
+    if (selectedThreadId.value !== null) return selectedModel.value;
+    return (
       firstNonEmptyString([
         selectedModel.value,
         defaultModel.value?.model,
         defaultModel.value?.id,
-      ]) ?? "",
-  );
+      ]) ?? ""
+    );
+  });
   const activeModelRecord = computed(() =>
     models.value.find(
       (candidate) => candidate.model === activeModel.value || candidate.id === activeModel.value,
@@ -92,10 +90,6 @@ export function useThreadSettingsControls() {
   });
   const activeEffortValue = computed(() => {
     if (selectedEffort.value !== "default") return selectedEffort.value;
-    // A new thread genuinely inherits the selected model's default. For an existing thread,
-    // "default" can also mean that a metadata-only thread/read could not expose persisted effort;
-    // displaying the catalog default as if it were authoritative is what produced the false Light
-    // state on mobile.
     return selectedThreadId.value === null
       ? (activeModelRecord.value?.defaultReasoningEffort ?? "")
       : "";
@@ -114,14 +108,7 @@ export function useThreadSettingsControls() {
     }
     return options;
   });
-  const activeEffortLabel = computed(() =>
-    labelEffortOption(effortOptions.value.find((option) => option.value === selectedEffort.value)),
-  );
-  const activeEffortCompactLabel = computed(() =>
-    activeEffortValue.value === ""
-      ? t("app.reasoningDefault")
-      : compactEffortLabel(activeEffortValue.value),
-  );
+  const activeEffortCompactLabel = computed(() => compactEffortLabel(activeEffortValue.value));
 
   function compactEffortLabel(value: string) {
     if (value === "") return "";
@@ -143,10 +130,7 @@ export function useThreadSettingsControls() {
       .join(" ");
   }
 
-  function labelEffortOption(option: { value: ReasoningEffort; label?: string } | undefined) {
-    if (option === undefined) {
-      return trimmedOrFallback(activeEffortCompactLabel.value, t("app.reasoningDefault"));
-    }
+  function labelEffortOption(option: { value: ReasoningEffort; label?: string }) {
     return compactEffortLabel(trimmedOrFallback(option.label, option.value));
   }
 
@@ -173,7 +157,6 @@ export function useThreadSettingsControls() {
     activeModel,
     activeModelLabel,
     activeEffortValue,
-    activeEffortLabel,
     activeEffortCompactLabel,
     effortOptions,
     labelEffortOption,

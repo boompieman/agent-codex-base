@@ -24,7 +24,7 @@ defineProps<{
   activeEffortValue: string;
   activeEffortCompactLabel: string;
   effortOptions: Array<{ value: ReasoningEffort; label?: string }>;
-  labelEffortOption: (option: { value: ReasoningEffort; label?: string } | undefined) => string;
+  labelEffortOption: (option: { value: ReasoningEffort; label?: string }) => string;
   modelOptionValue: (modelOption: { model?: string; id: string }) => string;
   hasComposerInput: boolean;
   isThreadRunning: boolean;

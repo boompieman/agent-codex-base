@@ -47,9 +47,8 @@ export function useComposerController() {
     const effort =
       settings.selectedEffort.value === "default" ? undefined : settings.selectedEffort.value;
     return {
-      // activeModel may contain a presentation fallback while thread/read settings are unknown.
-      // Only an explicit per-thread/new-thread selection may override app-server persistence;
-      // passing the display fallback also resets the persisted reasoning effort to model default.
+      // Only an explicit per-thread/new-thread selection may override app-server persistence.
+      // Existing-thread settings are projected from thread/resume instead of inferred here.
       model: settings.selectedModel.value === "" ? undefined : settings.selectedModel.value,
       effort,
       approvalPolicy:

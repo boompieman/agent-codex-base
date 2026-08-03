@@ -1,5 +1,5 @@
 import type { HostRecord, RpcEnvelope } from "~~/shared/types";
-import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
+import { isAppServerSubAgentThread, parseThreadResumeResult } from "~~/shared/runtime/app-server";
 import {
   runtimeStatusFromAppThreadStatus,
   runtimeStatusFromSnapshotState,
@@ -11,6 +11,7 @@ import { threadSnapshotStore } from "../state/thread-snapshots";
 import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
 import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
+import { extractThreadSettings } from "../protocol/thread-payload";
 
 export class ThreadController {
   readonly client: CodexRpcClient;
@@ -107,8 +108,25 @@ export class ThreadController {
       // Fresh threads never enter this branch: ControllerRegistry keeps thread/start's implicit
       // subscription under a bootstrap owner until turn/started. Calling thread/resume before that
       // point is invalid because app-server has not materialized a rollout yet.
-      await this.client.request("thread/resume", { threadId: this.threadId });
+      const resumed = await this.client.request(
+        "thread/resume",
+        { threadId: this.threadId },
+        120_000,
+        parseThreadResumeResult,
+      );
       this.subscribed = true;
+      // `thread/read` and paginated Turn history intentionally omit the persisted model and
+      // reasoning effort. App-server returns those authoritative values from `thread/resume`, but
+      // does not emit `thread/settings/updated` for the resume itself. Project the response through
+      // the same Gateway event path so the server snapshot and every browser use one settings
+      // source instead of guessing from the model catalog.
+      this.publish("thread/settings/updated", {
+        method: "thread/settings/updated",
+        params: {
+          threadId: this.threadId,
+          threadSettings: extractThreadSettings(resumed),
+        },
+      });
     });
   }
 
