@@ -8,6 +8,7 @@ import { hashToken } from "../../storage/crypto";
 import { subscribeTerminalEvents } from "./terminal";
 import { subscribeBrowserPreviewEvents } from "./browser-preview";
 import { sendRealtimePeerMessage, stateFor, type RealtimePeer } from "../peer-state";
+import { threadRuntimeStatusHub } from "../../runtime/thread-runtime-status-hub";
 
 export function authenticatePeer(
   peer: RealtimePeer,
@@ -42,8 +43,15 @@ export function authenticatePeer(
     pinnedThreadsUnsubscribe: pinnedThreadEvents.subscribe(user.id, () => {
       sendRealtimePeerMessage(peer, { type: "config.pinnedThreads.changed" });
     }),
+    threadRuntimeStatusUnsubscribe: threadRuntimeStatusHub.subscribe(user.id, (update) => {
+      sendRealtimePeerMessage(peer, { type: "thread.runtime.updated", update });
+    }),
   });
   sendRealtimePeerMessage(peer, { type: "ready", connectionId });
+  sendRealtimePeerMessage(peer, {
+    type: "thread.runtime.snapshot",
+    statuses: threadRuntimeStatusHub.snapshot(user.id),
+  });
   subscribeTerminalEvents(peer);
   subscribeBrowserPreviewEvents(peer);
 }

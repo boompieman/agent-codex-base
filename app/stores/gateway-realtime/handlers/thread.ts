@@ -1,10 +1,18 @@
 import type { GatewayEvent } from "~~/shared/types";
 import { gatewayDomainEvents } from "@/stores/gateway/domain-events";
-import type { RealtimeHandlers, RealtimeServerMessageHandlerContext } from "./types";
+import type {
+  RealtimeHandlers,
+  RealtimeServerMessageHandlerContext,
+  RealtimeServerMessageMap,
+} from "./types";
 
 export function createThreadRealtimeHandlers(ctx: RealtimeServerMessageHandlerContext) {
   return {
     "thread.event": ({ event }) => handleThreadEvent(ctx, event),
+    "thread.runtime.snapshot": ({ statuses }) => {
+      for (const update of statuses) projectThreadRuntimeStatus(update);
+    },
+    "thread.runtime.updated": ({ update }) => projectThreadRuntimeStatus(update),
     "thread.events.gap": ({ hostId, threadId }) =>
       gatewayDomainEvents.emit("realtime-thread-events-gap", { hostId, threadId }),
     "thread.goal.updated": (message) => {
@@ -20,6 +28,12 @@ export function createThreadRealtimeHandlers(ctx: RealtimeServerMessageHandlerCo
       ctx.resolveRequest(message);
     },
   } satisfies RealtimeHandlers;
+}
+
+function projectThreadRuntimeStatus(
+  update: RealtimeServerMessageMap["thread.runtime.updated"]["update"],
+) {
+  gatewayDomainEvents.emit("thread-status-detected", update);
 }
 
 function handleThreadEvent(ctx: RealtimeServerMessageHandlerContext, event: GatewayEvent) {

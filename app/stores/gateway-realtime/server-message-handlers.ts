@@ -32,6 +32,8 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
   return (message: RealtimeServerMessage) =>
     match(message)
       .with({ type: "thread.event" }, thread["thread.event"])
+      .with({ type: "thread.runtime.snapshot" }, thread["thread.runtime.snapshot"])
+      .with({ type: "thread.runtime.updated" }, thread["thread.runtime.updated"])
       .with({ type: "thread.events.gap" }, thread["thread.events.gap"])
       .with({ type: "thread.goal.updated" }, thread["thread.goal.updated"])
       .with({ type: "thread.goal.cleared" }, thread["thread.goal.cleared"])

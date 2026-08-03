@@ -4,6 +4,7 @@ import type {
   ThreadGoal,
   ThreadGoalStatus,
   ThreadOpenResult,
+  ThreadRuntimeStatusUpdate,
   ThreadTurnsPageResult,
 } from "./thread";
 import type { ApprovalPolicy, ReasoningEffort } from "./thread";
@@ -200,6 +201,14 @@ export type RealtimeServerMessage =
     }
   | {
       type: "config.pinnedThreads.changed";
+    }
+  | {
+      type: "thread.runtime.snapshot";
+      statuses: ThreadRuntimeStatusUpdate[];
+    }
+  | {
+      type: "thread.runtime.updated";
+      update: ThreadRuntimeStatusUpdate;
     }
   | {
       type: "host.lifecycle";

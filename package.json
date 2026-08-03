@@ -8,14 +8,15 @@
     "prebuild": "pnpm build:dependencies",
     "predev": "pnpm build:dependencies",
     "dev": "nuxt dev",
-    "format:check": "oxfmt --check app packages scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts '!third_party/**'",
+    "format:check": "oxfmt --check app scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts '!third_party/**'",
     "lint": "pnpm typecheck && pnpm lint:ox && pnpm format:check",
-    "lint:fix": "oxlint app packages scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts --ignore-pattern 'third_party/**' --fix && oxfmt --write app packages scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts '!third_party/**'",
-    "lint:ox": "oxlint app packages scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts --ignore-pattern 'third_party/**'",
-    "typecheck": "pnpm build:dependencies && turbo run typecheck --filter=@codex-gateway/browser-runtime --filter=@codex-gateway/ui --filter=@codex-gateway/ai-elements && nuxt typecheck && vue-tsc -p tests/e2e/tsconfig.json --noEmit",
+    "lint:fix": "oxlint app scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts --ignore-pattern 'third_party/**' --fix && oxfmt --write app scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts '!third_party/**'",
+    "lint:ox": "oxlint app scripts server shared tests nuxt.config.ts playwright.config.ts tailwind.config.ts --ignore-pattern 'third_party/**'",
+    "typecheck": "nuxt typecheck && vue-tsc -p tests/e2e/tsconfig.json --noEmit",
+    "typecheck:dependencies": "pnpm --filter '@codex-gateway/*' --recursive typecheck",
     "user:create": "node scripts/create-user.mjs",
     "test:e2e": "tests/e2e/run-in-containers.sh",
-    "postinstall": "pnpm build:dependencies && nuxt prepare"
+    "postinstall": "pnpm build:dependencies && pnpm typecheck:dependencies && nuxt prepare"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

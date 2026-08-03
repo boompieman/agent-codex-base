@@ -6,6 +6,9 @@ import { subAgentThreadStore } from "../state/sub-agent-threads";
 import { threadSnapshotStore } from "../state/thread-snapshots";
 import { dispatchThreadRuntimeNotification } from "../notifications/thread-notification-dispatcher";
 import { applyEventToOpenSnapshot } from "./open-snapshot-events";
+import { runtimeStatusFromEvent } from "~~/shared/thread-runtime-status";
+import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
+import { threadRuntimeStatusHub } from "./thread-runtime-status-hub";
 
 type ThreadEventSubscriber = (event: GatewayEvent) => void;
 export type ThreadGoalResolver = () => Promise<unknown>;
@@ -28,6 +31,7 @@ class ThreadRuntimeEventBus {
       applyEventToOpenSnapshot(snapshot, method, envelope, event.createdAt),
     );
     this.publish(event);
+    this.publishRuntimeStatus(event);
     dispatchThreadRuntimeNotification(event, options);
     return event;
   }
@@ -54,6 +58,20 @@ class ThreadRuntimeEventBus {
     ) ?? []) {
       subscriber(event);
     }
+  }
+
+  private publishRuntimeStatus(event: GatewayEvent) {
+    const status = runtimeStatusFromEvent(event);
+    if (status === null) return;
+    const params = recordFromUnknown(event.payload.params);
+    const turn = recordFromUnknown(params?.turn);
+    const turnId = idFromUnknown(turn?.id);
+    threadRuntimeStatusHub.publish(currentUserId(), {
+      hostId: event.hostId,
+      threadId: event.threadId,
+      status,
+      turnId: status === "running" && turnId !== null ? String(turnId) : null,
+    });
   }
 
   private key(userId: number, hostId: number, threadId: string) {

@@ -2,6 +2,13 @@ import type { GatewayEvent, ProjectRecord } from "./records";
 import type { ThreadHistoryItem, ThreadTimelineHistoryState } from "../thread-history/types";
 
 export type ThreadRuntimeStatus = "idle" | "running" | "completed" | "failed" | "interrupted";
+
+export interface ThreadRuntimeStatusUpdate {
+  hostId: number;
+  threadId: string;
+  status: ThreadRuntimeStatus;
+  turnId?: string | null;
+}
 export type ThreadGoalStatus =
   | "active"
   | "paused"
