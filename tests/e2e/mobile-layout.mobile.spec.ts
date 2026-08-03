@@ -52,6 +52,39 @@ test("uses the mobile layout with hidden sidebar and usable composer shell", asy
   await expect(page.getByText("先选择一个项目")).toBeVisible();
 });
 
+test("shows effort and compact context usage without mobile approval controls", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "mobile-composer-settings";
+  const tokenBreakdown = {
+    totalTokens: 50_000,
+    inputTokens: 45_000,
+    cachedInputTokens: 20_000,
+    cacheWriteInputTokens: 0,
+    outputTokens: 5_000,
+    reasoningOutputTokens: 2_000,
+  };
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Mobile composer settings" },
+    threadSettings: { effort: "medium", approvalPolicy: "never" },
+    tokenUsage: {
+      total: tokenBreakdown,
+      last: tokenBreakdown,
+      modelContextWindow: 100_000,
+    },
+  });
+
+  await expect(page.getByTestId("model-select")).toContainText("Medium");
+  await expect(page.getByText("完全访问", { exact: true })).toBeHidden();
+  const contextMeter = page.getByTestId("context-usage-meter");
+  await expect(contextMeter).toBeVisible();
+  await expect(contextMeter).toHaveAttribute("aria-label", "上下文用量 50%");
+  await expect(contextMeter.getByText("50%", { exact: true })).toBeHidden();
+});
+
 test("virtualizes a large running turn in one agent timeline", async ({ page }, testInfo) => {
   await openApp(page);
   // openApp may reset persisted E2E config by navigating once. WebKit reports an HTTP request

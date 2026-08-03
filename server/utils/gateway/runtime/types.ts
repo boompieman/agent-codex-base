@@ -28,7 +28,8 @@ export interface ThreadOpenSnapshot {
     nextCursor: string | null;
     backwardsCursor: string | null;
   };
-  threadSettings: ThreadSettingsState;
+  /** Null when a metadata-only thread/read cannot expose persisted model settings. */
+  threadSettings: ThreadSettingsState | null;
   tokenUsage: ThreadTokenUsageState | null;
 }
 

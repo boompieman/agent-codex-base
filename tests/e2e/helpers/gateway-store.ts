@@ -6,7 +6,9 @@ import type {
   ProjectRecord,
   ThreadGoalStatus,
   ThreadHistoryState,
+  ThreadSettingsState,
   ThreadTimelineTurn,
+  ThreadTokenUsageState,
 } from "../../../shared/types";
 import { projectThreadTimelineHistory } from "../../../shared/thread-history/timeline";
 import type { ThreadViewState } from "../../../app/stores/gateway/types";
@@ -40,6 +42,8 @@ interface SeedGatewayThreadInput {
   olderTurnsCursor?: string | null;
   newerTurnsCursor?: string | null;
   events?: GatewayEvent[];
+  threadSettings?: ThreadSettingsState;
+  tokenUsage?: ThreadTokenUsageState;
   lastEventId?: number;
   eventEpoch?: string;
   threadViews?: Record<
@@ -98,7 +102,7 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
   await page.evaluate((input: SeedGatewayThreadRuntimeInput) => {
     const driver = window.__codexGatewayE2e;
     if (!driver) throw new Error("Gateway E2E driver is unavailable");
-    const { bootstrap, catalog, navigation, runtime, views } = driver;
+    const { bootstrap, catalog, composer, navigation, runtime, views } = driver;
     const hostId = input.hostId ?? 1;
     const projectId = input.projectId ?? null;
     const threadId = input.threadId ?? null;
@@ -126,6 +130,12 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     views.loading = input.loading ?? false;
     if (hasThread && input.status !== undefined) {
       runtime.setThreadStatus(hostId, threadId, input.status);
+    }
+    if (hasThread && input.threadSettings !== undefined) {
+      composer.setThreadSettings(hostId, threadId, input.threadSettings);
+    }
+    if (hasThread && input.tokenUsage !== undefined) {
+      runtime.setThreadTokenUsage(hostId, threadId, input.tokenUsage);
     }
   }, runtimeInput);
 }

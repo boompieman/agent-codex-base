@@ -45,9 +45,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div
-    class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 pt-1.5 sm:flex sm:flex-row sm:flex-wrap sm:justify-between sm:gap-2"
-  >
+  <div class="flex min-w-0 items-center gap-1.5 pt-1.5 sm:flex-wrap sm:justify-between sm:gap-2">
     <div class="flex min-w-0 items-center gap-1 text-base text-ink-muted">
       <Button
         type="button"
@@ -61,14 +59,16 @@ const emit = defineEmits<{
         <Loader2Icon v-if="uploadingAttachments" class="size-5 animate-spin" />
         <PlusIcon v-else class="size-5" />
       </Button>
-      <ApprovalPolicyPicker
-        :model-value="selectedApprovalMode"
-        @update:model-value="emit('updateSelectedApprovalMode', $event)"
-      />
+      <div class="hidden sm:block">
+        <ApprovalPolicyPicker
+          :model-value="selectedApprovalMode"
+          @update:model-value="emit('updateSelectedApprovalMode', $event)"
+        />
+      </div>
     </div>
-    <div class="contents sm:flex sm:min-w-0 sm:items-center sm:justify-end sm:gap-2">
+    <div class="ml-auto flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
       <ContextUsageMeter :token-usage="selectedThreadTokenUsage" />
-      <div class="min-w-0 justify-self-center sm:contents">
+      <div class="min-w-0">
         <ModelEffortPicker
           :models="models"
           :loading-models="loadingModels"

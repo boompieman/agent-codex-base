@@ -25,17 +25,25 @@ const contextUsageStyle = computed(() => {
 const contextUsageLabel = computed(() =>
   contextUsedPercent.value == null ? null : `${contextUsedPercent.value}%`,
 );
+const accessibleLabel = computed(() =>
+  contextUsedPercent.value === null
+    ? t("app.contextUsageUnavailable")
+    : t("app.contextUsage", { percent: contextUsedPercent.value }),
+);
 </script>
 
 <template>
   <div
     v-if="contextUsageLabel"
-    class="hidden items-center gap-2 text-base text-ink-muted sm:flex"
-    :title="t('app.contextUsage', { percent: contextUsedPercent })"
+    data-testid="context-usage-meter"
+    class="flex shrink-0 items-center gap-2 text-base text-ink-muted"
+    :title="accessibleLabel"
+    role="img"
+    :aria-label="accessibleLabel"
   >
     <div class="flex size-6 items-center justify-center rounded-full" :style="contextUsageStyle">
       <div class="size-3.5 rounded-full bg-surface" />
     </div>
-    <span>{{ contextUsageLabel }}</span>
+    <span class="hidden sm:inline">{{ contextUsageLabel }}</span>
   </div>
 </template>
