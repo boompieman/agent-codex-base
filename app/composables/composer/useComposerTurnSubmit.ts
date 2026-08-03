@@ -20,6 +20,7 @@ export function useComposerTurnSubmit(input: {
   clearDraft: () => void;
   selectedTurnOptions: () => ComposerTurnOptions;
   activeModel: Ref<string | null>;
+  selectedModel: Ref<string>;
   selectedEffort: Ref<string>;
   fileReferencesLabel: Ref<string>;
 }) {
@@ -83,14 +84,22 @@ export function useComposerTurnSubmit(input: {
   }
 
   function planCollaborationMode() {
-    if (input.activeModel.value === null || input.activeModel.value === "") {
-      return undefined;
-    }
     const mode = planModeActive.value ? "plan" : "default";
+    // An existing metadata-only thread may have no selectedModel even though activeModel contains
+    // a catalog fallback for display. Omitting default collaboration mode in that state lets the
+    // resumed app-server thread retain its persisted model and effort. Plan mode is an explicit
+    // user override, so it may intentionally use the displayed catalog fallback.
+    const model =
+      input.selectedModel.value !== ""
+        ? input.selectedModel.value
+        : mode === "plan"
+          ? input.activeModel.value
+          : null;
+    if (model === null || model === "") return undefined;
     return {
       mode,
       settings: {
-        model: input.activeModel.value,
+        model,
         reasoningEffort:
           input.selectedEffort.value === "default" ? null : input.selectedEffort.value,
         developerInstructions: null,

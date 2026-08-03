@@ -91,7 +91,12 @@ function applyCommonThreadResult(
   views.newerTurnsCursor = result.turnsPage.backwardsCursor;
   views.lastEventId = explicitLastEventId ?? result.recentEvents.at(-1)?.id ?? 0;
   views.eventEpoch = result.eventEpoch;
-  composer.setThreadSettings(hostId, threadId, result.threadSettings);
+  // A metadata-only thread/read does not expose persisted model/effort. Null means unknown, not
+  // "reset to model defaults", so a same-page thread switch must retain the last authoritative
+  // thread/settings/updated projection already held by Pinia.
+  if (result.threadSettings !== null && result.threadSettings !== undefined) {
+    composer.setThreadSettings(hostId, threadId, result.threadSettings);
+  }
   if (result.tokenUsage !== null && result.tokenUsage !== undefined) {
     runtime.setThreadTokenUsage(hostId, threadId, result.tokenUsage);
   } else syncTokenUsageFromRecentEvents(result.recentEvents);

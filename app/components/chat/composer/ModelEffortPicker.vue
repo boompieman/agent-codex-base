@@ -45,7 +45,8 @@ const { t } = useI18n();
         data-testid="model-select"
         :disabled="loadingModels || !models.length"
       >
-        <span class="truncate text-ink">{{
+        <span class="truncate text-ink sm:hidden">{{ activeEffortCompactLabel }}</span>
+        <span class="hidden truncate text-ink sm:inline">{{
           loadingModels ? t("app.loadingModels") : activeModelLabel
         }}</span>
         <span v-if="activeEffortCompactLabel" class="hidden shrink-0 text-ink-muted sm:inline">{{

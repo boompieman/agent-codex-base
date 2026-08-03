@@ -6,7 +6,11 @@ import {
   runtimeStatusFromSnapshotState,
   runtimeStatusFromThreadState,
 } from "~~/shared/thread-runtime-status";
-import { extractThreadSettings, latestTokenUsageFromEvents } from "../protocol/thread-payload";
+import {
+  extractThreadSettings,
+  latestThreadSettingsFromEvents,
+  latestTokenUsageFromEvents,
+} from "../protocol/thread-payload";
 import { gatewayEventStore } from "../state/gateway-events";
 import { projectStore } from "../state/projects";
 import { threadMetadataStore } from "../state/thread-metadata";
@@ -278,7 +282,11 @@ export class ThreadOpenService {
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
-      threadSettings: extractThreadSettings(read.raw),
+      // thread/read intentionally returns only Thread metadata, not the persisted model/effort
+      // exposed by thread/resume. Preserve a setting observed from Gateway events when available;
+      // otherwise report unknown instead of projecting null fields that erase the browser's
+      // page-level per-thread setting cache.
+      threadSettings: latestThreadSettingsFromEvents(recentEvents),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
     threadSnapshotStore.set(host.id, threadId, snapshot);

@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref } from "vue";
 
 import { storeToRefs } from "pinia";
 import type { ApprovalPolicy, ReasoningEffort } from "~~/shared/types";
@@ -15,12 +15,65 @@ export function useThreadSettingsControls() {
   const { selectedThreadSettings } = storeToRefs(composer);
   const { selectedThreadId } = storeToRefs(navigation);
   const { t } = useI18n();
-  const selectedModel = ref("");
-  const selectedEffort = ref<ReasoningEffort>("default");
-  const selectedApprovalMode = ref<ApprovalPolicy | "custom">("custom");
-  let syncingSettings = false;
+  const newThreadModel = ref("");
+  const newThreadEffort = ref<ReasoningEffort>("default");
+  const newThreadApprovalMode = ref<ApprovalPolicy | "custom">("custom");
+
+  // Existing-thread controls are computed proxies over the per-thread Pinia state. Do not mirror
+  // them into local refs with bidirectional watchers: thread selection, snapshot hydration, and the
+  // model catalog arrive independently, and a transient model default can otherwise be written
+  // back as the thread's setting. Local refs are retained only for the pre-thread composer, where
+  // no app-server thread identity exists yet.
+  const selectedModel = computed({
+    get: () =>
+      selectedThreadId.value === null
+        ? (firstNonEmptyString([
+            newThreadModel.value,
+            defaultModel.value?.model,
+            defaultModel.value?.id,
+          ]) ?? "")
+        : (trimmedOrNull(selectedThreadSettings.value.model) ?? ""),
+    set: (model: string) => {
+      if (selectedThreadId.value === null) {
+        newThreadModel.value = model;
+        return;
+      }
+      void composer.saveSelectedThreadSettings({ model: trimmedOrNull(model) });
+    },
+  });
+  const selectedEffort = computed<ReasoningEffort>({
+    get: () =>
+      selectedThreadId.value === null
+        ? newThreadEffort.value
+        : (selectedThreadSettings.value.effort ?? "default"),
+    set: (effort) => {
+      if (selectedThreadId.value === null) {
+        newThreadEffort.value = effort;
+        return;
+      }
+      void composer.saveSelectedThreadSettings({ effort: effort === "default" ? null : effort });
+    },
+  });
+  const selectedApprovalMode = computed<ApprovalPolicy | "custom">({
+    get: () =>
+      selectedThreadId.value === null
+        ? newThreadApprovalMode.value
+        : (selectedThreadSettings.value.approvalPolicy ?? "custom"),
+    set: (approvalPolicy) => {
+      if (selectedThreadId.value === null) {
+        newThreadApprovalMode.value = approvalPolicy;
+        return;
+      }
+      void composer.saveSelectedThreadSettings({
+        approvalPolicy: approvalPolicy === "custom" ? null : approvalPolicy,
+      });
+    },
+  });
 
   const activeModel = computed(
+    // This fallback is presentation-only for an existing thread whose metadata-only read cannot
+    // expose persisted settings. Turn submission uses selectedModel instead, because explicitly
+    // sending this catalog default makes app-server discard the thread's persisted model/effort.
     () =>
       firstNonEmptyString([
         selectedModel.value,
@@ -38,9 +91,14 @@ export function useThreadSettingsControls() {
     return firstNonEmptyString([model?.displayName, model?.model, activeModel.value]) ?? "模型";
   });
   const activeEffortValue = computed(() => {
-    return selectedEffort.value !== "default"
-      ? selectedEffort.value
-      : (activeModelRecord.value?.defaultReasoningEffort ?? "");
+    if (selectedEffort.value !== "default") return selectedEffort.value;
+    // A new thread genuinely inherits the selected model's default. For an existing thread,
+    // "default" can also mean that a metadata-only thread/read could not expose persisted effort;
+    // displaying the catalog default as if it were authoritative is what produced the false Light
+    // state on mobile.
+    return selectedThreadId.value === null
+      ? (activeModelRecord.value?.defaultReasoningEffort ?? "")
+      : "";
   });
   const effortOptions = computed(() => {
     const supportedEfforts = activeModelRecord.value?.supportedReasoningEfforts ?? [];
@@ -59,7 +117,11 @@ export function useThreadSettingsControls() {
   const activeEffortLabel = computed(() =>
     labelEffortOption(effortOptions.value.find((option) => option.value === selectedEffort.value)),
   );
-  const activeEffortCompactLabel = computed(() => compactEffortLabel(activeEffortValue.value));
+  const activeEffortCompactLabel = computed(() =>
+    activeEffortValue.value === ""
+      ? t("app.reasoningDefault")
+      : compactEffortLabel(activeEffortValue.value),
+  );
 
   function compactEffortLabel(value: string) {
     if (value === "") return "";
@@ -103,57 +165,6 @@ export function useThreadSettingsControls() {
   function setSelectedApprovalMode(value: ApprovalPolicy | "custom") {
     selectedApprovalMode.value = value;
   }
-
-  function syncComposerFromThreadSettings() {
-    syncingSettings = true;
-    selectedModel.value =
-      firstNonEmptyString([
-        selectedThreadSettings.value.model,
-        defaultModel.value?.model,
-        defaultModel.value?.id,
-      ]) ?? "";
-    selectedEffort.value = selectedThreadSettings.value.effort ?? "default";
-    selectedApprovalMode.value = selectedThreadSettings.value.approvalPolicy ?? "custom";
-    void nextTick(() => {
-      syncingSettings = false;
-    });
-  }
-
-  watch(
-    () => [
-      selectedThreadId.value,
-      selectedThreadSettings.value.model,
-      selectedThreadSettings.value.effort,
-      selectedThreadSettings.value.approvalPolicy,
-      defaultModel.value?.model,
-      defaultModel.value?.id,
-    ],
-    syncComposerFromThreadSettings,
-    { immediate: true },
-  );
-
-  watch(selectedModel, (model) => {
-    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
-      return;
-    }
-    void composer.saveSelectedThreadSettings({ model: trimmedOrNull(model) });
-  });
-
-  watch(selectedEffort, (effort) => {
-    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
-      return;
-    }
-    void composer.saveSelectedThreadSettings({ effort: effort === "default" ? null : effort });
-  });
-
-  watch(selectedApprovalMode, (approvalPolicy) => {
-    if (syncingSettings || selectedThreadId.value === null || selectedThreadId.value === "") {
-      return;
-    }
-    void composer.saveSelectedThreadSettings({
-      approvalPolicy: approvalPolicy === "custom" ? null : approvalPolicy,
-    });
-  });
 
   return {
     selectedModel,
