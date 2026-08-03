@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { CopyIcon, MoveIcon, RotateCcwIcon, ZoomInIcon, ZoomOutIcon } from "@lucide/vue";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useAuthStore } from "@/stores/auth";
 import {
   Dialog,
@@ -10,8 +10,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Slider } from "@/components/ui/slider";
+} from "@codex-gateway/ui/dialog";
+import { Slider } from "@codex-gateway/ui/slider";
 
 const props = defineProps<{
   source: string;

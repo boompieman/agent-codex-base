@@ -2,8 +2,8 @@
 import { BotIcon } from "@lucide/vue";
 import { computed } from "vue";
 import type { ThreadTimelineTurn } from "~~/shared/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
 import { useOpenSubAgentPanel } from "@/composables/thread/useOpenSubAgentPanel";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";

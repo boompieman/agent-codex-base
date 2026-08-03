@@ -8,9 +8,9 @@ import {
   XCircleIcon,
 } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
+import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import HighlightedCode from "@/components/common/HighlightedCode.vue";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import { ChatStickToBottomScrollArea } from "@/components/common/chat-virtualizer";

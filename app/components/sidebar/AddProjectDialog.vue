@@ -2,16 +2,16 @@
 import { FolderIcon, FolderOpenIcon } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import type { HostRecord, ProjectRecord, RemoteDirectoryEntry } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+} from "@codex-gateway/ui/dialog";
+import { Input } from "@codex-gateway/ui/input";
+import { Separator } from "@codex-gateway/ui/separator";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 

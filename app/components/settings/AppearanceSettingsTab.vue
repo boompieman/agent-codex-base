@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { LogOutIcon } from "@lucide/vue";
 import LanguageSwitcher from "@/components/common/LanguageSwitcher.vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useAuthStore } from "@/stores/auth";
 
 const emit = defineEmits<{ close: [] }>();

@@ -82,7 +82,8 @@ Browser
 ```text
 .
 ├── app/                       # Nuxt 前端、Pinia store、chat/thread/settings UI
-├── app/components/ui/         # shadcn-vue 基础组件
+├── packages/gateway-ui/       # 预编译的 shadcn-vue 组件包
+├── packages/gateway-ai-elements/ # 预编译的 AI Elements 组件包
 ├── server/api/                # 浏览器访问 Gateway 的 HTTP/WebSocket API
 ├── server/tasks/              # Nitro 定时任务入口
 ├── server/utils/gateway/      # SSH、Codex RPC、runtime broker、存储、通知

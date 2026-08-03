@@ -2,8 +2,8 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { GitBranchIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
 import { useOpenSubAgentPanel } from "@/composables/thread/useOpenSubAgentPanel";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "@/stores/gateway/thread-utils/identity";

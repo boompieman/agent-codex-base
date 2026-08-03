@@ -2,10 +2,15 @@
 import { CheckIcon, CopyIcon } from "@lucide/vue";
 import { useClipboard } from "@vueuse/core";
 import { toRef } from "vue";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import TurnDurationLabel from "@/components/thread/TurnDurationLabel.vue";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@codex-gateway/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@codex-gateway/ui/tooltip";
 import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 
 const props = defineProps<{

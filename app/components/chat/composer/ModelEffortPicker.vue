@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CheckIcon, ChevronDownIcon } from "@lucide/vue";
 import type { ModelRecord, ReasoningEffort } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@codex-gateway/ui/dropdown-menu";
 
 defineProps<{
   models: ModelRecord[];

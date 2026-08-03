@@ -2,7 +2,7 @@
 import { ExternalLinkIcon, LoaderCircleIcon, RefreshCwIcon, ShieldAlertIcon } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { openBrowserPreview } from "@/stores/gateway-browser/transport";
 import { setBrowserPreviewInsecureTls } from "@/stores/gateway-browser/transport";

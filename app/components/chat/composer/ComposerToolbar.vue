@@ -7,7 +7,7 @@ import type {
   ThreadRuntimeStatus,
   ThreadTokenUsageState,
 } from "~~/shared/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import ApprovalPolicyPicker from "@/components/chat/composer/ApprovalPolicyPicker.vue";
 import ContextUsageMeter from "@/components/chat/composer/ContextUsageMeter.vue";
 import ModelEffortPicker from "@/components/chat/composer/ModelEffortPicker.vue";

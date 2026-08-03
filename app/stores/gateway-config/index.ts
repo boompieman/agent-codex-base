@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { klona } from "klona";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import { useGatewayTranslator } from "@/composables/i18n/useGatewayTranslator";
 import type {
   GatewayConfig,

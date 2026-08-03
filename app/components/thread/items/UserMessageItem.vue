@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@codex-gateway/ui/badge";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import ThreadImageAttachment from "@/components/thread/attachments/ThreadImageAttachment.vue";
 import { threadItemText } from "@/utils/thread-items";

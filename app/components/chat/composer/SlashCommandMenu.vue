@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SlashMenuItem } from "@/composables/composer/useSlashCommands";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 
 defineProps<{
   open: boolean;

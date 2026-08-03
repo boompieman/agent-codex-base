@@ -3,7 +3,7 @@ import { TargetIcon } from "@lucide/vue";
 import { computed } from "vue";
 import type { ThreadGoalStatus } from "~~/shared/types";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@codex-gateway/ui/badge";
 import {
   formatGoalElapsed,
   formatGoalTokens,

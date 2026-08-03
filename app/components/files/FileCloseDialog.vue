@@ -8,8 +8,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@codex-gateway/ui/alert-dialog";
+import { Button } from "@codex-gateway/ui/button";
 
 defineProps<{ document: FilePreviewDocument | null }>();
 const emit = defineEmits<{ cancel: []; discard: []; save: [] }>();

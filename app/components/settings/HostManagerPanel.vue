@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ServerIcon, Trash2Icon } from "@lucide/vue";
 import { storeToRefs } from "pinia";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { hostConnectionClass, hostConnectionLabelKey } from "@/components/sidebar/sidebar-utils";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";

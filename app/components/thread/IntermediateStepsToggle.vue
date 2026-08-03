@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDownIcon, ChevronRightIcon, ListTreeIcon } from "@lucide/vue";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@codex-gateway/ui/badge";
 
 const props = defineProps<{
   open: boolean;

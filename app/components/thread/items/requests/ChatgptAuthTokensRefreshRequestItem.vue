@@ -2,9 +2,9 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { KeyRoundIcon } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Button } from "@codex-gateway/ui/button";
+import { Input } from "@codex-gateway/ui/input";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 
 const props = defineProps<{

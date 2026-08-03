@@ -3,7 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useResizeObserver } from "@vueuse/core";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useGatewayTerminalTransport } from "@/composables/terminal/useGatewayTerminalTransport";
 import { useTerminalTheme } from "@/composables/terminal/useTerminalTheme";
 import type { TerminalSessionState } from "@/stores/gateway/types";

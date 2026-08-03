@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ClipboardPasteIcon, RefreshCwIcon } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import ConfigJsonEditor from "@/components/settings/ConfigJsonEditor.vue";
 import { useGatewayConfigStore } from "@/stores/gateway-config";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";

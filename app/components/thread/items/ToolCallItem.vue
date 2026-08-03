@@ -2,9 +2,9 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { ChevronDownIcon, ChevronRightIcon, ImageIcon, SearchIcon, WrenchIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import { isItemInProgress } from "@/utils/thread-items";

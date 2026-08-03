@@ -14,7 +14,7 @@ import AttachmentChips from "@/components/chat/composer/AttachmentChips.vue";
 import ComposerModeStrip from "@/components/chat/composer/ComposerModeStrip.vue";
 import ComposerToolbar from "@/components/chat/composer/ComposerToolbar.vue";
 import SlashCommandMenu from "@/components/chat/composer/SlashCommandMenu.vue";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@codex-gateway/ui/textarea";
 
 defineProps<{
   modelValue: string;

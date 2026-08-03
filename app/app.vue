@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@codex-gateway/ui/sonner";
 import LoginScreen from "@/components/auth/LoginScreen.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";

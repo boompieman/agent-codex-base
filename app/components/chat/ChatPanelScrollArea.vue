@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 
 defineProps<{
   class?: HTMLAttributes["class"];

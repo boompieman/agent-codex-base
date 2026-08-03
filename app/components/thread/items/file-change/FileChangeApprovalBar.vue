@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 
 const props = defineProps<{

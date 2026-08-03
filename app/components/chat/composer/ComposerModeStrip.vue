@@ -4,7 +4,7 @@ import { XIcon } from "@lucide/vue";
 import { computed, watch } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import ComposerGoalDetailsDialog from "@/components/chat/composer/ComposerGoalDetailsDialog.vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { formatGoalElapsed } from "@/utils/thread-goal-display";
 
 const props = defineProps<{

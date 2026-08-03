@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CollapsibleContent } from "@/components/ui/collapsible";
+import { CollapsibleContent } from "@codex-gateway/ui/collapsible";
 
 defineProps<{
   open: boolean;

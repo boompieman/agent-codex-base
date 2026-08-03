@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ImageIcon, Maximize2Icon } from "@lucide/vue";
 import { computed, ref, toRef } from "vue";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@codex-gateway/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@codex-gateway/ui/tooltip";
 import ImageViewer from "@/components/common/ImageViewer.vue";
 import { useAuthorizedObjectUrl } from "@/composables/files/useAuthorizedObjectUrl";
 

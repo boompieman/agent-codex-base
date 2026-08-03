@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import { toast } from "vue-sonner";
+import { toast } from "@codex-gateway/ui/sonner";
 import type { TmuxMonitor, TmuxMonitorMode, TmuxPaneSnapshot } from "~~/shared/types";
 import { useTmuxMonitorDashboard } from "./useTmuxMonitorDashboard";
 import { useGatewayTmuxStore } from "@/stores/gateway-tmux";

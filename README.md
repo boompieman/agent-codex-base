@@ -82,7 +82,8 @@ Core rules:
 ```text
 .
 ├── app/                       # Nuxt frontend, Pinia store, chat/thread/settings UI
-├── app/components/ui/         # shadcn-vue base components
+├── packages/gateway-ui/       # Precompiled shadcn-vue component package
+├── packages/gateway-ai-elements/ # Precompiled AI Elements component package
 ├── server/api/                # Browser-facing HTTP and WebSocket API
 ├── server/tasks/              # Nitro scheduled task entrypoints
 ├── server/utils/gateway/      # SSH, Codex RPC, runtime broker, storage, notifications

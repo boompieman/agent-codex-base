@@ -5,7 +5,7 @@ import { Compartment, EditorState } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
 import { useEventListener } from "@vueuse/core";
-import { cn } from "@/lib/utils";
+import { cn } from "@codex-gateway/ui/utils";
 import {
   gatewayCodeEditorTheme,
   languageExtension,

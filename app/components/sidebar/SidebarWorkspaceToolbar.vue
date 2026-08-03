@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ActivityIcon, ChartNoAxesCombinedIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@codex-gateway/ui/button";
+import { SidebarTrigger } from "@codex-gateway/ui/sidebar";
 
 defineProps<{ title: string; canLaunch: boolean; tmuxActiveCount: number }>();
 const emit = defineEmits<{

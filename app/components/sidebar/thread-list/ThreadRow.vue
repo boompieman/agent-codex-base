@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { StarIcon } from "@lucide/vue";
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@codex-gateway/ui/context-menu";
 import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
 import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import { selectedRowClass } from "../sidebar-utils";

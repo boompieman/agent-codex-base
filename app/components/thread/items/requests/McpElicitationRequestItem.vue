@@ -2,10 +2,10 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { ExternalLinkIcon, MessageCircleQuestionIcon } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@codex-gateway/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
+import { ScrollArea } from "@codex-gateway/ui/scroll-area";
+import { Textarea } from "@codex-gateway/ui/textarea";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 import { jsonPreview } from "@/utils/thread-items";
 

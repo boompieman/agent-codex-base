@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { GlobeIcon } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+} from "@codex-gateway/ui/dialog";
+import { Input } from "@codex-gateway/ui/input";
 
 const props = defineProps<{ open: boolean; openTarget: (targetUrl: string) => void }>();
 const emit = defineEmits<{ "update:open": [value: boolean] }>();

@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@codex-gateway/ui/alert-dialog";
 
 defineProps<{
   open: boolean;

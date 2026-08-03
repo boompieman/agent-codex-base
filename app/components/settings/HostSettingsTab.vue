@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PlusIcon } from "@lucide/vue";
 import { ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import HostEditList from "@/components/settings/HostEditList.vue";
 import HostConnectionFields from "./host-connection/HostConnectionFields.vue";
 import { emptyHostConnectionForm, hostConnectionPayload } from "./host-connection/form";

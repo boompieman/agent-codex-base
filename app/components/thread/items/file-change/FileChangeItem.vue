@@ -2,8 +2,8 @@
 import type { ThreadFileChange, ThreadHistoryItem } from "~~/shared/types";
 import { ChevronDownIcon, ChevronRightIcon, FilePenIcon, Loader2Icon } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@codex-gateway/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import FileChangeApprovalBar from "./FileChangeApprovalBar.vue";
 import FileChangeDiffPanel from "./FileChangeDiffPanel.vue";
 import FileChangeOutputPanel from "./FileChangeOutputPanel.vue";

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ActivityIcon, ChartNoAxesCombinedIcon, GlobeIcon, TerminalIcon } from "@lucide/vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 
 defineProps<{
   canOpenTerminal: boolean;

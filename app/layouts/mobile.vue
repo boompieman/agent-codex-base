@@ -4,14 +4,14 @@ import { storeToRefs } from "pinia";
 import { ref, watch } from "vue";
 import ChatWorkspace from "@/components/chat/ChatWorkspace.vue";
 import GatewaySidebar from "@/components/sidebar/GatewaySidebar.vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@codex-gateway/ui/sheet";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { projectById } from "@/stores/gateway-catalog/selectors";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";

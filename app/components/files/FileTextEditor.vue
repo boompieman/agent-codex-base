@@ -4,7 +4,7 @@ import { EyeIcon, FileCodeIcon, Loader2Icon, SaveIcon } from "@lucide/vue";
 import type { FilePreviewDocument } from "~~/shared/types";
 import { isMarkdownPreviewPath } from "~~/shared/file-preview";
 import CodeEditor from "@/components/common/CodeEditor.vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { codeEditorLanguageForPath } from "@/utils/code-editor-extensions";
 import { fileEditorExtensions } from "@/utils/file-editor-extensions";

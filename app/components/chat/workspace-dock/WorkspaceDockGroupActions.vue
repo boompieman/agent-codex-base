@@ -2,7 +2,7 @@
 import type { IDockviewHeaderActionsProps } from "dockview-vue";
 import { ArrowDownToLineIcon, Maximize2Icon, PictureInPicture2Icon, Rows3Icon } from "@lucide/vue";
 import { onBeforeUnmount, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@codex-gateway/ui/button";
 
 import { floatDockItem, popoutDockItem } from "./actions";
 
