@@ -102,15 +102,22 @@ export class ThreadController {
     await this.enqueue(async () => {
       // Check and mutation must share the serialized critical section. Two browser peers can
       // acquire the same explicit lease in one tick; checking before enqueue would make both send
-      // thread/resume even though the RPC operations themselves execute sequentially. Cold views
-      // never reach this controller path: they use thread/read plus thread/turns/list.
-      if (this.subscribed) return;
+      // thread/resume even though the RPC operations themselves execute sequentially. Conversation
+      // history still uses thread/read plus thread/turns/list; this resume is only the official
+      // subscription and settings hydration operation.
+      // A subscription inherited from the background monitor proves only that notifications are
+      // attached; it has no ThreadResumeResponse. Existing threads must still resume once when
+      // their materialized snapshot does not yet contain model/effort. This is the app-server's
+      // authoritative settings read, not a presentation fallback.
+      if (this.subscribed && this.getOpenSnapshot()?.threadSettings != null) return;
       // Fresh threads never enter this branch: ControllerRegistry keeps thread/start's implicit
       // subscription under a bootstrap owner until turn/started. Calling thread/resume before that
       // point is invalid because app-server has not materialized a rollout yet.
       const resumed = await this.client.request(
         "thread/resume",
-        { threadId: this.threadId },
+        // Conversation history is hydrated separately through the paginated API. Asking resume to
+        // return it again wastes SSH bandwidth and memory, especially for long-running threads.
+        { threadId: this.threadId, excludeTurns: true },
         120_000,
         parseThreadResumeResult,
       );
@@ -120,13 +127,7 @@ export class ThreadController {
       // does not emit `thread/settings/updated` for the resume itself. Project the response through
       // the same Gateway event path so the server snapshot and every browser use one settings
       // source instead of guessing from the model catalog.
-      this.publish("thread/settings/updated", {
-        method: "thread/settings/updated",
-        params: {
-          threadId: this.threadId,
-          threadSettings: extractThreadSettings(resumed),
-        },
-      });
+      this.publishResumedSettings(resumed);
     });
   }
 
@@ -220,5 +221,15 @@ export class ThreadController {
     this.activeMainThread =
       !this.subAgentThread &&
       runtimeStatusFromSnapshotState(snapshot.thread, snapshot.history) === "running";
+  }
+
+  private publishResumedSettings(resumed: unknown) {
+    this.publish("thread/settings/updated", {
+      method: "thread/settings/updated",
+      params: {
+        threadId: this.threadId,
+        threadSettings: extractThreadSettings(resumed),
+      },
+    });
   }
 }

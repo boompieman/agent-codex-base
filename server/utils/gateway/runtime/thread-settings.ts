@@ -5,9 +5,9 @@ export class ThreadSettingsService {
   constructor(private readonly registry: ControllerRegistry) {}
 
   async resolveThreadSettings(host: HostRecord, threadId: string) {
-    // Acquiring a scoped lease performs the only authoritative settings read exposed by
-    // app-server: `thread/resume`. The controller projects its response into the snapshot/event
-    // stream; no second settings state is kept here.
+    // Acquiring a scoped lease invokes the controller's unified subscription/settings hydration.
+    // The controller may skip thread/resume only when both the upstream subscription and the
+    // materialized settings are already present.
     await this.registry.withScopedSubscription(host, threadId, async () => undefined);
   }
 
