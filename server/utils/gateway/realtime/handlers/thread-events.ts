@@ -72,6 +72,23 @@ export async function activateThread(
     eventEpoch,
     result.runtimeStatus === "running",
   );
+  if (result.threadSettings === null || result.threadSettings === undefined) {
+    // Send the paginated snapshot first so settings discovery never blocks conversation display.
+    // App-server exposes persisted model/effort only through `thread/resume`; resolve it once when
+    // this server-side snapshot is unknown, then let the ordinary event path update Pinia. The
+    // resolved value is cached in the snapshot, so subsequent same-process opens do not resume an
+    // idle thread again.
+    void runPeerScoped(peer, () =>
+      threadBroker.resolveThreadSettings(host, input.threadId).catch((error: unknown) => {
+        threadRuntimeEvents.record(input.hostId, input.threadId, "gateway/error", {
+          method: "gateway/error",
+          params: {
+            message: error instanceof Error ? error.message : "Failed to resolve thread settings",
+          },
+        });
+      }),
+    );
+  }
 }
 
 export async function startThread(

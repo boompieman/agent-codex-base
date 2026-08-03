@@ -4,6 +4,13 @@ import type { ControllerRegistry } from "./controller-registry";
 export class ThreadSettingsService {
   constructor(private readonly registry: ControllerRegistry) {}
 
+  async resolveThreadSettings(host: HostRecord, threadId: string) {
+    // Acquiring a scoped lease performs the only authoritative settings read exposed by
+    // app-server: `thread/resume`. The controller projects its response into the snapshot/event
+    // stream; no second settings state is kept here.
+    await this.registry.withScopedSubscription(host, threadId, async () => undefined);
+  }
+
   async updateThreadSettings(host: HostRecord, threadId: string, input: ThreadSettingsState) {
     const params: Record<string, unknown> = { threadId };
     if ("model" in input) params.model = input.model;

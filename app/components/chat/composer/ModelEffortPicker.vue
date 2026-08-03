@@ -22,7 +22,7 @@ defineProps<{
   activeEffortValue: string;
   activeEffortCompactLabel: string;
   effortOptions: Array<{ value: ReasoningEffort; label?: string }>;
-  labelEffortOption: (option: { value: ReasoningEffort; label?: string } | undefined) => string;
+  labelEffortOption: (option: { value: ReasoningEffort; label?: string }) => string;
   modelOptionValue: (modelOption: { model?: string; id: string }) => string;
 }>();
 
@@ -45,7 +45,14 @@ const { t } = useI18n();
         data-testid="model-select"
         :disabled="loadingModels || !models.length"
       >
-        <span class="truncate text-ink sm:hidden">{{ activeEffortCompactLabel }}</span>
+        <span class="flex min-w-0 items-center gap-1.5 sm:hidden">
+          <span class="truncate text-ink">{{
+            loadingModels ? t("app.loadingModels") : activeModelLabel
+          }}</span>
+          <span v-if="activeEffortCompactLabel" class="shrink-0 text-ink-muted">
+            {{ activeEffortCompactLabel }}
+          </span>
+        </span>
         <span class="hidden truncate text-ink sm:inline">{{
           loadingModels ? t("app.loadingModels") : activeModelLabel
         }}</span>

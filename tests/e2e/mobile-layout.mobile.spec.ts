@@ -69,7 +69,7 @@ test("shows effort and compact context usage without mobile approval controls", 
     projectId: 1,
     threadId,
     currentThread: { id: threadId, name: "Mobile composer settings" },
-    threadSettings: { effort: "medium", approvalPolicy: "never" },
+    threadSettings: { model: "gpt-5.6-luna", effort: "medium", approvalPolicy: "never" },
     tokenUsage: {
       total: tokenBreakdown,
       last: tokenBreakdown,
@@ -77,6 +77,7 @@ test("shows effort and compact context usage without mobile approval controls", 
     },
   });
 
+  await expect(page.getByTestId("model-select")).toContainText("gpt-5.6-luna");
   await expect(page.getByTestId("model-select")).toContainText("Medium");
   await expect(page.getByText("完全访问", { exact: true })).toBeHidden();
   const contextMeter = page.getByTestId("context-usage-meter");

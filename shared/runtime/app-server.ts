@@ -285,3 +285,33 @@ export function parseThreadReadResult(value: unknown) {
   const result = z.object({ thread: appServerThreadSchema }).loose().parse(value);
   return { raw: result, thread: result.thread };
 }
+
+const threadResumeResultSchema = z
+  .object({
+    thread: appServerThreadSchema,
+    model: z.string().min(1),
+    reasoningEffort: z.string().nullable(),
+    approvalPolicy: z.union([
+      z.literal("untrusted"),
+      z.literal("on-request"),
+      z.literal("never"),
+      z
+        .object({
+          granular: z
+            .object({
+              sandbox_approval: z.boolean(),
+              rules: z.boolean(),
+              skill_approval: z.boolean(),
+              request_permissions: z.boolean(),
+              mcp_elicitations: z.boolean(),
+            })
+            .strict(),
+        })
+        .strict(),
+    ]),
+  })
+  .loose();
+
+export function parseThreadResumeResult(value: unknown) {
+  return threadResumeResultSchema.parse(value);
+}
