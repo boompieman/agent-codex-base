@@ -60,7 +60,23 @@ export function useDirectDomVirtualizer<
   const resolvedOptions = computed(() => ({
     observeElementRect,
     observeElementOffset,
-    scrollToFn: elementScroll,
+    scrollToFn: (
+      offset: number,
+      scrollOptions: { adjustments?: number; behavior?: ScrollBehavior },
+      changedInstance: Virtualizer<TScrollElement, TItemElement>,
+    ) => {
+      // Virtual Core updates its size cache before applying an end-anchor correction. Because this
+      // adapter owns the sizer directly, the browser would otherwise receive the new scrollTop
+      // while the DOM still exposes the old maximum and clamp the write. The final measured row
+      // then leaves exactly its estimate-to-real delta below a supposedly pinned chat.
+      //
+      // Keep this ordering at the adapter boundary, where every Core-driven scroll passes through;
+      // a component ResizeObserver or repeated scrollToEnd would create a second scroll owner and
+      // race native iOS momentum. This mirrors the official React direct-DOM adapter requirement
+      // that the size container commit before Core synchronizes the scroll position.
+      applyContainerSize(changedInstance);
+      elementScroll(offset, scrollOptions, changedInstance);
+    },
     ...unref(options),
   }));
 
@@ -147,7 +163,7 @@ export function useDirectDomVirtualizer<
     return should;
   }
 
-  function applyDirectStyles(
+  function applyContainerSize(
     changedInstance: Virtualizer<TScrollElement, TItemElement> = instance,
   ) {
     const container = directState.container;
@@ -161,6 +177,17 @@ export function useDirectDomVirtualizer<
       const sizeAxis = changedInstance.options.horizontal ? "width" : "height";
       container.style[sizeAxis] = `${totalSize}px`;
     }
+  }
+
+  function applyDirectStyles(
+    changedInstance: Virtualizer<TScrollElement, TItemElement> = instance,
+  ) {
+    const container = directState.container;
+    if (!container) {
+      return;
+    }
+
+    applyContainerSize(changedInstance);
 
     const horizontal = Boolean(changedInstance.options.horizontal);
     const positionAxis = horizontal ? "left" : "top";
