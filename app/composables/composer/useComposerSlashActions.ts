@@ -1,6 +1,7 @@
 import type { Ref } from "vue";
 import { z } from "zod";
 import type { SlashMenuItem } from "./useSlashCommands";
+import type { useComposerGoalControls } from "./useComposerGoalControls";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 
@@ -11,6 +12,7 @@ type GoalMenuCommand = Extract<
 >;
 type SlashCommandAction = (args: string) => Promise<void> | void;
 type GoalControlAction = () => Promise<void>;
+type ComposerGoalControls = ReturnType<typeof useComposerGoalControls>;
 
 export function useComposerSlashActions(input: {
   text: Ref<string>;
@@ -18,6 +20,7 @@ export function useComposerSlashActions(input: {
   startNewThread: () => Promise<void>;
   activatePlanMode: () => void;
   missingGoalObjectiveMessage: Ref<string>;
+  goalControls: ComposerGoalControls;
 }) {
   const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
@@ -32,9 +35,9 @@ export function useComposerSlashActions(input: {
   };
 
   const goalControlActions: Record<string, GoalControlAction> = {
-    clear: () => composer.clearSelectedThreadGoal(),
-    pause: () => composer.setSelectedThreadGoalStatus("paused"),
-    resume: () => composer.setSelectedThreadGoalStatus("active"),
+    clear: input.goalControls.clear,
+    pause: input.goalControls.pause,
+    resume: input.goalControls.resume,
   };
 
   const selectedCommandMenuActions: Record<
@@ -51,11 +54,7 @@ export function useComposerSlashActions(input: {
     "goal-objective": () => {
       input.text.value = "/goal ";
     },
-    "goal-edit": (command) => {
-      input.text.value = `${command.command.replace(/\s+edit$/i, "")} ${
-        composer.selectedThreadGoal?.objective ?? ""
-      }`.trimEnd();
-    },
+    "goal-edit": () => input.goalControls.edit(),
     "goal-pause": () => {
       void runGoalCommand("pause");
     },
@@ -100,7 +99,7 @@ export function useComposerSlashActions(input: {
     input.text.value = "";
     gateway.clearError();
     if (control === "edit") {
-      input.text.value = `/goal ${composer.selectedThreadGoal?.objective ?? ""}`.trimEnd();
+      input.goalControls.edit();
       return;
     }
     const controlAction = goalControlActions[control];

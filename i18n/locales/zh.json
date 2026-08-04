@@ -230,6 +230,7 @@
     "goalModeActive": "目标",
     "threadGoal": "Goal",
     "goalInputHint": "输入目标后回车",
+    "goalStop": "停止目标",
     "goalDetailsTitle": "目标详情",
     "goalDetailsDescription": "当前目标的推进状态由 app-server 同步。",
     "goalObjective": "目标内容",

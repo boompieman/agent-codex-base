@@ -4,6 +4,7 @@ import { XIcon } from "@lucide/vue";
 import { computed, watch } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import ComposerGoalDetailsDialog from "@/components/chat/composer/ComposerGoalDetailsDialog.vue";
+import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
 import { Button } from "@codex-gateway/ui/button";
 import { formatGoalElapsed } from "@/utils/thread-goal-display";
 
@@ -13,10 +14,14 @@ const props = defineProps<{
   goalInputActive: boolean;
   goal: ThreadGoal | null;
   goalObservedAt: number | null;
+  goalActionPending: ComposerGoalPendingAction | null;
 }>();
 
 const emit = defineEmits<{
   deactivatePlan: [];
+  editGoal: [];
+  stopGoal: [];
+  clearGoal: [];
 }>();
 
 const { timestamp: now, pause, resume } = useTimestamp({ controls: true, interval: 250 });
@@ -84,6 +89,10 @@ watch(visibleGoal, (goal) => (goal ? resume() : pause()), { immediate: true });
       :elapsed-label="goalElapsedLabel"
       :tokens-label="goalTokensLabel"
       :budget-label="goalBudgetLabel"
+      :pending-action="goalActionPending"
+      @edit="emit('editGoal')"
+      @stop="emit('stopGoal')"
+      @clear="emit('clearGoal')"
     />
   </div>
 </template>

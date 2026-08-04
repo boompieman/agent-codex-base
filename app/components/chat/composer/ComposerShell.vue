@@ -9,6 +9,7 @@ import type {
   ThreadTokenUsageState,
 } from "~~/shared/types";
 import type { ComposerAttachment } from "@/composables/composer/useComposerDraft";
+import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
 import type { SlashMenuItem } from "@/composables/composer/useSlashCommands";
 import AttachmentChips from "@/components/chat/composer/AttachmentChips.vue";
 import ComposerModeStrip from "@/components/chat/composer/ComposerModeStrip.vue";
@@ -24,6 +25,7 @@ defineProps<{
   goalInputActive: boolean;
   goal: ThreadGoal | null;
   goalObservedAt: number | null;
+  goalActionPending: ComposerGoalPendingAction | null;
   slashMenuOpen: boolean;
   filteredSlashCommands: SlashMenuItem[];
   selectedSlashCommandIndex: number;
@@ -53,6 +55,9 @@ defineProps<{
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   deactivatePlan: [];
+  editGoal: [];
+  stopGoal: [];
+  clearGoal: [];
   hoverSlashCommand: [index: number];
   selectSlashCommand: [command: SlashMenuItem];
   attachmentChange: [event: Event];
@@ -83,7 +88,11 @@ function openAttachmentPicker() {
         :goal-input-active="goalInputActive"
         :goal="goal"
         :goal-observed-at="goalObservedAt"
+        :goal-action-pending="goalActionPending"
         @deactivate-plan="emit('deactivatePlan')"
+        @edit-goal="emit('editGoal')"
+        @stop-goal="emit('stopGoal')"
+        @clear-goal="emit('clearGoal')"
       />
       <div
         class="relative rounded-[1.35rem] border border-hairline bg-surface p-2 shadow-lg shadow-ink/10 md:rounded-3xl md:p-[clamp(0.45rem,1vw,0.7rem)]"
