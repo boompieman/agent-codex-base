@@ -150,7 +150,7 @@ export function useComposerController() {
     attachedFiles,
     goalInputActive,
     goalActionPending: goalControls.pendingAction,
-    editSelectedThreadGoal: goalControls.edit,
+    saveSelectedThreadGoal: goalControls.saveObjective,
     stopSelectedThreadGoal: goalControls.pause,
     clearSelectedThreadGoal: goalControls.clear,
     selectedThreadGoal,

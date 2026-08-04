@@ -29,11 +29,12 @@ type DirectDomVirtualizerOptions<
   "observeElementRect" | "observeElementOffset" | "scrollToFn"
 >;
 
-type DirectDomState = {
+type DirectDomState<TItemElement extends Element> = {
   container: HTMLElement | null;
   lastPositions: WeakMap<HTMLElement, number>;
   lastSize: number | null;
   mode: DirectDomMode;
+  pendingMeasurements: Set<TItemElement>;
   prevRange: { startIndex: number; endIndex: number; isScrolling: boolean } | null;
 };
 
@@ -49,11 +50,12 @@ export function useDirectDomVirtualizer<
   options: MaybeRef<DirectDomVirtualizerOptions<TScrollElement, TItemElement>>,
   directOptions: { mode?: DirectDomMode } = {},
 ) {
-  const directState: DirectDomState = {
+  const directState: DirectDomState<TItemElement> = {
     container: null,
     lastPositions: new WeakMap<HTMLElement, number>(),
     lastSize: null,
     mode: directOptions.mode ?? "transform",
+    pendingMeasurements: new Set<TItemElement>(),
     prevRange: null,
   };
 
@@ -241,11 +243,28 @@ export function useDirectDomVirtualizer<
       directState.lastSize = totalSize;
       const sizeAxis = instance.options.horizontal ? "width" : "height";
       element.style[sizeAxis] = `${totalSize}px`;
+
+      // Vue attaches descendant refs before the ancestor ref that owns this size container. A row
+      // therefore cannot be measured from its ref callback immediately: Core may calculate an
+      // estimate-to-real end correction while the browser still exposes the old scrollHeight and
+      // clamp that write. The container would grow afterwards, leaving the chat one row delta away
+      // from the latest edge (135px in the mobile WebKit regression).
+      //
+      // Flush the queued rows through Core only after the sizer exists. This is mount ordering, not
+      // a second anchoring policy: TanStack still performs every measurement and scroll correction.
+      for (const pendingElement of directState.pendingMeasurements) {
+        instance.measureElement(pendingElement);
+      }
+      directState.pendingMeasurements.clear();
       scheduleDomCommit();
     }
   }
 
   function measureElement(element: TItemElement) {
+    if (directState.container === null) {
+      directState.pendingMeasurements.add(element);
+      return;
+    }
     instance.measureElement(element);
     applyDirectStyles();
   }

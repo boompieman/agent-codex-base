@@ -1,14 +1,18 @@
 import { ref, type Ref } from "vue";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 
-export type ComposerGoalPendingAction = "pause" | "resume" | "clear";
+export type ComposerGoalPendingAction = "set" | "pause" | "resume" | "clear";
 
 export function useComposerGoalControls(text: Ref<string>) {
   const composer = useGatewayComposerStore();
   const pendingAction = ref<ComposerGoalPendingAction | null>(null);
 
-  function edit() {
+  function editInComposer() {
     text.value = `/goal ${composer.selectedThreadGoal?.objective ?? ""}`.trimEnd();
+  }
+
+  async function saveObjective(objective: string) {
+    await runMutation("set", () => composer.setSelectedThreadGoal(objective));
   }
 
   async function pause() {
@@ -33,5 +37,5 @@ export function useComposerGoalControls(text: Ref<string>) {
     }
   }
 
-  return { pendingAction, edit, pause, resume, clear };
+  return { pendingAction, editInComposer, saveObjective, pause, resume, clear };
 }
