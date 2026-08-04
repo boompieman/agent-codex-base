@@ -54,7 +54,7 @@ export function useComposerSlashActions(input: {
     "goal-objective": () => {
       input.text.value = "/goal ";
     },
-    "goal-edit": () => input.goalControls.edit(),
+    "goal-edit": () => input.goalControls.editInComposer(),
     "goal-pause": () => {
       void runGoalCommand("pause");
     },
@@ -99,7 +99,7 @@ export function useComposerSlashActions(input: {
     input.text.value = "";
     gateway.clearError();
     if (control === "edit") {
-      input.goalControls.edit();
+      input.goalControls.editInComposer();
       return;
     }
     const controlAction = goalControlActions[control];

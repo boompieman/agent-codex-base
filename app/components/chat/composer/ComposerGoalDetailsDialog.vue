@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { LoaderCircleIcon, PencilIcon, SquareIcon, Trash2Icon } from "@lucide/vue";
-import { ref } from "vue";
+import { LoaderCircleIcon, PencilIcon, SaveIcon, SquareIcon, Trash2Icon } from "@lucide/vue";
+import { computed, ref, watch } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
@@ -15,8 +15,9 @@ import {
   DialogTrigger,
 } from "@codex-gateway/ui/dialog";
 import { ScrollArea } from "@codex-gateway/ui/scroll-area";
+import { Textarea } from "@codex-gateway/ui/textarea";
 
-defineProps<{
+const props = defineProps<{
   goal: ThreadGoal;
   elapsedLabel: string;
   tokensLabel: string;
@@ -25,17 +26,51 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  edit: [];
+  save: [objective: string];
   stop: [];
   clear: [];
 }>();
 
 const open = ref(false);
+const editing = ref(false);
+const objectiveDraft = ref("");
+const normalizedObjective = computed(() => objectiveDraft.value.trim());
+const canSave = computed(
+  () =>
+    props.pendingAction === null &&
+    normalizedObjective.value.length > 0 &&
+    normalizedObjective.value !== props.goal.objective.trim(),
+);
 
-function editGoal() {
-  open.value = false;
-  emit("edit");
+function beginEditing() {
+  objectiveDraft.value = props.goal.objective;
+  editing.value = true;
 }
+
+function cancelEditing() {
+  objectiveDraft.value = props.goal.objective;
+  editing.value = false;
+}
+
+function saveGoal() {
+  if (!canSave.value) return;
+  emit("save", normalizedObjective.value);
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) objectiveDraft.value = props.goal.objective;
+  else editing.value = false;
+});
+
+watch(
+  () => props.goal.objective,
+  (objective) => {
+    objectiveDraft.value = objective;
+    // The store updates the Goal while the shared mutation guard still reports `set`. Closing the
+    // editor on that semantic commit keeps a failed request editable and avoids timing assumptions.
+    if (props.pendingAction === "set") editing.value = false;
+  },
+);
 </script>
 
 <template>
@@ -74,7 +109,15 @@ function editGoal() {
           >
             {{ $t("app.goalObjective") }}
           </div>
-          <ScrollArea class="min-h-0 flex-1">
+          <Textarea
+            v-if="editing"
+            v-model="objectiveDraft"
+            data-testid="goal-details-objective-input"
+            :aria-label="$t('app.goalObjective')"
+            class="h-full min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent p-4 text-sm shadow-none focus-visible:ring-0"
+            :disabled="pendingAction !== null"
+          />
+          <ScrollArea v-else class="min-h-0 flex-1">
             <div class="p-4 pr-6">
               <MarkdownContent :content="goal.objective" compact />
             </div>
@@ -112,26 +155,49 @@ function editGoal() {
           {{ $t("app.slashGoalClearTitle") }}
         </Button>
         <div class="flex flex-col-reverse gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            data-testid="goal-details-stop"
-            :disabled="pendingAction !== null"
-            @click="emit('stop')"
-          >
-            <LoaderCircleIcon v-if="pendingAction === 'pause'" class="size-4 animate-spin" />
-            <SquareIcon v-else class="size-4" />
-            {{ $t("app.goalStop") }}
-          </Button>
-          <Button
-            type="button"
-            data-testid="goal-details-edit"
-            :disabled="pendingAction !== null"
-            @click="editGoal"
-          >
-            <PencilIcon class="size-4" />
-            {{ $t("app.slashGoalEditTitle") }}
-          </Button>
+          <template v-if="editing">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="goal-details-edit-cancel"
+              :disabled="pendingAction !== null"
+              @click="cancelEditing"
+            >
+              {{ $t("app.cancel") }}
+            </Button>
+            <Button
+              type="button"
+              data-testid="goal-details-edit-save"
+              :disabled="!canSave"
+              @click="saveGoal"
+            >
+              <LoaderCircleIcon v-if="pendingAction === 'set'" class="size-4 animate-spin" />
+              <SaveIcon v-else class="size-4" />
+              {{ $t("app.save") }}
+            </Button>
+          </template>
+          <template v-else>
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="goal-details-stop"
+              :disabled="pendingAction !== null"
+              @click="emit('stop')"
+            >
+              <LoaderCircleIcon v-if="pendingAction === 'pause'" class="size-4 animate-spin" />
+              <SquareIcon v-else class="size-4" />
+              {{ $t("app.goalStop") }}
+            </Button>
+            <Button
+              type="button"
+              data-testid="goal-details-edit"
+              :disabled="pendingAction !== null"
+              @click="beginEditing"
+            >
+              <PencilIcon class="size-4" />
+              {{ $t("app.slashGoalEditTitle") }}
+            </Button>
+          </template>
         </div>
       </DialogFooter>
     </DialogContent>

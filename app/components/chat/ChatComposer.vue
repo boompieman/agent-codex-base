@@ -13,7 +13,6 @@ const {
   canUsePrimaryAction,
   composerInputEnabled,
   deactivatePlanMode,
-  editSelectedThreadGoal,
   effortOptions,
   filteredSlashCommands,
   goalActionPending,
@@ -41,6 +40,7 @@ const {
   selectedThreadStatus,
   selectedThreadTokenUsage,
   sendButtonLabel,
+  saveSelectedThreadGoal,
   stopSelectedThreadGoal,
   clearSelectedThreadGoal,
   setSelectedApprovalMode,
@@ -87,7 +87,7 @@ const {
     :selected-thread-status="selectedThreadStatus"
     :send-button-label="sendButtonLabel"
     @deactivate-plan="deactivatePlanMode"
-    @edit-goal="editSelectedThreadGoal"
+    @save-goal="saveSelectedThreadGoal"
     @stop-goal="stopSelectedThreadGoal"
     @clear-goal="clearSelectedThreadGoal"
     @hover-slash-command="selectSlashCommandIndex"

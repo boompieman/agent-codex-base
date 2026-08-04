@@ -19,7 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   deactivatePlan: [];
-  editGoal: [];
+  saveGoal: [objective: string];
   stopGoal: [];
   clearGoal: [];
 }>();
@@ -90,7 +90,7 @@ watch(visibleGoal, (goal) => (goal ? resume() : pause()), { immediate: true });
       :tokens-label="goalTokensLabel"
       :budget-label="goalBudgetLabel"
       :pending-action="goalActionPending"
-      @edit="emit('editGoal')"
+      @save="emit('saveGoal', $event)"
       @stop="emit('stopGoal')"
       @clear="emit('clearGoal')"
     />

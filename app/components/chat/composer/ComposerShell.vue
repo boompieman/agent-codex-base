@@ -55,7 +55,7 @@ defineProps<{
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   deactivatePlan: [];
-  editGoal: [];
+  saveGoal: [objective: string];
   stopGoal: [];
   clearGoal: [];
   hoverSlashCommand: [index: number];
@@ -90,7 +90,7 @@ function openAttachmentPicker() {
         :goal-observed-at="goalObservedAt"
         :goal-action-pending="goalActionPending"
         @deactivate-plan="emit('deactivatePlan')"
-        @edit-goal="emit('editGoal')"
+        @save-goal="emit('saveGoal', $event)"
         @stop-goal="emit('stopGoal')"
         @clear-goal="emit('clearGoal')"
       />

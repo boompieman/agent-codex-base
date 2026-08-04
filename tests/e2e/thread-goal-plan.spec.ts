@@ -109,12 +109,18 @@ test("goal controls are shared by the slash menu and details dialog", async ({ p
   await expect(goalDialog.getByTestId("goal-details-stop")).toBeVisible();
   await expect(goalDialog.getByTestId("goal-details-clear")).toBeVisible();
   await goalDialog.getByTestId("goal-details-edit").click();
-  await expect(goalDialog).toHaveCount(0);
-  await expect(composer).toHaveValue("/goal 保持目标控制清晰");
+  const objectiveInput = goalDialog.getByTestId("goal-details-objective-input");
+  await expect(objectiveInput).toHaveValue("保持目标控制清晰");
+  await objectiveInput.fill("在目标详情中直接编辑");
+  await goalDialog.getByTestId("goal-details-edit-save").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalObjective))
+    .toBe("在目标详情中直接编辑");
+  await expect(objectiveInput).toHaveCount(0);
+  await expect(goalDialog.getByText("在目标详情中直接编辑")).toBeVisible();
+  await expect(composer).toHaveValue("");
 
-  await composer.fill("");
-  await page.getByTestId("composer-goal-summary").click();
-  await page.getByRole("dialog").getByTestId("goal-details-stop").click();
+  await goalDialog.getByTestId("goal-details-stop").click();
   await expect
     .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([
