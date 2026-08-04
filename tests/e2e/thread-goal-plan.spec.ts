@@ -57,9 +57,7 @@ test("goal slash input derives the goal tag and requires an objective before sub
   );
 });
 
-test("goal slash menu exposes official app-server controls for an existing goal", async ({
-  page,
-}) => {
+test("goal controls are shared by the slash menu and details dialog", async ({ page }) => {
   await openApp(page);
   const threadId = "e2e-goal-controls-thread";
   await seedGatewayThread(page, {
@@ -104,19 +102,42 @@ test("goal slash menu exposes official app-server controls for an existing goal"
       { type: "status", status: "active" },
     ]);
 
-  await composer.fill("/goal");
-  await page.getByTestId("slash-command-goal-edit").click();
+  await composer.fill("");
+  await page.getByTestId("composer-goal-summary").click();
+  const goalDialog = page.getByRole("dialog");
+  await expect(goalDialog.getByTestId("goal-details-edit")).toBeVisible();
+  await expect(goalDialog.getByTestId("goal-details-stop")).toBeVisible();
+  await expect(goalDialog.getByTestId("goal-details-clear")).toBeVisible();
+  await goalDialog.getByTestId("goal-details-edit").click();
+  await expect(goalDialog).toHaveCount(0);
   await expect(composer).toHaveValue("/goal 保持目标控制清晰");
 
-  await composer.fill("/goal");
-  await page.getByTestId("slash-command-goal-clear").click();
+  await composer.fill("");
+  await page.getByTestId("composer-goal-summary").click();
+  await page.getByRole("dialog").getByTestId("goal-details-stop").click();
   await expect
     .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([
       { type: "status", status: "paused" },
       { type: "status", status: "active" },
+      { type: "status", status: "paused" },
+    ]);
+  await expect(page.getByTestId("composer-mode-strip")).toHaveCount(0);
+
+  await composer.fill("/goal");
+  await page.getByTestId("slash-command-goal-resume").click();
+  await page.getByTestId("composer-goal-summary").click();
+  await page.getByRole("dialog").getByTestId("goal-details-clear").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
+    .toEqual([
+      { type: "status", status: "paused" },
+      { type: "status", status: "active" },
+      { type: "status", status: "paused" },
+      { type: "status", status: "active" },
       { type: "clear" },
     ]);
+  await expect(page.getByTestId("composer-mode-strip")).toHaveCount(0);
 });
 
 test("goal progress updates the composer status strip without flooding the agent loop", async ({

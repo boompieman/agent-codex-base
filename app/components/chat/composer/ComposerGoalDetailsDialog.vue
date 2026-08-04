@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { LoaderCircleIcon, PencilIcon, SquareIcon, Trash2Icon } from "@lucide/vue";
+import { ref } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
+import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
+import { Button } from "@codex-gateway/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -16,11 +21,25 @@ defineProps<{
   elapsedLabel: string;
   tokensLabel: string;
   budgetLabel: string;
+  pendingAction: ComposerGoalPendingAction | null;
 }>();
+
+const emit = defineEmits<{
+  edit: [];
+  stop: [];
+  clear: [];
+}>();
+
+const open = ref(false);
+
+function editGoal() {
+  open.value = false;
+  emit("edit");
+}
 </script>
 
 <template>
-  <Dialog>
+  <Dialog v-model:open="open">
     <DialogTrigger as-child>
       <button
         type="button"
@@ -77,6 +96,44 @@ defineProps<{
           </div>
         </dl>
       </div>
+
+      <DialogFooter
+        class="shrink-0 border-t border-hairline px-6 py-4 sm:items-center sm:justify-between"
+      >
+        <Button
+          type="button"
+          variant="destructive"
+          data-testid="goal-details-clear"
+          :disabled="pendingAction !== null"
+          @click="emit('clear')"
+        >
+          <LoaderCircleIcon v-if="pendingAction === 'clear'" class="size-4 animate-spin" />
+          <Trash2Icon v-else class="size-4" />
+          {{ $t("app.slashGoalClearTitle") }}
+        </Button>
+        <div class="flex flex-col-reverse gap-2 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="goal-details-stop"
+            :disabled="pendingAction !== null"
+            @click="emit('stop')"
+          >
+            <LoaderCircleIcon v-if="pendingAction === 'pause'" class="size-4 animate-spin" />
+            <SquareIcon v-else class="size-4" />
+            {{ $t("app.goalStop") }}
+          </Button>
+          <Button
+            type="button"
+            data-testid="goal-details-edit"
+            :disabled="pendingAction !== null"
+            @click="editGoal"
+          >
+            <PencilIcon class="size-4" />
+            {{ $t("app.slashGoalEditTitle") }}
+          </Button>
+        </div>
+      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

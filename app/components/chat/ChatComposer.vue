@@ -13,8 +13,10 @@ const {
   canUsePrimaryAction,
   composerInputEnabled,
   deactivatePlanMode,
+  editSelectedThreadGoal,
   effortOptions,
   filteredSlashCommands,
+  goalActionPending,
   goalInputActive,
   handleAttachmentChange,
   handleComposerKeydown,
@@ -39,6 +41,8 @@ const {
   selectedThreadStatus,
   selectedThreadTokenUsage,
   sendButtonLabel,
+  stopSelectedThreadGoal,
+  clearSelectedThreadGoal,
   setSelectedApprovalMode,
   setSelectedEffort,
   setSelectedModel,
@@ -57,6 +61,7 @@ const {
     :goal-input-active="goalInputActive"
     :goal="selectedThreadGoal"
     :goal-observed-at="selectedThreadGoalObservedAt"
+    :goal-action-pending="goalActionPending"
     :slash-menu-open="slashMenuOpen"
     :filtered-slash-commands="filteredSlashCommands"
     :selected-slash-command-index="selectedSlashCommandIndex"
@@ -82,6 +87,9 @@ const {
     :selected-thread-status="selectedThreadStatus"
     :send-button-label="sendButtonLabel"
     @deactivate-plan="deactivatePlanMode"
+    @edit-goal="editSelectedThreadGoal"
+    @stop-goal="stopSelectedThreadGoal"
+    @clear-goal="clearSelectedThreadGoal"
     @hover-slash-command="selectSlashCommandIndex"
     @select-slash-command="runSlashCommand"
     @attachment-change="handleAttachmentChange"

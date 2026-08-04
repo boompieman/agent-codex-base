@@ -2,6 +2,7 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useAttachmentUpload } from "./useAttachmentUpload";
 import { useComposerDraft } from "./useComposerDraft";
+import { useComposerGoalControls } from "./useComposerGoalControls";
 import { useComposerSlashActions } from "./useComposerSlashActions";
 import { useComposerTurnSubmit } from "./useComposerTurnSubmit";
 import { useThreadSettingsControls } from "./useThreadSettingsControls";
@@ -32,6 +33,7 @@ export function useComposerController() {
   );
 
   const { turnText, attachedFiles, clearDraft } = useComposerDraft();
+  const goalControls = useComposerGoalControls(turnText);
   const settings = useThreadSettingsControls();
   const attachmentUpload = useAttachmentUpload(selectedHostId, attachedFiles);
   const selectedRuntime = computed(() =>
@@ -100,6 +102,7 @@ export function useComposerController() {
     startNewThread: submit.startNewThread,
     activatePlanMode: submit.activatePlanMode,
     missingGoalObjectiveMessage: computed(() => t("app.goalObjectiveRequired")),
+    goalControls,
   });
   const slashCommandsState = useComposerSlashMenu({
     text: turnText,
@@ -146,6 +149,10 @@ export function useComposerController() {
     activePlanSummary,
     attachedFiles,
     goalInputActive,
+    goalActionPending: goalControls.pendingAction,
+    editSelectedThreadGoal: goalControls.edit,
+    stopSelectedThreadGoal: goalControls.pause,
+    clearSelectedThreadGoal: goalControls.clear,
     selectedThreadGoal,
     selectedThreadGoalObservedAt,
     turnText,

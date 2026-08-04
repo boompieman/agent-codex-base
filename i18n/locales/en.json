@@ -230,6 +230,7 @@
     "goalModeActive": "Goal",
     "threadGoal": "Goal",
     "goalInputHint": "Enter an objective and press Enter",
+    "goalStop": "Stop goal",
     "goalDetailsTitle": "Goal details",
     "goalDetailsDescription": "Current goal progress is synchronized from app-server.",
     "goalObjective": "Objective",
