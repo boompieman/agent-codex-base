@@ -208,7 +208,7 @@ test("terminal wait notifications mention the command being watched", async ({ p
         item: {
           id: "cmd-watch",
           type: "commandExecution",
-          command: "pnpm dev",
+          command: "/bin/bash -lc 'pnpm dev'",
           cwd: "/workspace/codex-gateway",
           processId: "proc-123",
           status: "inProgress",
@@ -239,7 +239,9 @@ test("terminal wait notifications mention the command being watched", async ({ p
   });
 
   const chatScrollArea = page.getByTestId("chat-scroll-area");
-  await expect(chatScrollArea.getByText("agent 正在等待命令：pnpm dev")).toBeVisible();
+  await expect(
+    chatScrollArea.getByText("agent 正在等待命令：pnpm dev", { exact: true }),
+  ).toBeVisible();
 
   await installRealtimeInterruptMock(page);
 

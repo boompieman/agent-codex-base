@@ -111,9 +111,17 @@ test("command labels unwrap official shell invocations and short output uses nat
               {
                 id: "command-plain-1",
                 type: "commandExecution",
-                status: "completed",
-                command: "git status --short",
+                status: "inProgress",
+                command: "sleep 10",
                 aggregatedOutput: "",
+              },
+              {
+                id: "command-failed-1",
+                type: "commandExecution",
+                status: "failed",
+                command: "false",
+                aggregatedOutput: "",
+                exitCode: 1,
               },
             ],
           },
@@ -124,8 +132,15 @@ test("command labels unwrap official shell invocations and short output uses nat
 
   await openIntermediateSteps(page);
   await expect(page.getByRole("button", { name: /pwd && printf "done"/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /git status --short/ })).toBeVisible();
-  await page.getByRole("button", { name: /pwd && printf "done"/ }).click();
+  const completedCommand = page.getByRole("button", { name: /pwd && printf "done"/ });
+  const runningCommand = page.getByRole("button", { name: /sleep 10/ });
+  const failedCommand = page.getByRole("button", { name: /false/ });
+  await expect(runningCommand).toBeVisible();
+  await expect(failedCommand).toBeVisible();
+  await expect(completedCommand.getByTestId("command-status-completed")).toBeVisible();
+  await expect(runningCommand.getByTestId("command-status-running")).toBeVisible();
+  await expect(failedCommand.getByTestId("command-status-failed")).toBeVisible();
+  await completedCommand.click();
   const commandOutput = page.getByTestId("chat-scroll-area").getByText("/tmp/e2e");
   await expect(commandOutput).toBeVisible();
   await expect

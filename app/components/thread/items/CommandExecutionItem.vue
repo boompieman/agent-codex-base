@@ -4,6 +4,7 @@ import {
   CheckCircle2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
+  LoaderCircleIcon,
   TerminalIcon,
   XCircleIcon,
 } from "@lucide/vue";
@@ -45,6 +46,18 @@ const isInProgress = computed(() => {
   const value = commandStatus.value;
   return value === "inProgress" || value === "running" || value === "active";
 });
+const visualStatus = computed<"running" | "completed" | "failed" | null>(() => {
+  if (isInProgress.value) return "running";
+  if (
+    commandStatus.value === "failed" ||
+    commandStatus.value === "interrupted" ||
+    (typeof props.item.exitCode === "number" && props.item.exitCode !== 0)
+  ) {
+    return "failed";
+  }
+  if (commandStatus.value === "completed" || props.item.exitCode === 0) return "completed";
+  return null;
+});
 
 async function respond(decision: "accept" | "decline") {
   await respondToRequest({ decision });
@@ -58,11 +71,34 @@ async function respond(decision: "accept" | "decline") {
     >
       <TerminalIcon class="size-4 shrink-0" />
       <span class="min-w-0 flex-1 truncate">{{ title }}</span>
-      <Badge v-if="commandStatus" variant="secondary">{{ commandStatus }}</Badge>
       <Badge v-if="pendingApproval" variant="outline">{{ t("app.waitingApproval") }}</Badge>
-      <Badge v-if="isInProgress" variant="outline">{{ t("app.running") }}</Badge>
-      <CheckCircle2Icon v-if="item.exitCode === 0" class="size-4 shrink-0 text-accent-green" />
-      <XCircleIcon v-else-if="item.exitCode" class="size-4 shrink-0 text-destructive" />
+      <!-- The icon is the complete command lifecycle indicator. Do not add a status badge beside
+           it: app-server's raw status repeats the same information and needlessly truncates long
+           commands. Keep the translated label available to assistive technology and hover. -->
+      <LoaderCircleIcon
+        v-if="visualStatus === 'running'"
+        data-testid="command-status-running"
+        class="size-4 shrink-0 animate-spin text-accent"
+        role="img"
+        :aria-label="t('app.running')"
+        :title="t('app.running')"
+      />
+      <CheckCircle2Icon
+        v-else-if="visualStatus === 'completed'"
+        data-testid="command-status-completed"
+        class="size-4 shrink-0 text-accent-green"
+        role="img"
+        :aria-label="t('app.completed')"
+        :title="t('app.completed')"
+      />
+      <XCircleIcon
+        v-else-if="visualStatus === 'failed'"
+        data-testid="command-status-failed"
+        class="size-4 shrink-0 text-destructive"
+        role="img"
+        :aria-label="t('app.failed')"
+        :title="t('app.failed')"
+      />
       <span class="rounded-full p-0.5">
         <ChevronDownIcon v-if="open" class="size-4 shrink-0 text-ink-faint" />
         <ChevronRightIcon v-else class="size-4 shrink-0 text-ink-faint" />

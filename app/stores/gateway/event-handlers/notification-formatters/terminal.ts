@@ -12,6 +12,7 @@ import {
   type TranslationFunction,
 } from "./common";
 import { firstNonEmptyString } from "~~/shared/utils/strings";
+import { commandDisplayLabel } from "@/utils/thread-item-display";
 
 export function terminalInteractionNotification(
   t: TranslationFunction,
@@ -56,7 +57,9 @@ function commandForTerminalInteraction(
     if (command !== "") break;
   }
   return truncate(
-    command === "" ? t("app.notifications.terminalProcessFallback", { processId }) : command,
+    command === ""
+      ? t("app.notifications.terminalProcessFallback", { processId })
+      : commandDisplayLabel(command),
     140,
   );
 }
