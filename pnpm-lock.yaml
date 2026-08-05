@@ -62,6 +62,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.6
         version: 6.43.6
+      '@codex-gateway/ai-elements':
+        specifier: workspace:*
+        version: link:packages/gateway-ai-elements
       '@codex-gateway/browser-runtime':
         specifier: workspace:*
         version: link:packages/gateway-browser-runtime
