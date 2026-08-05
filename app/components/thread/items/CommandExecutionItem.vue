@@ -15,6 +15,7 @@ import HighlightedCode from "@/components/common/HighlightedCode.vue";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import { ChatStickToBottomScrollArea } from "@/components/common/chat-virtualizer";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
+import { commandDisplayLabel } from "@/utils/thread-item-display";
 import { threadItemResultText } from "@/utils/thread-items";
 
 const props = defineProps<{
@@ -23,7 +24,7 @@ const props = defineProps<{
   threadId: string | null;
 }>();
 const { t } = useI18n();
-const title = computed(() => props.item.command || "Command");
+const title = computed(() => commandDisplayLabel(props.item.command));
 const rawOutput = computed(() => props.item.aggregatedOutput || threadItemResultText(props.item));
 const output = computed(() => rawOutput.value);
 const commandStatus = computed(() =>

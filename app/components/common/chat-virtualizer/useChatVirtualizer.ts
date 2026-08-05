@@ -13,7 +13,7 @@ import { useDirectDomVirtualizer } from "./direct-dom-virtualizer";
 interface ChatVirtualizerOptions {
   count: MaybeRefOrGetter<number>;
   getViewport: () => HTMLElement | null;
-  getItemKey: (index: number) => string | number;
+  getItemKeySnapshot: () => (index: number) => string | number;
   estimateSize: (index: number) => number;
   threshold?: MaybeRefOrGetter<number>;
   overscan?: MaybeRefOrGetter<number>;
@@ -29,14 +29,21 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
   const followLatest = ref(true);
   const viewportElement = computed(options.getViewport);
   const directVirtualizer = useDirectDomVirtualizer(
-    computed(() => ({
-      count: toValue(options.count),
-      getScrollElement: options.getViewport,
-      getItemKey: options.getItemKey,
-      estimateSize: options.estimateSize,
-      overscan: toValue(options.overscan) ?? 0,
-      ...createChatVirtualizerBehavior(threshold()),
-    })),
+    computed(() => {
+      const getItemKey = options.getItemKeySnapshot();
+      return {
+        count: toValue(options.count),
+        getScrollElement: options.getViewport,
+        // Core calls both the previous and next getItemKey while classifying an update as prepend
+        // or append. Capture this render's immutable row-array reference, matching React's
+        // `useCallback(..., [messages])`; a permanent callback that reads live Vue props makes the
+        // "previous" function see new keys and silently disables Core's official prepend anchor.
+        getItemKey,
+        estimateSize: options.estimateSize,
+        overscan: toValue(options.overscan) ?? 0,
+        ...createChatVirtualizerBehavior(threshold()),
+      };
+    }),
   );
   const virtualizer = directVirtualizer.virtualizer;
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());

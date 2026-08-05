@@ -14,6 +14,7 @@ WORKDIR /workspace/codex-gateway
 # Turbo's task graph and workspace package sources are dependency inputs, not application inputs.
 # Copy them before the mutable app tree so ordinary UI edits reuse pnpm and prebuilt vendor layers.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY patches ./patches
 COPY packages ./packages
 RUN --mount=type=cache,id=codex-gateway-e2e-pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile

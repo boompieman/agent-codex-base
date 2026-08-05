@@ -21,6 +21,7 @@ const props = defineProps<{
   turns: ThreadTimelineTurn[];
   hostId: number | null;
   projectId?: number | null;
+  workspaceRoot?: string | null;
   loading: boolean;
   loadingOlder: boolean;
   olderTurnsCursor: string | null;
@@ -32,7 +33,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const composer = useGatewayComposerStore();
-const viewportRef = ref<{ resetFollowLatest: () => void } | null>(null);
 const userDetachedFromLatest = ref(false);
 const projectId = computed(() => props.projectId ?? null);
 const planModeActive = computed(() => selectedThreadMode() === "plan");
@@ -43,6 +43,7 @@ provideFilePreviewContext({
   hostId: toRef(props, "hostId"),
   projectId,
   threadId: toRef(props, "threadId"),
+  workspaceRoot: computed(() => props.workspaceRoot ?? null),
 });
 
 const turnStates = computed(() =>
@@ -112,16 +113,21 @@ function timelineRow(row: unknown) {
 watch(
   () => props.threadId,
   () => {
+    // Detachment belongs to the conversation being read, so it must not leak into the next
+    // thread's disclosure policy. Scroll initialization is deliberately absent here: the keyed
+    // viewport below owns its one official TanStack initial-layout transaction.
     userDetachedFromLatest.value = false;
-    viewportRef.value?.resetFollowLatest();
   },
-  { flush: "post" },
 );
 </script>
 
 <template>
+  <!--
+    Key the viewport by thread so each conversation gets one clean TanStack Chat lifecycle.
+    Do not also watch threadId and imperatively reset the child: after a keyed replacement the ref
+    already points at the new viewport, so a parent reset would duplicate its initial layout scroll.
+  -->
   <VirtualTimelineViewport
-    ref="viewportRef"
     :key="threadId ?? 'empty-thread'"
     :rows="rows"
     :estimate-size="estimateRowSize"

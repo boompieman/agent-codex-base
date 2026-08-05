@@ -92,3 +92,6 @@ minimumReleaseAgeExclude:
 
 overrides:
   crossws: 0.4.7
+
+patchedDependencies:
+  '@tanstack/virtual-core@3.17.7': patches/@tanstack__virtual-core@3.17.7.patch

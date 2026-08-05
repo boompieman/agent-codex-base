@@ -12,6 +12,8 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
 }) => {
   await openApp(page);
   const threadId = "e2e-diff-thread";
+  const workspaceRoot = "/workspace/diff-ui";
+  const changedFilePath = `${workspaceRoot}/src/example.py`;
   const diff = [
     "diff --git a/src/example.py b/src/example.py",
     "index 1111111..2222222 100644",
@@ -27,7 +29,7 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await seedGatewayThread(page, {
     threadId,
     projectId: 1,
-    currentThread: { id: threadId, name: "Diff UI" },
+    currentThread: { id: threadId, name: "Diff UI", cwd: workspaceRoot },
     history: {
       thread: {
         id: threadId,
@@ -45,7 +47,7 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
                 id: "file-change-1",
                 type: "fileChange",
                 status: "completed",
-                changes: [{ path: "src/example.py", kind: "update", diff }],
+                changes: [{ path: changedFilePath, kind: "update", diff }],
               },
             ],
           },
@@ -57,6 +59,7 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await openIntermediateSteps(page);
   const toggle = page.getByRole("button", { name: /src\/example\.py/ });
   const diffText = page.getByText("new_value =");
+  await expect(toggle.locator("span[title]")).toHaveAttribute("title", changedFilePath);
   await expect(toggle).toHaveAttribute("data-state", "open");
   await expect(diffText).toBeVisible();
   await expect
@@ -69,7 +72,7 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
 
   await appendFileDiffLines(page, {
     itemId: "file-change-1",
-    path: "src/example.py",
+    path: changedFilePath,
     prefix: "streamed while manually collapsed",
     count: 2,
   });
@@ -82,7 +85,9 @@ test("file diff blocks can collapse and expand after virtual timeline measuremen
   await expect(page.getByText("streamed while manually collapsed 001")).toBeVisible();
 });
 
-test("short command output uses natural height instead of a fixed minimum", async ({ page }) => {
+test("command labels unwrap official shell invocations and short output uses natural height", async ({
+  page,
+}) => {
   await openApp(page);
   const threadId = "e2e-short-command-output-thread";
   await seedGatewayThread(page, {
@@ -100,8 +105,15 @@ test("short command output uses natural height instead of a fixed minimum", asyn
                 id: "command-short-1",
                 type: "commandExecution",
                 status: "completed",
-                command: "pwd",
+                command: "/bin/zsh -lc 'pwd && printf \"done\"'",
                 aggregatedOutput: "/tmp/e2e\n",
+              },
+              {
+                id: "command-plain-1",
+                type: "commandExecution",
+                status: "completed",
+                command: "git status --short",
+                aggregatedOutput: "",
               },
             ],
           },
@@ -111,7 +123,9 @@ test("short command output uses natural height instead of a fixed minimum", asyn
   });
 
   await openIntermediateSteps(page);
-  await page.getByRole("button", { name: /pwd/ }).click();
+  await expect(page.getByRole("button", { name: /pwd && printf "done"/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /git status --short/ })).toBeVisible();
+  await page.getByRole("button", { name: /pwd && printf "done"/ }).click();
   const commandOutput = page.getByTestId("chat-scroll-area").getByText("/tmp/e2e");
   await expect(commandOutput).toBeVisible();
   await expect

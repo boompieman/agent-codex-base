@@ -8,6 +8,8 @@ import FileChangeApprovalBar from "./FileChangeApprovalBar.vue";
 import FileChangeDiffPanel from "./FileChangeDiffPanel.vue";
 import FileChangeOutputPanel from "./FileChangeOutputPanel.vue";
 import { fileChangeKey, fileChangeKind, fileChangePath } from "./utils";
+import { useFilePreviewContext } from "@/composables/files/useFilePreviewContext";
+import { workspacePathDisplayLabel } from "@/utils/thread-item-display";
 import { threadItemResultText } from "@/utils/thread-items";
 
 const props = defineProps<{
@@ -16,6 +18,7 @@ const props = defineProps<{
   threadId: string | null;
 }>();
 const { t } = useI18n();
+const filePreviewContext = useFilePreviewContext();
 const fileChanges = computed(() => (Array.isArray(props.item.changes) ? props.item.changes : []));
 const openChangeKeys = ref(new Set<string>());
 const initializedChangeKeys = new Set<string>();
@@ -41,6 +44,10 @@ function changeKindLabel(change: ThreadFileChange) {
   if (kind.includes("delete") || kind === "remove") return t("app.fileDeleted");
   if (kind.includes("move") || kind.includes("rename")) return t("app.fileMoved");
   return t("app.fileUpdated");
+}
+
+function changeDisplayPath(change: ThreadFileChange) {
+  return workspacePathDisplayLabel(fileChangePath(change), filePreviewContext?.workspaceRoot.value);
 }
 
 function isChangeOpen(change: ThreadFileChange) {
@@ -114,9 +121,11 @@ watch(
           >
             <ChevronDownIcon v-if="open" class="size-4 shrink-0 text-ink-faint" />
             <ChevronRightIcon v-else class="size-4 shrink-0 text-ink-faint" />
-            <span class="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-ink-secondary">{{
-              fileChangePath(change)
-            }}</span>
+            <span
+              class="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-ink-secondary"
+              :title="fileChangePath(change)"
+              >{{ changeDisplayPath(change) }}</span
+            >
             <Badge variant="outline">{{ changeKindLabel(change) }}</Badge>
           </button>
         </CollapsibleTrigger>
