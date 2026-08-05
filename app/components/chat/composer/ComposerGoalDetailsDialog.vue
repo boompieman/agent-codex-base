@@ -93,19 +93,25 @@ watch(
     </DialogTrigger>
 
     <DialogContent
-      class="flex h-[min(54rem,calc(100dvh-3rem))] w-[min(70rem,calc(100vw-3rem))] !max-w-[min(70rem,calc(100vw-3rem))] flex-col overflow-hidden p-0"
+      data-testid="goal-details-dialog"
+      class="flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] !max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0 sm:h-[min(54rem,calc(100dvh-3rem))] sm:w-[min(70rem,calc(100vw-3rem))] sm:!max-w-[min(70rem,calc(100vw-3rem))]"
     >
-      <DialogHeader class="shrink-0 border-b border-hairline px-6 py-5">
+      <DialogHeader class="shrink-0 border-b border-hairline px-4 py-3 text-left sm:px-6 sm:py-5">
         <DialogTitle class="text-lg">{{ $t("app.goalDetailsTitle") }}</DialogTitle>
-        <DialogDescription>{{ $t("app.goalDetailsDescription") }}</DialogDescription>
+        <DialogDescription class="hidden sm:block">
+          {{ $t("app.goalDetailsDescription") }}
+        </DialogDescription>
       </DialogHeader>
 
-      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-5">
+      <div
+        class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-3 sm:gap-4 sm:px-6 sm:py-5"
+      >
         <div
-          class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-hairline bg-canvas-soft"
+          data-testid="goal-details-objective"
+          class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-canvas-soft sm:rounded-2xl"
         >
           <div
-            class="shrink-0 border-b border-hairline px-4 py-3 text-xs font-medium uppercase tracking-wide text-ink-muted"
+            class="shrink-0 border-b border-hairline px-4 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted sm:py-3"
           >
             {{ $t("app.goalObjective") }}
           </div>
@@ -114,38 +120,63 @@ watch(
             v-model="objectiveDraft"
             data-testid="goal-details-objective-input"
             :aria-label="$t('app.goalObjective')"
-            class="h-full min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent p-4 text-sm shadow-none focus-visible:ring-0"
+            class="h-full min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent p-3 text-sm shadow-none focus-visible:ring-0 sm:p-4"
             :disabled="pendingAction !== null"
           />
           <ScrollArea v-else class="min-h-0 flex-1">
-            <div class="p-4 pr-6">
+            <div class="p-3 pr-5 sm:p-4 sm:pr-6">
               <MarkdownContent :content="goal.objective" compact />
             </div>
           </ScrollArea>
         </div>
 
-        <dl class="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
-          <div class="rounded-2xl border border-hairline bg-surface p-3">
+        <!--
+          Mobile reserves the flexible height for the objective. Keep metrics in one compact strip
+          instead of stacking three desktop cards; otherwise short browser visual viewports leave
+          only a single text line for the actual Goal. The desktop breakpoint restores card gaps.
+        -->
+        <dl
+          data-testid="goal-details-stats"
+          class="grid shrink-0 grid-cols-3 divide-x divide-hairline overflow-hidden rounded-xl border border-hairline bg-surface sm:gap-3 sm:divide-x-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent"
+        >
+          <div class="min-w-0 p-2 sm:rounded-2xl sm:border sm:border-hairline sm:bg-surface sm:p-3">
             <dt class="text-xs text-ink-muted">{{ $t("app.goalElapsed") }}</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">{{ elapsedLabel }}</dd>
+            <dd
+              class="mt-1 break-all font-mono text-xs leading-tight text-ink sm:break-normal sm:text-sm"
+              :title="elapsedLabel"
+            >
+              {{ elapsedLabel }}
+            </dd>
           </div>
-          <div class="rounded-2xl border border-hairline bg-surface p-3">
+          <div class="min-w-0 p-2 sm:rounded-2xl sm:border sm:border-hairline sm:bg-surface sm:p-3">
             <dt class="text-xs text-ink-muted">{{ $t("app.goalTokensUsed") }}</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">{{ tokensLabel }}</dd>
+            <dd
+              class="mt-1 break-all font-mono text-xs leading-tight text-ink sm:break-normal sm:text-sm"
+              :title="tokensLabel"
+            >
+              {{ tokensLabel }}
+            </dd>
           </div>
-          <div class="rounded-2xl border border-hairline bg-surface p-3">
+          <div class="min-w-0 p-2 sm:rounded-2xl sm:border sm:border-hairline sm:bg-surface sm:p-3">
             <dt class="text-xs text-ink-muted">{{ $t("app.goalTokenBudget") }}</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">{{ budgetLabel }}</dd>
+            <dd
+              class="mt-1 break-all font-mono text-xs leading-tight text-ink sm:break-normal sm:text-sm"
+              :title="budgetLabel"
+            >
+              {{ budgetLabel }}
+            </dd>
           </div>
         </dl>
       </div>
 
       <DialogFooter
-        class="shrink-0 border-t border-hairline px-6 py-4 sm:items-center sm:justify-between"
+        data-testid="goal-details-footer"
+        class="grid shrink-0 grid-cols-3 gap-2 border-t border-hairline px-4 py-3 sm:flex sm:px-6 sm:py-4 sm:items-center sm:justify-between"
       >
         <Button
           type="button"
           variant="destructive"
+          class="order-3 min-w-0 px-1 sm:order-none sm:px-2"
           data-testid="goal-details-clear"
           :disabled="pendingAction !== null"
           @click="emit('clear')"
@@ -154,11 +185,14 @@ watch(
           <Trash2Icon v-else class="size-4" />
           {{ $t("app.slashGoalClearTitle") }}
         </Button>
-        <div class="flex flex-col-reverse gap-2 sm:flex-row">
+        <!-- `contents` makes the two context actions peers of Clear in the mobile three-column
+             toolbar; desktop restores the original grouped action row without duplicate controls. -->
+        <div class="contents sm:flex sm:flex-row sm:gap-2">
           <template v-if="editing">
             <Button
               type="button"
               variant="outline"
+              class="order-1 min-w-0 px-1 sm:order-none sm:px-2"
               data-testid="goal-details-edit-cancel"
               :disabled="pendingAction !== null"
               @click="cancelEditing"
@@ -167,6 +201,7 @@ watch(
             </Button>
             <Button
               type="button"
+              class="order-2 min-w-0 px-1 sm:order-none sm:px-2"
               data-testid="goal-details-edit-save"
               :disabled="!canSave"
               @click="saveGoal"
@@ -180,6 +215,7 @@ watch(
             <Button
               type="button"
               variant="outline"
+              class="order-2 min-w-0 px-1 sm:order-none sm:px-2"
               data-testid="goal-details-stop"
               :disabled="pendingAction !== null"
               @click="emit('stop')"
@@ -190,6 +226,7 @@ watch(
             </Button>
             <Button
               type="button"
+              class="order-1 min-w-0 px-1 sm:order-none sm:px-2"
               data-testid="goal-details-edit"
               :disabled="pendingAction !== null"
               @click="beginEditing"

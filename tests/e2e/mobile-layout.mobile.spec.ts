@@ -2,7 +2,11 @@ import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures/remote-workspace";
 import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { hostRecordSchema, projectRecordSchema } from "./helpers/http-schemas";
-import { appendAgentStreamLines, seedGatewayThread } from "./helpers/gateway-store";
+import {
+  appendAgentStreamLines,
+  installSelectedThreadGoalSubmitMock,
+  seedGatewayThread,
+} from "./helpers/gateway-store";
 import { defaultGatewayHost } from "./fixtures/thread-history";
 import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 import {
@@ -84,6 +88,52 @@ test("shows effort and compact context usage without mobile approval controls", 
   await expect(contextMeter).toBeVisible();
   await expect(contextMeter).toHaveAttribute("aria-label", "上下文用量 50%");
   await expect(contextMeter.getByText("50%", { exact: true })).toBeHidden();
+});
+
+test("gives the Goal objective most of the mobile details dialog", async ({ page }) => {
+  await openApp(page);
+  const threadId = "mobile-goal-details-layout";
+  await seedGatewayThread(page, {
+    projectId: 1,
+    threadId,
+    currentThread: { id: threadId, name: "Mobile Goal details" },
+  });
+  await installSelectedThreadGoalSubmitMock(page, { hostId: 1, threadId });
+
+  const longObjective = "移动端目标正文需要保留足够的阅读空间。".repeat(40);
+  const composer = page.getByPlaceholder("输入后续修改要求");
+  await composer.fill(`/goal ${longObjective}`);
+  await page.keyboard.press("Enter");
+  await page.getByTestId("composer-goal-summary").click();
+
+  const dialog = page.getByTestId("goal-details-dialog");
+  const objective = dialog.getByTestId("goal-details-objective");
+  const stats = dialog.getByTestId("goal-details-stats");
+  const footer = dialog.getByTestId("goal-details-footer");
+  await expect(dialog).toBeVisible();
+  await expect(objective).toBeVisible();
+  await expect(stats).toBeVisible();
+  await expect(footer).toBeVisible();
+
+  const [dialogBox, objectiveBox, statBoxes, actionBoxes] = await Promise.all([
+    dialog.boundingBox(),
+    objective.boundingBox(),
+    stats
+      .locator(":scope > div")
+      .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top)),
+    Promise.all(
+      ["goal-details-edit", "goal-details-stop", "goal-details-clear"].map((testId) =>
+        dialog.getByTestId(testId).boundingBox(),
+      ),
+    ),
+  ]);
+  expect(dialogBox).not.toBeNull();
+  expect(objectiveBox).not.toBeNull();
+  expect(objectiveBox!.height).toBeGreaterThan(dialogBox!.height * 0.5);
+  expect(Math.max(...statBoxes) - Math.min(...statBoxes)).toBeLessThanOrEqual(1);
+  expect(actionBoxes.every((box) => box !== null)).toBe(true);
+  const actionTops = actionBoxes.map((box) => box!.y);
+  expect(Math.max(...actionTops) - Math.min(...actionTops)).toBeLessThanOrEqual(1);
 });
 
 test("virtualizes a large running turn in one agent timeline", async ({ page }, testInfo) => {
