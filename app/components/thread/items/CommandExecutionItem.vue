@@ -4,11 +4,11 @@ import {
   CheckCircle2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   TerminalIcon,
   XCircleIcon,
 } from "@lucide/vue";
 import { computed } from "vue";
+import { Loader } from "@codex-gateway/ai-elements/loader";
 import { Badge } from "@codex-gateway/ui/badge";
 import { Button } from "@codex-gateway/ui/button";
 import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
@@ -72,14 +72,14 @@ async function respond(decision: "accept" | "decline") {
       <TerminalIcon class="size-4 shrink-0" />
       <span class="min-w-0 flex-1 truncate">{{ title }}</span>
       <Badge v-if="pendingApproval" variant="outline">{{ t("app.waitingApproval") }}</Badge>
-      <!-- The icon is the complete command lifecycle indicator. Do not add a status badge beside
-           it: app-server's raw status repeats the same information and needlessly truncates long
-           commands. Keep the translated label available to assistive technology and hover. -->
-      <LoaderCircleIcon
+      <!-- The icon is the complete command lifecycle indicator. AI Elements owns the spinner
+           geometry and animation; use the primary foreground token because accent is a surface
+           token in this theme and is too faint for an active command. Do not add a status badge
+           beside it: app-server's raw status repeats the same information and truncates commands. -->
+      <Loader
         v-if="visualStatus === 'running'"
         data-testid="command-status-running"
-        class="size-4 shrink-0 animate-spin text-accent"
-        role="img"
+        class="size-4 shrink-0 text-primary"
         :aria-label="t('app.running')"
         :title="t('app.running')"
       />
