@@ -138,11 +138,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       .fill(
         [
           `请执行较长命令后回复：${backgroundStatusMarker}`,
-          "运行 python - <<'PY'",
-          "import time",
-          "time.sleep(8)",
-          `print('${backgroundStatusMarker}')`,
-          "PY",
+          `运行 sleep 8; printf '%s\\n' '${backgroundStatusMarker}'`,
         ].join("\n"),
       );
     await page.getByTestId("send-turn-button").click();

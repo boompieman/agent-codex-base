@@ -100,7 +100,11 @@ export function useDirectDomVirtualizer<
   watch(
     commitVersion,
     () => {
-      applyDirectStyles(instance);
+      // Match the official React adapter's layout-effect order exactly. The sizer must expose the
+      // new scroll range before Core resolves an end anchor; row positions are safe to write only
+      // after that transaction. Do not queue row measurements until the ancestor ref mounts:
+      // framework refs merely register elements, while this post-flush phase is the commit point.
+      applyContainerSize(instance);
       instance._willUpdate();
       applyDirectStyles(instance);
     },
@@ -122,6 +126,14 @@ export function useDirectDomVirtualizer<
       // virtual-core captures and resolves prepend/append anchors here; the post-flush callback
       // above only applies the positions core computed. Do not add a Vue-side anchor fallback.
       instance.setOptions(wrapOptions(nextOptions));
+      // React-rendered virtualizers put the new sizer height in the same render that creates the
+      // new row refs. Our direct-DOM sizer is intentionally outside Vue's style bindings, so mirror
+      // that ordering here: setOptions has already computed the new total and this synchronous,
+      // idempotent write runs before Vue mounts/measures the corresponding children. Waiting for
+      // the post-flush adapter effect lets WebKit clamp Core's first end correction to the previous
+      // scrollHeight. Keep this limited to the sizer; Core still owns row measurements and every
+      // scroll transaction.
+      applyContainerSize(instance);
       triggerRef(state);
       scheduleDomCommit();
     },
@@ -244,14 +256,13 @@ export function useDirectDomVirtualizer<
       const sizeAxis = instance.options.horizontal ? "width" : "height";
       element.style[sizeAxis] = `${totalSize}px`;
 
-      // Vue attaches descendant refs before the ancestor ref that owns this size container. A row
-      // therefore cannot be measured from its ref callback immediately: Core may calculate an
-      // estimate-to-real end correction while the browser still exposes the old scrollHeight and
-      // clamp that write. The container would grow afterwards, leaving the chat one row delta away
-      // from the latest edge (135px in the mobile WebKit regression).
-      //
-      // Flush the queued rows through Core only after the sizer exists. This is mount ordering, not
-      // a second anchoring policy: TanStack still performs every measurement and scroll correction.
+      // The official React direct-DOM adapter requires the size container to commit before Core's
+      // scroll synchronization. Vue invokes descendant function refs before this ancestor ref, so
+      // measuring those rows immediately would violate that requirement: WebKit clamps Core's end
+      // correction against the old scrollHeight and leaves exactly one estimated row below the
+      // viewport. Hold only the not-yet-registered DOM nodes until the sizer exists, then pass every
+      // measurement straight to virtual-core. This is ref-order normalization, not a second anchor
+      // or scroll policy; no offsets are captured and no scroll position is written here.
       for (const pendingElement of directState.pendingMeasurements) {
         instance.measureElement(pendingElement);
       }

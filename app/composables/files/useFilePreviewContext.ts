@@ -6,6 +6,7 @@ export interface FilePreviewContext {
   hostId: Ref<number | null>;
   projectId: Ref<number | null>;
   threadId: Ref<string | null>;
+  workspaceRoot: Ref<string | null>;
 }
 
 const filePreviewContextKey: InjectionKey<FilePreviewContext> = Symbol("file-preview-context");

@@ -36,6 +36,7 @@ const threadStatus = computed(
       :turns="turns"
       :host-id="panel.hostId"
       :project-id="null"
+      :workspace-root="preview?.currentThread?.cwd ?? null"
       :loading="Boolean(preview?.loading)"
       :loading-older="false"
       :older-turns-cursor="null"

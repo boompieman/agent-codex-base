@@ -32,12 +32,20 @@ const scrollFrameRef = ref<InstanceType<typeof ChatVirtualScrollFrame> | null>(n
 const latestThreshold = 2;
 const historyStartThreshold = 80;
 const startControlsVisible = ref(false);
+const viewportReady = ref(false);
+const didInitialScroll = ref(false);
 
 const chatVirtualizer = useChatVirtualizer({
   count: () => props.rows.length,
   threshold: latestThreshold,
   getViewport: scrollViewport,
-  getItemKey: (index: number) => props.rows[index]?.key ?? index,
+  // Capture the array reference without copying every key on each streaming update. This is the
+  // Vue equivalent of React's dependency-bound callback: old and new Core options retain distinct
+  // row snapshots, while each indexed lookup stays O(1).
+  getItemKeySnapshot: () => {
+    const rows = props.rows;
+    return (index: number) => rows[index]?.key ?? index;
+  },
   estimateSize: (index: number) => props.estimateSize(props.rows[index], index),
   overscan: 6,
   onViewportScroll: (viewport) => {
@@ -127,9 +135,25 @@ if (workspaceLayoutRevision !== null) {
     // Those mechanisms cannot distinguish Dockview layout from row streaming and would race
     // virtual-core's prepend, iOS momentum, and dynamic-row compensation.
     chatVirtualizer.refresh();
-    if (chatVirtualizer.followLatest.value) resetFollowLatest();
+    if (didInitialScroll.value && chatVirtualizer.followLatest.value) resetFollowLatest();
   });
 }
+
+watch(
+  [viewportReady, () => props.rows.length],
+  ([ready, rowCount]) => {
+    if (!ready || rowCount === 0 || didInitialScroll.value) return;
+    didInitialScroll.value = true;
+    // Match TanStack's official React Chat example: perform the one initial end alignment only
+    // after both the viewport and the first non-empty message snapshot have committed. Calling
+    // scrollToEnd while the list is still empty and treating 0 -> N as an ordinary append leaves
+    // WebKit free to settle on the estimated last-row height; its later real measurement can then
+    // remain below the viewport. This is intentionally one-shot. All subsequent appends, streaming
+    // growth, prepends, and user detachment belong to Core's anchorTo/followOnAppend transaction.
+    resetFollowLatest();
+  },
+  { flush: "post", immediate: true },
+);
 
 watch(
   () => chatVirtualizer.userDetached.value,
@@ -142,10 +166,10 @@ watch(
 
 function handleViewportReady() {
   chatVirtualizer.refresh();
-  resetFollowLatest();
+  // Do not mark an empty viewport as initially aligned. History commonly arrives after this
+  // component mounts; the watcher above is the single equivalent of React's initial layout effect.
+  viewportReady.value = true;
 }
-
-defineExpose({ resetFollowLatest });
 </script>
 
 <template>

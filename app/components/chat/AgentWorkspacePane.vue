@@ -16,6 +16,7 @@ const {
   selectedThreadStatus,
   selectedProjectId,
   selectedHostId,
+  currentThread,
   historyTurns,
   loading,
   loadingOlderTurns,
@@ -60,6 +61,7 @@ const showThreadLoading = computed(
         :turns="historyTurns"
         :host-id="selectedHostId"
         :project-id="selectedProjectId"
+        :workspace-root="currentThread?.cwd ?? null"
         :loading="loading"
         :loading-older="loadingOlderTurns"
         :older-turns-cursor="olderTurnsCursor"
