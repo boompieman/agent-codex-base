@@ -30,6 +30,10 @@ export interface ThreadRequestParams extends Record<string, unknown> {
   message?: string | null;
   url?: string | null;
   requestedSchema?: unknown;
+  /** Required by Codex 0.147 for requestUserInput; optional here because this is a shared request union. */
+  isBlocking?: boolean;
+  /** Deprecated by Codex 0.147; retained in the exact upstream request shape until it is removed upstream. */
+  autoResolutionMs?: number | null;
   permissions?: ThreadRequestedPermissions;
   cwd?: string | null;
   questions?: ThreadUserInputQuestion[];
@@ -75,12 +79,16 @@ export interface ThreadHistoryItem extends Record<string, unknown> {
   exitCode?: number | null;
   changes?: ThreadFileChange[];
   tool?: string | null;
+  /** MCP tool annotation from Codex 0.147; null means the server did not provide one. */
+  readOnlyHint?: boolean | null;
   server?: string | null;
   arguments?: unknown;
   error?: { message?: string | null } | null;
   name?: string | null;
   contentItems?: unknown[];
   revisedPrompt?: string | null;
+  /** Image generation background mode from Codex 0.147. */
+  transparentBackground?: boolean | null;
   savedPath?: string | null;
   review?: string | null;
   query?: string | null;

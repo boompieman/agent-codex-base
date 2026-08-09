@@ -74,6 +74,23 @@ test("shows effort and compact context usage without mobile approval controls", 
     threadId,
     currentThread: { id: threadId, name: "Mobile composer settings" },
     threadSettings: { model: "gpt-5.6-luna", effort: "medium", approvalPolicy: "never" },
+    models: [
+      {
+        id: "gpt-5.6-luna",
+        model: "gpt-5.6-luna",
+        displayName: "GPT-5.6 Luna",
+        supportedReasoningEfforts: [
+          { reasoningEffort: "low" },
+          { reasoningEffort: "medium" },
+          { reasoningEffort: "high" },
+        ],
+      },
+      {
+        id: "gpt-5.6-sol",
+        model: "gpt-5.6-sol",
+        displayName: "GPT-5.6 Sol",
+      },
+    ],
     tokenUsage: {
       total: tokenBreakdown,
       last: tokenBreakdown,
@@ -81,13 +98,33 @@ test("shows effort and compact context usage without mobile approval controls", 
     },
   });
 
-  await expect(page.getByTestId("model-select")).toContainText("gpt-5.6-luna");
+  await expect(page.getByTestId("model-select")).toContainText("GPT-5.6 Luna");
   await expect(page.getByTestId("model-select")).toContainText("Medium");
   await expect(page.getByText("完全访问", { exact: true })).toBeHidden();
   const contextMeter = page.getByTestId("context-usage-meter");
   await expect(contextMeter).toBeVisible();
   await expect(contextMeter).toHaveAttribute("aria-label", "上下文用量 50%");
   await expect(contextMeter.getByText("50%", { exact: true })).toBeHidden();
+
+  await page.getByTestId("model-select").click();
+  const modelSearch = page.getByPlaceholder("搜索模型或推理强度");
+  await expect(modelSearch).toBeVisible();
+  await modelSearch.fill("luna");
+  await expect(page.getByTestId("model-option-gpt-5.6-luna")).toBeVisible();
+  await expect(page.getByTestId("model-option-gpt-5.6-sol")).toBeHidden();
+  await page.keyboard.press("Escape");
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "mobile-preview.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  await expect(page.getByAltText("mobile-preview.png")).toBeVisible();
+  await page.getByRole("button", { name: "移除附件" }).click();
+  await expect(page.getByAltText("mobile-preview.png")).toHaveCount(0);
 });
 
 test("gives the Goal objective most of the mobile details dialog", async ({ page }) => {

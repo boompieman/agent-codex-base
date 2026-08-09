@@ -6,6 +6,7 @@ export interface ModelRecord {
   hidden?: boolean;
   isDefault?: boolean;
   defaultReasoningEffort?: string | null;
+  modelSpecialty?: string | null;
   supportedReasoningEfforts?: Array<{
     reasoningEffort: string;
     description?: string | null;

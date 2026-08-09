@@ -2,15 +2,9 @@
 import { CheckIcon, CopyIcon } from "@lucide/vue";
 import { useClipboard } from "@vueuse/core";
 import { toRef } from "vue";
+import { MessageAction, MessageActions } from "@codex-gateway/ai-elements/message";
 import { toast } from "@codex-gateway/ui/sonner";
 import TurnDurationLabel from "@/components/thread/TurnDurationLabel.vue";
-import { Button } from "@codex-gateway/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@codex-gateway/ui/tooltip";
 import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 
 const props = defineProps<{
@@ -40,30 +34,19 @@ async function copyText() {
 
 <template>
   <!-- The parent mounts actions only after the existing intermediate-process disclosure closes. -->
-  <div
+  <MessageActions
     data-testid="agent-message-actions"
     class="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
   >
     <TurnDurationLabel v-if="turnTiming" :timing="turnTiming" />
-    <span>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="size-8 p-0 text-ink-muted hover:bg-canvas-soft hover:text-ink"
-              :aria-label="t('app.copyAgentOutput')"
-              @click="copyText"
-            >
-              <CheckIcon v-if="copied" class="size-4 text-accent-green" />
-              <CopyIcon v-else class="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{{ t("app.copyAgentOutput") }}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </span>
-  </div>
+    <MessageAction
+      :tooltip="t('app.copyAgentOutput')"
+      size="sm"
+      class="size-8 p-0 text-ink-muted hover:bg-canvas-soft hover:text-ink"
+      @click="copyText"
+    >
+      <CheckIcon v-if="copied" class="size-4 text-accent-green" />
+      <CopyIcon v-else class="size-4" />
+    </MessageAction>
+  </MessageActions>
 </template>

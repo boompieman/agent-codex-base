@@ -11,7 +11,14 @@ export default defineGatewayEventHandler(async () => {
   const request: RpcEnvelope = {
     id: requestId,
     method: "item/tool/requestUserInput",
-    params: { threadId, turnId: "turn-1", itemId: "question-1", questions: [] },
+    params: {
+      threadId,
+      turnId: "turn-1",
+      itemId: "question-1",
+      questions: [],
+      isBlocking: true,
+      autoResolutionMs: null,
+    },
   };
   pendingServerRequests.track(hostId, threadId, request);
   const before = new Set(gatewayMemoryState.publishedNotificationKeys);

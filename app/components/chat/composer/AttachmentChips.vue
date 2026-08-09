@@ -1,35 +1,40 @@
 <script setup lang="ts">
-import { FileIcon, ImageIcon, XIcon } from "@lucide/vue";
+import { computed } from "vue";
+import {
+  Attachment,
+  AttachmentInfo,
+  AttachmentPreview,
+  AttachmentRemove,
+  Attachments,
+} from "@codex-gateway/ai-elements/attachments";
 import type { ComposerAttachment } from "@/composables/composer/useComposerDraft";
-import { Badge } from "@codex-gateway/ui/badge";
+import { presentComposerAttachment } from "./attachment-presentation";
 
-defineProps<{
+const props = defineProps<{
   files: ComposerAttachment[];
 }>();
 
 const emit = defineEmits<{
   remove: [id: string];
 }>();
+
+const { t } = useI18n();
+const presentations = computed(() => props.files.map(presentComposerAttachment));
 </script>
 
 <template>
-  <div v-if="files.length" class="mb-2 flex flex-wrap gap-2">
-    <Badge
-      v-for="file in files"
-      :key="file.id"
-      variant="outline"
-      class="h-7 gap-1.5 rounded-md px-2 text-xs"
+  <Attachments v-if="presentations.length" variant="inline" class="mb-2 max-w-full">
+    <Attachment
+      v-for="attachment in presentations"
+      :key="attachment.id"
+      :data="attachment.data"
+      class="max-w-full"
+      @remove="emit('remove', attachment.id)"
     >
-      <ImageIcon v-if="file.isImage" class="size-3.5 text-primary" />
-      <FileIcon v-else class="size-3.5 text-ink-muted" />
-      <span class="max-w-48 truncate">{{ file.name }}</span>
-      <button
-        type="button"
-        class="ml-1 rounded-sm text-ink-muted hover:text-ink"
-        @click="emit('remove', file.id)"
-      >
-        <XIcon class="size-3.5" />
-      </button>
-    </Badge>
-  </div>
+      <AttachmentPreview />
+      <AttachmentInfo class="max-w-48" />
+      <!-- AI Elements hides inline removal until hover; touch users need a persistent target. -->
+      <AttachmentRemove :label="t('app.removeAttachment')" class="opacity-100" />
+    </Attachment>
+  </Attachments>
 </template>

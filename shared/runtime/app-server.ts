@@ -116,7 +116,14 @@ export const appServerThreadSchema = z
     parentThreadId: z.string().nullable(),
     preview: z.string(),
     ephemeral: z.boolean(),
-    isPinned: z.boolean(),
+    section: z
+      .object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+      })
+      .strict()
+      .nullable(),
+    sectionEnteredAt: z.number().nullable(),
     historyMode: z.enum(["legacy", "paginated"]),
     modelProvider: z.string(),
     createdAt: z.number(),

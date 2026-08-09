@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures/remote-workspace";
 import { openApp, reloadApp } from "./helpers/app";
-import { revealVirtualizedChatLocator } from "./helpers/scroll";
+import { chatViewportBottomDistance, revealVirtualizedChatLocator } from "./helpers/scroll";
 import {
   activeRealtimeSocketCount,
   activeRealtimeSocketUrls,
@@ -85,6 +85,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   await expect(firstIntermediateStepsToggle(page)).toHaveAttribute("data-state", "closed");
   const reconnectedMarker = `E2E WS重连 ${Date.now()}`;
   await sendTextTurn(page, reconnectedMarker);
+  await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "停止生成");
   const reconnectMessageOffset = await realtimeClientMessageCount(page);
   await closeRealtimeSockets(page);

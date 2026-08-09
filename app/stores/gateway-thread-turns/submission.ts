@@ -7,6 +7,7 @@ import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
+import { requestScrollToLatest } from "@/stores/gateway/thread-open/view-state";
 import {
   createClientUserMessageId,
   optimisticUserContent,
@@ -44,6 +45,11 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
     runtimeStore.setThreadRunning(hostId, threadId, true);
   }
 
+  // Sending is an explicit request to show the new user message, even if a completed-turn collapse
+  // or restored layout left the strict two-pixel end detector detached. Issue the command before
+  // the optimistic append; the viewport consumes it after Vue commits that row and uses TanStack's
+  // public scrollToEnd transaction instead of writing scrollTop directly.
+  requestScrollToLatest();
   const optimisticContent = optimisticUserContent(text, options);
   if (steerTurnId !== null) {
     insertOptimisticSteerMessage(threadId, steerTurnId, clientUserMessageId, optimisticContent);

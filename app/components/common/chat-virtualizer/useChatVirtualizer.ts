@@ -97,13 +97,16 @@ export function useChatVirtualizer(options: ChatVirtualizerOptions) {
   }
 
   async function scrollToLatest() {
+    // Explicit navigation/submission intent takes ownership before Vue commits the appended row.
+    // Setting this after nextTick leaves the intervening append classified as detached and is the
+    // reason a newly submitted user message could remain hidden behind the composer.
+    followLatest.value = true;
     await nextTick();
     refresh();
     // The official Chat guide recommends an imperative initial scroll after the viewport mounts.
     // Later appends and streaming growth are owned by followOnAppend/end anchoring; repeatedly
     // calling this method for content updates would override a reader who intentionally scrolled up.
     virtualizer.value.scrollToEnd({ behavior: "auto" });
-    followLatest.value = true;
   }
 
   return {

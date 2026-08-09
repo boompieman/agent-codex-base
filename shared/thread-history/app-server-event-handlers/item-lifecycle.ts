@@ -63,7 +63,7 @@ function upsertStartedOrCompletedItem(
   if (item === null) {
     return input.history;
   }
-  // App-server 0.146 reports the actual lifecycle instant. Envelope emission can happen later,
+  // App-server 0.147 reports the actual lifecycle instant. Envelope emission can happen later,
   // especially over slow SSH, so it must not be used to calculate item durations.
   const lifecycleTimestamp = itemLifecycleTimestampMs(params, phase);
   return mergeItemIntoLatestTurn(input.history, input.currentThread, input.threadId, {

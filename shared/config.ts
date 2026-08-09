@@ -1,6 +1,6 @@
 import type { GatewayConfig, GatewayNotificationSettings } from "./types";
 
-// Keep first paint bounded for item-heavy Codex 0.146 histories. Older turns are fetched only by
+// Keep first paint bounded for item-heavy Codex 0.147 histories. Older turns are fetched only by
 // explicit history navigation; do not silently prepend a background page after the Agent viewport
 // mounts. A same-page cached view may retain a wider depth that the user already loaded.
 export const INITIAL_TURN_PAGE_LIMIT = 2;
