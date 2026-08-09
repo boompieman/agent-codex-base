@@ -316,6 +316,8 @@ const threadResumeResultSchema = z
         })
         .strict(),
     ]),
+    initialTurnsPage: turnsPageSchema.nullable().optional(),
+    turnsBackwardsCursor: z.string().nullable().optional(),
   })
   .loose();
 

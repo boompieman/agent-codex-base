@@ -16,6 +16,7 @@ import { projectStore } from "../state/projects";
 import { threadMetadataStore } from "../state/thread-metadata";
 import { threadSnapshotStore } from "../state/thread-snapshots";
 import { ControllerRegistry } from "./controller-registry";
+import type { ThreadController } from "./thread-controller";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
 import { runtimeLog } from "./runtime-log";
 import { threadRuntimeEvents } from "./thread-runtime-events";
@@ -41,24 +42,18 @@ export class ThreadOpenService {
     threadId: string,
     projectId: number | null,
     limit = INITIAL_TURN_PAGE_LIMIT,
+    activationController?: ThreadController,
   ) {
     const cachedSnapshot = threadSnapshotStore.get(host.id, threadId);
     if (cachedSnapshot) {
-      const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
-      const cachedStatus = runtimeStatusFromThreadState(
-        cachedSnapshot.thread,
-        cachedSnapshot.history,
-        recentEvents,
-      );
-      if (cachedStatus === "running") {
-        runtimeLog("thread running cache refresh", {
-          hostId: host.id,
-          threadId,
-          projectId,
-        });
-        return this.refreshThreadState(host, threadId, projectId, limit);
-      }
       if (snapshotSatisfiesTurnLimit(cachedSnapshot, limit)) {
+        // Runtime notifications are projected into this snapshot as they arrive, including the
+        // active Turn's cumulative output and status. Re-reading a running thread here would make
+        // every browser activation call thread/turns/list again. For legacy rollouts app-server
+        // must replay the complete JSONL even when the requested page contains only two Turns, so
+        // that policy made long conversations slow while their realtime controller was healthy.
+        // Only an absent or too-shallow cache requires remote history I/O; reconnect gaps already
+        // use the authoritative refresh path explicitly.
         return this.snapshotResult(host, threadId, projectId, cachedSnapshot);
       }
       runtimeLog("thread cache depth refresh", {
@@ -67,7 +62,7 @@ export class ThreadOpenService {
         cachedTurns: threadTurnsFromHistory(cachedSnapshot.history).length,
         requestedTurns: limit,
       });
-      return this.refreshThreadState(host, threadId, projectId, limit);
+      return this.refreshThreadState(host, threadId, projectId, limit, activationController);
     }
 
     runtimeLog("thread cache miss", {
@@ -75,7 +70,7 @@ export class ThreadOpenService {
       threadId,
       limit,
     });
-    return this.refreshThreadState(host, threadId, projectId, limit);
+    return this.refreshThreadState(host, threadId, projectId, limit, activationController);
   }
 
   startedThreadResult(host: HostRecord, projectId: number | null, rawResult: unknown) {
@@ -133,6 +128,7 @@ export class ThreadOpenService {
     threadId: string,
     projectId: number | null,
     limit = INITIAL_TURN_PAGE_LIMIT,
+    activationController?: ThreadController,
   ): Promise<ReturnTypeResult> {
     const key = refreshKey(host.id, threadId);
     const pending = this.pendingRefreshes.get(key);
@@ -143,10 +139,16 @@ export class ThreadOpenService {
       // same store entry.
       if (pending.limit >= limit) return pending.promise;
       await pending.promise;
-      return this.refreshThreadState(host, threadId, projectId, limit);
+      return this.refreshThreadState(host, threadId, projectId, limit, activationController);
     }
 
-    const promise = this.performThreadStateRefresh(host, threadId, projectId, limit);
+    const promise = this.performThreadStateRefresh(
+      host,
+      threadId,
+      projectId,
+      limit,
+      activationController,
+    );
     this.pendingRefreshes.set(key, { limit, promise });
     try {
       return await promise;
@@ -188,12 +190,14 @@ export class ThreadOpenService {
     threadId: string,
     projectId: number | null,
     limit: number,
+    activationController?: ThreadController,
   ) {
     const { snapshot, resolvedProjectId } = await this.loadRemoteOpenSnapshot(
       host,
       threadId,
       projectId,
       limit,
+      activationController,
     );
     const status = runtimeStatusFromSnapshotState(snapshot.thread, snapshot.history) ?? "completed";
     // The refresh event is the backend's canonical correction after reconnect
@@ -250,7 +254,27 @@ export class ThreadOpenService {
     threadId: string,
     projectId: number | null,
     limit: number,
+    activationController?: ThreadController,
   ) {
+    if (activationController !== undefined) {
+      const resumed = await activationController.resumeWithInitialTurnsPage(limit);
+      const initialTurnsPage = resumed.initialTurnsPage;
+      if (initialTurnsPage === null || initialTurnsPage === undefined) {
+        throw new Error("thread/resume omitted the requested initialTurnsPage");
+      }
+      return this.storeRemoteOpenSnapshot(
+        host,
+        projectId,
+        resumed.thread,
+        initialTurnsPage,
+        extractThreadSettings(resumed),
+        activationController,
+      );
+    }
+
+    // Non-browser refreshes, such as reconciliation after a failed turn command, already run under
+    // a controller operation and must not acquire another subscription lease. They retain the
+    // metadata + page pair; normal browser cold opens use the combined resume path above.
     const client = await this.registry.getHostClient(host);
     const [read, initialTurnsPage] = await Promise.all([
       client.request(
@@ -272,7 +296,24 @@ export class ThreadOpenService {
         parseTurnsPage,
       ),
     ]);
-    const thread = read.thread;
+    return this.storeRemoteOpenSnapshot(
+      host,
+      projectId,
+      read.thread,
+      initialTurnsPage,
+      latestThreadSettingsFromEvents(gatewayEventStore.list(host.id, threadId, 0, 200)),
+    );
+  }
+
+  private storeRemoteOpenSnapshot(
+    host: HostRecord,
+    projectId: number | null,
+    thread: AppServerThread,
+    initialTurnsPage: ReturnType<typeof parseTurnsPage>,
+    threadSettings: ReturnType<typeof extractThreadSettings> | null,
+    activationController?: ThreadController,
+  ) {
+    const threadId = thread.id;
     const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
@@ -282,14 +323,15 @@ export class ThreadOpenService {
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
-      // thread/read intentionally returns only Thread metadata, not the persisted model/effort
-      // exposed by thread/resume. Preserve a setting observed from Gateway events when available;
-      // otherwise report unknown instead of projecting null fields that erase the browser's
-      // page-level per-thread setting cache.
-      threadSettings: latestThreadSettingsFromEvents(recentEvents),
+      threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
-    threadSnapshotStore.set(host.id, threadId, snapshot);
+    // During browser activation the controller is created before the cold snapshot exists. Route
+    // the write through it so sub-agent classification and active-main-thread handoff state are
+    // initialized together with the cache. Non-browser reconciliation has no activation controller
+    // and writes the same canonical snapshot directly.
+    if (activationController === undefined) threadSnapshotStore.set(host.id, threadId, snapshot);
+    else activationController.setOpenSnapshot(snapshot);
     return { snapshot, resolvedProjectId };
   }
 }

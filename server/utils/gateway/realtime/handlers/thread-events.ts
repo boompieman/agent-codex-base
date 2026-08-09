@@ -49,45 +49,52 @@ export async function activateThread(
   // snapshot with a newer cursor and permanently skip those events.
   const lastEventId = gatewayEventStore.latestId(input.hostId, input.threadId);
   const eventEpoch = gatewayEventStore.epoch(input.hostId);
-  const result = await threadBroker.openThread(
-    host,
-    input.threadId,
-    input.projectId ?? null,
-    input.limit,
-  );
-  sendRealtimePeerMessage(peer, {
-    type: "thread.snapshot",
-    requestId: message.requestId,
-    hostId: input.hostId,
-    threadId: input.threadId,
-    lastEventId,
-    eventEpoch,
-    ...result,
-  });
-  subscribeThreadEvents(
-    peer,
-    host,
-    input.threadId,
-    lastEventId,
-    eventEpoch,
-    result.runtimeStatus === "running",
-  );
-  if (result.threadSettings === null || result.threadSettings === undefined) {
-    // Send the paginated snapshot first so settings discovery never blocks conversation display.
-    // App-server exposes persisted model/effort only through `thread/resume`; resolve it once when
-    // this server-side snapshot is unknown, then let the ordinary event path update Pinia. The
-    // resolved value is cached in the snapshot, so subsequent same-process opens do not resume an
-    // idle thread again.
-    void runPeerScoped(peer, () =>
-      threadBroker.resolveThreadSettings(host, input.threadId).catch((error: unknown) => {
-        threadRuntimeEvents.record(input.hostId, input.threadId, "gateway/error", {
-          method: "gateway/error",
-          params: {
-            message: error instanceof Error ? error.message : "Failed to resolve thread settings",
-          },
-        });
-      }),
+  const activationLease = threadBroker.retainThreadActivation(host, input.threadId);
+  let leaseTransferred = false;
+  try {
+    const activationController = await activationLease.ready;
+    const result = await threadBroker.openThread(
+      host,
+      input.threadId,
+      input.projectId ?? null,
+      input.limit,
+      activationController,
     );
+    sendRealtimePeerMessage(peer, {
+      type: "thread.snapshot",
+      requestId: message.requestId,
+      hostId: input.hostId,
+      threadId: input.threadId,
+      lastEventId,
+      eventEpoch,
+      ...result,
+    });
+    subscribeThreadEvents(
+      peer,
+      host,
+      input.threadId,
+      lastEventId,
+      eventEpoch,
+      result.runtimeStatus === "running",
+      { lease: activationLease, controller: activationController },
+    );
+    leaseTransferred = true;
+    if (result.threadSettings === null || result.threadSettings === undefined) {
+      // A cache hit can predate settings hydration. Resolve only that metadata after the snapshot;
+      // cold opens already obtain it from the combined thread/resume response above.
+      void runPeerScoped(peer, () =>
+        threadBroker.resolveThreadSettings(host, input.threadId).catch((error: unknown) => {
+          threadRuntimeEvents.record(input.hostId, input.threadId, "gateway/error", {
+            method: "gateway/error",
+            params: {
+              message: error instanceof Error ? error.message : "Failed to resolve thread settings",
+            },
+          });
+        }),
+      );
+    }
+  } finally {
+    if (!leaseTransferred) activationLease.release();
   }
 }
 
@@ -146,6 +153,10 @@ function subscribeThreadEvents(
   afterId: number,
   afterEpoch?: string,
   initiallyRunning = threadBroker.isThreadRunning(host.id, threadId),
+  activation?: {
+    lease: ThreadSubscriptionLease;
+    controller: Awaited<ThreadSubscriptionLease["ready"]>;
+  },
 ) {
   const hostId = host.id;
   const eventEpoch = gatewayEventStore.epoch(hostId);
@@ -203,9 +214,28 @@ function subscribeThreadEvents(
   let replaying = true;
   const liveQueue: GatewayEvent[] = [];
   let upstreamLease: ThreadSubscriptionLease | null = null;
+  let pendingActivation = activation;
 
   const ensureUpstreamSubscription = () => {
     if (upstreamLease !== null) return;
+    if (pendingActivation !== undefined) {
+      const retained = pendingActivation;
+      pendingActivation = undefined;
+      upstreamLease = retained.lease;
+      void runPeerScoped(peer, () =>
+        retained.controller.ensureSubscribed().catch((error: unknown) => {
+          threadRuntimeEvents.record(hostId, threadId, "gateway/error", {
+            method: "gateway/error",
+            params: {
+              message:
+                error instanceof Error ? error.message : "Failed to subscribe thread upstream",
+            },
+          });
+          if (upstreamLease === retained.lease) releaseUpstreamSubscription();
+        }),
+      );
+      return;
+    }
     const lease = threadBroker.retainUpstreamSubscription(host, threadId, "browser");
     upstreamLease = lease;
     void runPeerScoped(peer, () =>
@@ -227,6 +257,13 @@ function subscribeThreadEvents(
   };
 
   if (initiallyRunning) ensureUpstreamSubscription();
+  else {
+    // A cold resume subscribes as part of returning initialTurnsPage. Idle threads do not need a
+    // retained upstream subscription, so release the activation lease after the snapshot and let
+    // the global thread/started broadcast reacquire one when work begins.
+    pendingActivation?.lease.release();
+    pendingActivation = undefined;
+  }
 
   const unsubscribe = threadRuntimeEvents.subscribe(
     hostId,
@@ -242,6 +279,8 @@ function subscribeThreadEvents(
   );
   releaseSubscription = () => {
     unsubscribe();
+    pendingActivation?.lease.release();
+    pendingActivation = undefined;
     releaseUpstreamSubscription();
     if (state.threadUnsubscribers.get(key) === releaseSubscription) {
       state.threadUnsubscribers.delete(key);

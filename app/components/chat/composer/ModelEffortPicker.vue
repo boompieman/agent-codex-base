@@ -37,12 +37,16 @@ const selectorOpen = ref(false);
 
 function selectModel(model: string) {
   emit("selectModel", model);
-  selectorOpen.value = false;
 }
 
 function selectEffort(effort: ReasoningEffort) {
   emit("selectEffort", effort);
-  selectorOpen.value = false;
+}
+
+function preventInitialFocus(event: Event) {
+  // Reka Dialog otherwise focuses the first tabbable element while CommandInput also requests
+  // autofocus. Preventing both paths keeps mobile keyboards closed until the user taps search.
+  event.preventDefault();
 }
 </script>
 
@@ -77,8 +81,11 @@ function selectEffort(effort: ReasoningEffort) {
     <ModelSelectorContent
       :title="t('app.model')"
       class="w-[min(92vw,32rem)] overflow-hidden rounded-2xl border-hairline shadow-xl shadow-ink/10"
+      close-button-test-id="model-selector-close"
+      data-testid="model-selector-dialog"
+      @open-auto-focus="preventInitialFocus"
     >
-      <ModelSelectorInput :placeholder="t('app.searchModels')" />
+      <ModelSelectorInput :auto-focus="false" :placeholder="t('app.searchModels')" />
       <ModelSelectorList class="max-h-[min(60dvh,28rem)] p-1">
         <ModelSelectorEmpty>{{ t("app.noMatchingModels") }}</ModelSelectorEmpty>
         <ModelSelectorGroup :heading="t('app.reasoningEffort')">

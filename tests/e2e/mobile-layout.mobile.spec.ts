@@ -60,6 +60,9 @@ test("shows effort and compact context usage without mobile approval controls", 
   page,
 }) => {
   await openApp(page);
+  await page.route("**/api/threads/settings", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+  });
   const threadId = "mobile-composer-settings";
   const tokenBreakdown = {
     totalTokens: 50_000,
@@ -109,10 +112,27 @@ test("shows effort and compact context usage without mobile approval controls", 
   await page.getByTestId("model-select").click();
   const modelSearch = page.getByPlaceholder("搜索模型或推理强度");
   await expect(modelSearch).toBeVisible();
+  await expect(modelSearch).not.toBeFocused();
+  await modelSearch.click();
+  await expect(modelSearch).toBeFocused();
   await modelSearch.fill("luna");
   await expect(page.getByTestId("model-option-gpt-5.6-luna")).toBeVisible();
   await expect(page.getByTestId("model-option-gpt-5.6-sol")).toBeHidden();
-  await page.keyboard.press("Escape");
+  await modelSearch.fill("");
+
+  await page.getByText("High", { exact: true }).click();
+  await expect(modelSearch).toBeVisible();
+  await expect(page.getByTestId("model-select")).toContainText("High");
+  await page.getByTestId("model-option-gpt-5.6-sol").click();
+  await expect(modelSearch).toBeVisible();
+  await expect(page.getByTestId("model-select")).toContainText("GPT-5.6 Sol");
+
+  await page.getByTestId("model-selector-close").click();
+  await expect(modelSearch).toBeHidden();
+  await page.getByTestId("model-select").click();
+  await expect(modelSearch).toBeVisible();
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 4, y: 4 } });
+  await expect(modelSearch).toBeHidden();
 
   await page.locator('input[type="file"]').setInputFiles({
     name: "mobile-preview.png",

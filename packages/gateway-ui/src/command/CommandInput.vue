@@ -13,11 +13,16 @@ defineOptions({
   inheritAttrs: false,
 });
 
-const props = defineProps<
-  ListboxFilterProps & {
-    class?: HTMLAttributes["class"];
-  }
->();
+const props = withDefaults(
+  defineProps<
+    ListboxFilterProps & {
+      class?: HTMLAttributes["class"];
+    }
+  >(),
+  {
+    autoFocus: true,
+  },
+);
 
 const delegatedProps = reactiveOmit(props, "class");
 
@@ -33,7 +38,7 @@ const { filterState } = useCommand();
         v-bind="{ ...forwardedProps, ...$attrs }"
         v-model="filterState.search"
         data-slot="command-input"
-        auto-focus
+        :auto-focus="props.autoFocus"
         :class="
           cn(
             'w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
