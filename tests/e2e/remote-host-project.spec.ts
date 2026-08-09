@@ -6,6 +6,7 @@ import { authenticatedFetch, openApp, reloadApp } from "./helpers/app";
 import { projectRecordSchema } from "./helpers/http-schemas";
 import { STALE_THREAD_CURSOR_ERROR_CODE } from "../../shared/gateway-errors";
 import { sendRealtimeRawRequest } from "./helpers/realtime";
+import { chatViewportBottomDistance } from "./helpers/scroll";
 import {
   activeRealtimeSocketCount,
   installRealtimeSocketProbe,
@@ -183,6 +184,7 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   const afterReloadMarker = `E2E 刷新后新轮 ${Date.now()}`;
   await page.getByPlaceholder("输入后续修改要求").fill(`用一句话回复：${afterReloadMarker}`);
   await page.getByTestId("send-turn-button").click();
+  await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
   await expect(page.getByTestId("chat-scroll-area").getByText(afterReloadMarker)).toBeVisible({
     timeout: 120_000,
   });

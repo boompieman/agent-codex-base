@@ -25,6 +25,7 @@ const props = defineProps<{
   loading: boolean;
   loadingOlder: boolean;
   olderTurnsCursor: string | null;
+  scrollToLatestToken?: number;
 }>();
 
 const emit = defineEmits<{
@@ -131,6 +132,7 @@ watch(
     :key="threadId ?? 'empty-thread'"
     :rows="rows"
     :estimate-size="estimateRowSize"
+    :scroll-to-latest-token="scrollToLatestToken"
     @reach-start="handleReachStart"
     @user-detached-change="handleUserDetachedChange"
   >

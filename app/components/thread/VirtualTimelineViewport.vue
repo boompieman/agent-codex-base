@@ -18,6 +18,7 @@ interface TimelineViewportRow {
 const props = defineProps<{
   rows: TimelineViewportRow[];
   estimateSize: (row: unknown, index: number) => number;
+  scrollToLatestToken?: number;
 }>();
 
 const emit = defineEmits<{
@@ -153,6 +154,19 @@ watch(
     resetFollowLatest();
   },
   { flush: "post", immediate: true },
+);
+
+watch(
+  () => props.scrollToLatestToken,
+  (token, previous) => {
+    if (!viewportReady.value || token === undefined || token === previous) return;
+    // A user submission and an explicit thread activation are the only external commands that
+    // may reclaim the latest edge. The former content-signature watcher followed every stream
+    // delta and overrode readers who had scrolled up; keeping this scalar command separate lets
+    // TanStack own all ordinary appends, measurements, and intermediate-step collapse.
+    resetFollowLatest();
+  },
+  { flush: "post" },
 );
 
 watch(

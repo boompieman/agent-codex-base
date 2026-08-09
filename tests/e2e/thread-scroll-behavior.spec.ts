@@ -162,7 +162,7 @@ function selectedTimelineUsesCachedReference(page: Page, threadId: string) {
     const views = window.__codexGatewayE2e?.views;
     if (views === undefined) throw new Error("Gateway E2E driver is unavailable");
     // A route switch is only a Pinia selection. Object identity is intentional here: rebuilding an
-    // equivalent array would rescan every item and remount virtual rows for large 0.146 histories.
+    // equivalent array would rescan every item and remount virtual rows for large 0.147 histories.
     return views.timelineTurns === views.threadViews[`1:${threadId}`]?.timelineTurns;
   }, threadId);
 }

@@ -21,6 +21,7 @@ const {
   loading,
   loadingOlderTurns,
   olderTurnsCursor,
+  scrollToLatestToken,
   visibleError,
   selectedThreadViewReady,
 } = useChatWorkspaceState();
@@ -65,6 +66,7 @@ const showThreadLoading = computed(
         :loading="loading"
         :loading-older="loadingOlderTurns"
         :older-turns-cursor="olderTurnsCursor"
+        :scroll-to-latest-token="scrollToLatestToken"
         @load-older="threadTurns.loadOlderTurns"
       />
 

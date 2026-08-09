@@ -3,6 +3,7 @@ import type {
   GatewayThread,
   GatewayEvent,
   HostRecord,
+  ModelRecord,
   ProjectRecord,
   ThreadGoalStatus,
   ThreadHistoryState,
@@ -44,6 +45,7 @@ interface SeedGatewayThreadInput {
   events?: GatewayEvent[];
   threadSettings?: ThreadSettingsState;
   tokenUsage?: ThreadTokenUsageState;
+  models?: ModelRecord[];
   lastEventId?: number;
   eventEpoch?: string;
   threadViews?: Record<
@@ -107,6 +109,11 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     const projectId = input.projectId ?? null;
     const threadId = input.threadId ?? null;
     catalog.hosts = [input.host ?? input.defaultHost];
+    if (input.models !== undefined) {
+      catalog.models = input.models;
+      catalog.modelsHostId = hostId;
+      catalog.loadingModels = false;
+    }
     catalog.projects =
       input.project !== null && input.project !== undefined
         ? [input.project]

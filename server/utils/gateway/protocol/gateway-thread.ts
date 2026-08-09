@@ -4,7 +4,7 @@ import { gatewayMemoryState } from "../state/memory";
 /**
  * The browser boundary is the only place that enriches an official app-server Thread. Runtime
  * snapshots must retain the exact upstream DTO so user-scoped Gateway pins can never leak back
- * into RPC state or be mistaken for Codex's remote `isPinned` field.
+ * into RPC state or be mistaken for Codex's app-server-global section membership.
  */
 export function gatewayThreadFromAppServer(
   hostId: number,
