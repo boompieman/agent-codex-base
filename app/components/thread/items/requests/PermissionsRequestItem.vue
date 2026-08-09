@@ -2,11 +2,12 @@
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { ShieldQuestionIcon } from "@lucide/vue";
 import { computed } from "vue";
+import { ConfirmationAction } from "@codex-gateway/ai-elements/confirmation";
 import { Badge } from "@codex-gateway/ui/badge";
-import { Button } from "@codex-gateway/ui/button";
-import { ScrollArea } from "@codex-gateway/ui/scroll-area";
+import StaticJsonCodeBlock from "@/components/common/StaticJsonCodeBlock.vue";
+import CodexApprovalConfirmation from "@/components/thread/items/approval/CodexApprovalConfirmation.vue";
+import { projectCodexApproval } from "@/components/thread/items/approval/presentation";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
-import { jsonPreview } from "@/utils/thread-items";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -38,20 +39,16 @@ const writePaths = computed(() =>
 const entries = computed(() =>
   Array.isArray(fileSystem.value?.entries) ? fileSystem.value.entries : [],
 );
-
-async function approve(scope: "turn" | "session") {
-  await respond({
+const approvalPresentation = computed(() =>
+  projectCodexApproval({
+    kind: "permissions",
+    requestId: requestId.value,
+    pending: requestId.value !== null && requestId.value !== undefined && requestId.value !== "",
+    canRespond: canRespond.value,
+    presentationId: `permissions-${String(props.item.id ?? "request")}`,
     permissions: requested.value,
-    scope,
-  });
-}
-
-async function decline() {
-  await respond({
-    permissions: {},
-    scope: "turn",
-  });
-}
+  }),
+);
 
 async function respond(result: unknown) {
   await respondToRequest(result);
@@ -59,14 +56,12 @@ async function respond(result: unknown) {
 </script>
 
 <template>
-  <div
-    class="max-w-4xl rounded-lg border border-accent-orange/30 bg-accent-orange/10 px-3 py-3 text-sm text-ink-secondary"
-  >
-    <div class="flex items-center gap-2">
+  <CodexApprovalConfirmation class="max-w-4xl" :presentation="approvalPresentation">
+    <template #title>
       <ShieldQuestionIcon class="size-4 shrink-0" />
       <span class="font-medium">{{ t("app.permissionsRequest") }}</span>
       <Badge variant="outline">{{ item.status }}</Badge>
-    </div>
+    </template>
     <div v-if="params.reason" class="mt-2 text-accent-orange-deep">{{ params.reason }}</div>
     <div class="mt-3 grid gap-2">
       <div v-if="params.cwd" class="rounded-md bg-surface/80 px-3 py-2">
@@ -102,41 +97,21 @@ async function respond(result: unknown) {
             {{ path }}
           </div>
         </div>
-        <ScrollArea v-if="entries.length" class="mt-2 h-40 rounded-md bg-surface">
-          <pre class="p-2 text-xs">{{ jsonPreview(entries) }}</pre>
-        </ScrollArea>
+        <StaticJsonCodeBlock v-if="entries.length" class="mt-2" :value="entries" />
       </div>
     </div>
-    <div v-if="canRespond" class="mt-3 flex flex-wrap gap-2">
-      <Button
+    <template #actions>
+      <ConfirmationAction
+        v-for="action in approvalPresentation.actions"
+        :key="action.id"
         size="sm"
+        :variant="action.variant"
         :disabled="responding"
-        data-testid="permissions-approval-turn"
-        @click="approve('turn')"
+        :data-testid="action.testId"
+        @click="respond(action.result)"
       >
-        {{ t("app.approveForTurn") }}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        :disabled="responding"
-        data-testid="permissions-approval-session"
-        @click="approve('session')"
-      >
-        {{ t("app.approveForSession") }}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        :disabled="responding"
-        data-testid="permissions-approval-decline"
-        @click="decline"
-      >
-        {{ t("app.decline") }}
-      </Button>
-    </div>
-    <div v-else class="mt-3 rounded-md bg-surface/80 px-3 py-2 text-xs text-ink-muted">
-      {{ t("app.serverRequestResolved") }}
-    </div>
-  </div>
+        {{ t(action.label) }}
+      </ConfirmationAction>
+    </template>
+  </CodexApprovalConfirmation>
 </template>

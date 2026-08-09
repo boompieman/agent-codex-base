@@ -102,6 +102,7 @@ watch(
         :pending-approval="pendingApproval"
         :host-id="hostId"
         :thread-id="threadId"
+        :presentation-id="`file-${String(item.id ?? item.turnId ?? 'request')}`"
       />
     </div>
     <div v-if="fileChanges.length" class="mt-3 space-y-2">

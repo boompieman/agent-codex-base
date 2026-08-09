@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { computed, ref } from "vue";
+import { PlanFooter } from "@codex-gateway/ai-elements/plan";
 import { Button } from "@codex-gateway/ui/button";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
@@ -85,9 +86,9 @@ function defaultCollaborationMode() {
 </script>
 
 <template>
-  <div
+  <PlanFooter
     v-if="visible"
-    class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-canvas-soft px-3 py-2"
+    class="flex flex-wrap items-center gap-2 border-t border-hairline bg-canvas-soft px-4 py-3"
   >
     <span class="min-w-0 flex-1 text-sm text-ink-secondary">
       {{ $t("app.planImplementationPrompt") }}
@@ -98,5 +99,5 @@ function defaultCollaborationMode() {
     <Button size="sm" variant="ghost" @click="continuePlanning">
       {{ $t("app.continuePlanning") }}
     </Button>
-  </div>
+  </PlanFooter>
 </template>

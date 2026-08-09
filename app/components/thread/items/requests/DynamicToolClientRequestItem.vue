@@ -4,10 +4,9 @@ import { WrenchIcon } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Badge } from "@codex-gateway/ui/badge";
 import { Button } from "@codex-gateway/ui/button";
-import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { Textarea } from "@codex-gateway/ui/textarea";
+import StaticJsonCodeBlock from "@/components/common/StaticJsonCodeBlock.vue";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
-import { jsonPreview } from "@/utils/thread-items";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -48,9 +47,7 @@ async function submit() {
     </div>
     <div class="mt-3">
       <div class="mb-1 text-xs font-medium uppercase text-primary">{{ t("app.arguments") }}</div>
-      <ScrollArea class="h-40 rounded-md bg-surface/80">
-        <pre class="p-2 text-xs">{{ jsonPreview(params.arguments) }}</pre>
-      </ScrollArea>
+      <StaticJsonCodeBlock :value="params.arguments" />
     </div>
     <div v-if="canRespond" class="mt-3">
       <div class="mb-1 text-xs font-medium uppercase text-primary">

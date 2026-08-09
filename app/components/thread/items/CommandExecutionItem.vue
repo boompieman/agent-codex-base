@@ -9,15 +9,17 @@ import {
 } from "@lucide/vue";
 import { computed } from "vue";
 import { Loader } from "@codex-gateway/ai-elements/loader";
+import { ConfirmationAction } from "@codex-gateway/ai-elements/confirmation";
 import { Badge } from "@codex-gateway/ui/badge";
-import { Button } from "@codex-gateway/ui/button";
 import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import HighlightedCode from "@/components/common/HighlightedCode.vue";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import { ChatStickToBottomScrollArea } from "@/components/common/chat-virtualizer";
+import CodexApprovalConfirmation from "@/components/thread/items/approval/CodexApprovalConfirmation.vue";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
 import { commandDisplayLabel } from "@/utils/thread-item-display";
 import { threadItemResultText } from "@/utils/thread-items";
+import { projectCodexApproval } from "./approval/presentation";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -58,9 +60,18 @@ const visualStatus = computed<"running" | "completed" | "failed" | null>(() => {
   if (commandStatus.value === "completed" || props.item.exitCode === 0) return "completed";
   return null;
 });
+const approvalPresentation = computed(() =>
+  projectCodexApproval({
+    kind: "command",
+    requestId: requestId.value,
+    pending: pendingApproval.value !== null,
+    canRespond: canRespond.value,
+    presentationId: `command-${String(props.item.id ?? props.item.turnId ?? "request")}`,
+  }),
+);
 
-async function respond(decision: "accept" | "decline") {
-  await respondToRequest({ decision });
+async function respond(result: unknown) {
+  await respondToRequest(result);
 }
 </script>
 
@@ -105,37 +116,29 @@ async function respond(decision: "accept" | "decline") {
       </span>
     </CollapsibleTrigger>
     <DeferredCollapsibleContent :open="open">
-      <div
+      <CodexApprovalConfirmation
         v-if="pendingApproval"
-        class="mt-2 rounded-lg border border-accent-orange/30 bg-accent-orange/10 px-3 py-2 text-sm text-accent-orange-deep"
+        class="mt-2"
+        :presentation="approvalPresentation"
       >
-        <div class="font-medium">{{ t("app.commandApprovalRequired") }}</div>
+        <template #title>{{ t("app.commandApprovalRequired") }}</template>
         <div v-if="pendingApproval.params?.reason" class="mt-1 text-accent-orange-deep">
           {{ pendingApproval.params.reason }}
         </div>
-        <div v-if="canRespond" class="mt-2 flex flex-wrap gap-2">
-          <Button
+        <template #actions>
+          <ConfirmationAction
+            v-for="action in approvalPresentation.actions"
+            :key="action.id"
             size="sm"
+            :variant="action.variant"
             :disabled="responding"
-            data-testid="command-approval-accept"
-            @click="respond('accept')"
+            :data-testid="action.testId"
+            @click="respond(action.result)"
           >
-            {{ t("app.approve") }}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            :disabled="responding"
-            data-testid="command-approval-decline"
-            @click="respond('decline')"
-          >
-            {{ t("app.decline") }}
-          </Button>
-        </div>
-        <div v-else class="mt-2 text-xs text-accent-orange-deep">
-          {{ t("app.serverRequestResolved") }}
-        </div>
-      </div>
+            {{ t(action.label) }}
+          </ConfirmationAction>
+        </template>
+      </CodexApprovalConfirmation>
       <ChatStickToBottomScrollArea
         v-if="output"
         class="mt-2 max-h-56 rounded-lg border border-hairline bg-canvas-soft"
