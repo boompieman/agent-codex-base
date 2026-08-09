@@ -1,7 +1,7 @@
 import type { HostRecord, ThreadGoalStatus, ThreadSettingsState } from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
 import type { ServerRequestResponseInput, TurnStartInput, TurnSteerInput } from "./types";
-import { ControllerRegistry } from "./controller-registry";
+import { ControllerRegistry, type ThreadSubscriptionLease } from "./controller-registry";
 import { ThreadOpenService } from "./thread-open-service";
 import { ThreadTurnCommandService } from "./turn-commands";
 import { ThreadGoalService } from "./thread-goals";
@@ -23,13 +23,17 @@ class ThreadBroker {
     threadId: string,
     projectId: number | null,
     limit = INITIAL_TURN_PAGE_LIMIT,
+    controller?: Awaited<ThreadSubscriptionLease["ready"]>,
   ) {
-    return this.openService.openThread(host, threadId, projectId, limit);
+    return this.openService.openThread(host, threadId, projectId, limit, controller);
   }
 
   async startThread(host: HostRecord, params: Record<string, unknown>, projectId: number | null) {
     const client = await this.registry.getHostClient(host);
-    const result = await client.request("thread/start", params);
+    // Paginated history is the current App Server storage model that can hydrate indexed Turn
+    // pages without replaying an entire rollout JSONL. Keep this policy at the protocol boundary so
+    // every Gateway-created thread uses it and browser DTOs do not need to expose storage details.
+    const result = await client.request("thread/start", { ...params, historyMode: "paginated" });
     const started = this.openService.startedThreadResult(host, projectId, result);
     await this.registry.retainStartedThreadSubscription(host, started.threadId);
     return started.result;
@@ -121,6 +125,10 @@ class ThreadBroker {
 
   retainUpstreamSubscription(host: HostRecord, threadId: string, owner: "browser" | "scoped") {
     return this.registry.retainSubscription(host, threadId, owner);
+  }
+
+  retainThreadActivation(host: HostRecord, threadId: string) {
+    return this.registry.retainActivationController(host, threadId);
   }
 
   isThreadRunning(hostId: number, threadId: string) {

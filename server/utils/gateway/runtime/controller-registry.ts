@@ -15,6 +15,7 @@ export interface ThreadSubscriptionLease {
 
 interface RetainSubscriptionOptions {
   upstreamAlreadySubscribed?: boolean;
+  deferUpstreamSubscription?: boolean;
 }
 
 interface SubscriptionLeases {
@@ -74,7 +75,7 @@ export class ControllerRegistry {
         // `thread/start` subscribes the same shared Host RPC connection before a controller exists.
         // Adopt that protocol-owned subscription instead of issuing a redundant thread/resume.
         controller.adoptExistingSubscription();
-      } else {
+      } else if (options.deferUpstreamSubscription !== true) {
         await controller.ensureSubscribed();
       }
       return controller;
@@ -111,6 +112,15 @@ export class ControllerRegistry {
         });
       },
     };
+  }
+
+  retainActivationController(host: HostRecord, threadId: string) {
+    // Activation may satisfy a cold open with thread/resume.initialTurnsPage. Reserve the browser
+    // lease before issuing that RPC, but let ThreadOpenService decide whether a remote read is
+    // needed at all. Cache hits therefore do not resume idle threads merely to render history.
+    return this.retainSubscription(host, threadId, "browser", {
+      deferUpstreamSubscription: true,
+    });
   }
 
   async retainStartedThreadSubscription(host: HostRecord, threadId: string) {

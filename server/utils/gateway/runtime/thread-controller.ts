@@ -102,9 +102,7 @@ export class ThreadController {
     await this.enqueue(async () => {
       // Check and mutation must share the serialized critical section. Two browser peers can
       // acquire the same explicit lease in one tick; checking before enqueue would make both send
-      // thread/resume even though the RPC operations themselves execute sequentially. Conversation
-      // history still uses thread/read plus thread/turns/list; this resume is only the official
-      // subscription and settings hydration operation.
+      // thread/resume even though the RPC operations themselves execute sequentially.
       // A subscription inherited from the background monitor proves only that notifications are
       // attached; it has no ThreadResumeResponse. Existing threads must still resume once when
       // their materialized snapshot does not yet contain model/effort. This is the app-server's
@@ -113,22 +111,23 @@ export class ThreadController {
       // Fresh threads never enter this branch: ControllerRegistry keeps thread/start's implicit
       // subscription under a bootstrap owner until turn/started. Calling thread/resume before that
       // point is invalid because app-server has not materialized a rollout yet.
-      const resumed = await this.client.request(
-        "thread/resume",
-        // Conversation history is hydrated separately through the paginated API. Asking resume to
-        // return it again wastes SSH bandwidth and memory, especially for long-running threads.
-        { threadId: this.threadId, excludeTurns: true },
-        120_000,
-        parseThreadResumeResult,
-      );
-      this.subscribed = true;
-      // `thread/read` and paginated Turn history intentionally omit the persisted model and
-      // reasoning effort. App-server returns those authoritative values from `thread/resume`, but
-      // does not emit `thread/settings/updated` for the resume itself. Project the response through
-      // the same Gateway event path so the server snapshot and every browser use one settings
-      // source instead of guessing from the model catalog.
-      this.publishResumedSettings(resumed);
+      await this.requestResume({ threadId: this.threadId, excludeTurns: true });
     });
+  }
+
+  async resumeWithInitialTurnsPage(limit: number) {
+    await this.ensureConnected();
+    return this.enqueue(() =>
+      this.requestResume({
+        threadId: this.threadId,
+        excludeTurns: true,
+        initialTurnsPage: {
+          limit,
+          sortDirection: "desc",
+          itemsView: "full",
+        },
+      }),
+    );
   }
 
   isSubscribed() {
@@ -231,5 +230,20 @@ export class ThreadController {
         threadSettings: extractThreadSettings(resumed),
       },
     });
+  }
+
+  private async requestResume(params: Record<string, unknown>) {
+    const resumed = await this.client.request(
+      "thread/resume",
+      params,
+      120_000,
+      parseThreadResumeResult,
+    );
+    this.subscribed = true;
+    // App-server exposes persisted model/effort in thread/resume but emits no settings event for
+    // the response itself. Publish it through the ordinary event path so snapshots and all browser
+    // peers converge on one authoritative value instead of maintaining a second settings cache.
+    this.publishResumedSettings(resumed);
+    return resumed;
   }
 }
