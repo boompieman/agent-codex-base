@@ -3,8 +3,7 @@ import type { ThreadHistoryItem } from "~~/shared/types";
 import { AlertTriangleIcon } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@codex-gateway/ui/badge";
-import { ScrollArea } from "@codex-gateway/ui/scroll-area";
-import { jsonPreview } from "@/utils/thread-items";
+import StaticJsonCodeBlock from "@/components/common/StaticJsonCodeBlock.vue";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -27,8 +26,6 @@ const description = computed(() => props.description || t("app.protocolMismatchD
       <Badge variant="outline">{{ item.status }}</Badge>
     </div>
     <div class="mt-2">{{ description }}</div>
-    <ScrollArea class="mt-3 h-56 rounded-md bg-surface/80">
-      <pre class="p-2 text-xs">{{ jsonPreview(item.params) }}</pre>
-    </ScrollArea>
+    <StaticJsonCodeBlock class="mt-3" :value="item.params" max-height="default" />
   </div>
 </template>

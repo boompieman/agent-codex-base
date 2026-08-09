@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import DeferredCollapsibleContent from "@/components/common/DeferredCollapsibleContent.vue";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
+import StaticJsonCodeBlock from "@/components/common/StaticJsonCodeBlock.vue";
 import { isItemInProgress } from "@/utils/thread-items";
 import { presentToolCall } from "./tool-call-presenters";
 
@@ -49,8 +50,12 @@ const detailSections = computed(() => presentation.value.details);
         <div class="space-y-3 border-t border-hairline px-3 py-3">
           <div v-for="section in detailSections" :key="section.label" class="space-y-1">
             <div class="text-xs font-medium uppercase text-ink-faint">{{ section.label }}</div>
-            <MarkdownContent v-if="section.markdown" :content="section.content || ''" compact />
-            <Sources v-else-if="section.links?.length" class="mb-0 w-full space-y-2 text-sm">
+            <MarkdownContent
+              v-if="section.kind === 'markdown'"
+              :content="section.content"
+              compact
+            />
+            <Sources v-else-if="section.kind === 'links'" class="mb-0 w-full space-y-2 text-sm">
               <Source
                 v-for="link in section.links"
                 :key="link.url"
@@ -71,6 +76,11 @@ const detailSections = computed(() => presentation.value.details);
                 </span>
               </Source>
             </Sources>
+            <StaticJsonCodeBlock
+              v-else-if="section.kind === 'json'"
+              :value="section.value"
+              max-height="default"
+            />
             <ScrollArea v-else class="h-56 rounded-md bg-canvas-soft">
               <pre class="p-3 text-xs leading-5 text-ink-secondary">{{ section.content }}</pre>
             </ScrollArea>

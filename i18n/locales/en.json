@@ -227,6 +227,8 @@
     "slashGoalClearTitle": "Clear goal",
     "slashGoalClearDescription": "Clear the current goal through app-server",
     "planModeActive": "Plan mode",
+    "plan": "Plan",
+    "togglePlan": "Toggle plan",
     "goalModeActive": "Goal",
     "threadGoal": "Goal",
     "goalInputHint": "Enter an objective and press Enter",

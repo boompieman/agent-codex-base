@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Button } from "@codex-gateway/ui/button";
+import { ConfirmationAction } from "@codex-gateway/ai-elements/confirmation";
+import CodexApprovalConfirmation from "@/components/thread/items/approval/CodexApprovalConfirmation.vue";
 import { useServerRequestResponder } from "@/composables/thread/useServerRequestResponder";
+import { projectCodexApproval } from "@/components/thread/items/approval/presentation";
 
 const props = defineProps<{
   pendingApproval: {
@@ -10,6 +12,7 @@ const props = defineProps<{
   };
   hostId: number | null;
   threadId: string | null;
+  presentationId: string;
 }>();
 
 const { t } = useI18n();
@@ -23,41 +26,39 @@ const {
   threadId: computed(() => props.threadId),
   requestId,
 });
+const approvalPresentation = computed(() =>
+  projectCodexApproval({
+    kind: "fileChange",
+    requestId: requestId.value,
+    pending: true,
+    canRespond: canRespond.value,
+    presentationId: props.presentationId,
+  }),
+);
 
-async function respond(decision: "accept" | "decline") {
-  await respondToRequest({ decision });
+async function respond(result: unknown) {
+  await respondToRequest(result);
 }
 </script>
 
 <template>
-  <div
-    class="mt-3 rounded-lg border border-accent-orange/30 bg-accent-orange/10 px-3 py-2 text-sm text-accent-orange-deep"
-  >
-    <div class="font-medium">{{ t("app.fileApprovalRequired") }}</div>
+  <CodexApprovalConfirmation class="mt-3" :presentation="approvalPresentation">
+    <template #title>{{ t("app.fileApprovalRequired") }}</template>
     <div v-if="pendingApproval.params?.reason" class="mt-1 text-accent-orange-deep">
       {{ pendingApproval.params.reason }}
     </div>
-    <div v-if="canRespond" class="mt-2 flex flex-wrap gap-2">
-      <Button
+    <template #actions>
+      <ConfirmationAction
+        v-for="action in approvalPresentation.actions"
+        :key="action.id"
         size="sm"
+        :variant="action.variant"
         :disabled="responding"
-        data-testid="file-approval-accept"
-        @click="respond('accept')"
+        :data-testid="action.testId"
+        @click="respond(action.result)"
       >
-        {{ t("app.approve") }}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        :disabled="responding"
-        data-testid="file-approval-decline"
-        @click="respond('decline')"
-      >
-        {{ t("app.decline") }}
-      </Button>
-    </div>
-    <div v-else class="mt-2 text-xs text-accent-orange-deep">
-      {{ t("app.serverRequestResolved") }}
-    </div>
-  </div>
+        {{ t(action.label) }}
+      </ConfirmationAction>
+    </template>
+  </CodexApprovalConfirmation>
 </template>

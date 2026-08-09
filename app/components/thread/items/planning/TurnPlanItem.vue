@@ -5,6 +5,7 @@ import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import PlanImplementationActions from "./PlanImplementationActions.vue";
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { recordFromUnknown } from "~~/shared/utils/records";
+import CodexPlanCard from "./CodexPlanCard.vue";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -22,11 +23,10 @@ function stepStatus(step: unknown) {
 </script>
 
 <template>
-  <div class="max-w-4xl rounded-lg border border-hairline bg-surface px-4 py-3 text-ink-secondary">
-    <div class="mb-3 flex items-center gap-2 text-[0.9375rem] font-medium text-ink-secondary">
+  <CodexPlanCard :title="t('app.todoPlan')">
+    <template #icon>
       <ListTodoIcon class="size-4" />
-      <span>{{ t("app.todoPlan") }}</span>
-    </div>
+    </template>
     <MarkdownContent v-if="item.explanation" :content="item.explanation" compact />
     <div v-if="steps.length" class="mt-3 space-y-2">
       <div
@@ -46,6 +46,8 @@ function stepStatus(step: unknown) {
         <span class="min-w-0 flex-1">{{ step.step }}</span>
       </div>
     </div>
-    <PlanImplementationActions :item="item" :host-id="hostId" :thread-id="threadId" />
-  </div>
+    <template #footer>
+      <PlanImplementationActions :item="item" :host-id="hostId" :thread-id="threadId" />
+    </template>
+  </CodexPlanCard>
 </template>

@@ -1,5 +1,3 @@
-import { jsonPreview } from "@/utils/thread-items";
-
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { recordFromUnknown } from "~~/shared/utils/records";
 import { trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
@@ -8,12 +6,35 @@ type ToolCallItem = ThreadHistoryItem;
 
 export type ToolCallIcon = "image" | "search" | "tool";
 
-export interface ToolCallDetailSection {
+interface ToolCallMarkdownDetail {
   label: string;
-  content?: string;
-  markdown?: boolean;
-  links?: ToolCallResultLink[];
+  kind: "markdown";
+  content: string;
 }
+
+interface ToolCallTextDetail {
+  label: string;
+  kind: "text";
+  content: string;
+}
+
+interface ToolCallJsonDetail {
+  label: string;
+  kind: "json";
+  value: unknown;
+}
+
+interface ToolCallLinksDetail {
+  label: string;
+  kind: "links";
+  links: ToolCallResultLink[];
+}
+
+export type ToolCallDetailSection =
+  | ToolCallMarkdownDetail
+  | ToolCallTextDetail
+  | ToolCallJsonDetail
+  | ToolCallLinksDetail;
 
 export interface ToolCallResultLink {
   title: string;
@@ -39,12 +60,12 @@ const toolCallPresenters: Record<string, ToolCallPresenter> = {
       title: `${trimmedOrFallback(item.server, "MCP")} · ${trimmedOrFallback(item.tool, "tool")}`,
       icon: "tool",
       details: compactDetails([
-        { label: t("app.arguments"), content: jsonPreview(item.arguments) },
+        { label: t("app.arguments"), kind: "json", value: item.arguments },
         item.result !== null && item.result !== undefined
-          ? { label: t("app.result"), content: jsonPreview(item.result) }
+          ? { label: t("app.result"), kind: "json", value: item.result }
           : null,
         errorMessage !== null
-          ? { label: t("app.error"), content: errorMessage, markdown: true }
+          ? { label: t("app.error"), kind: "markdown", content: errorMessage }
           : null,
       ]),
     };
@@ -54,9 +75,9 @@ const toolCallPresenters: Record<string, ToolCallPresenter> = {
     title: trimmedOrFallback(item.name, trimmedOrFallback(item.tool, "Tool call")),
     icon: "tool",
     details: compactDetails([
-      { label: t("app.arguments"), content: jsonPreview(item.arguments) },
+      { label: t("app.arguments"), kind: "json", value: item.arguments },
       Array.isArray(item.contentItems) && item.contentItems.length > 0
-        ? { label: t("app.result"), content: jsonPreview(item.contentItems) }
+        ? { label: t("app.result"), kind: "json", value: item.contentItems }
         : null,
     ]),
   }),
@@ -70,9 +91,9 @@ const toolCallPresenters: Record<string, ToolCallPresenter> = {
       icon: "image",
       details: compactDetails([
         typeof item.result === "string"
-          ? { label: t("app.result"), content: item.result, markdown: true }
+          ? { label: t("app.result"), kind: "markdown", content: item.result }
           : null,
-        savedPath !== null ? { label: t("app.savedPath"), content: savedPath } : null,
+        savedPath !== null ? { label: t("app.savedPath"), kind: "text", content: savedPath } : null,
       ]),
     };
   },
@@ -103,7 +124,7 @@ function reviewModePresentation(item: ToolCallItem, t: Translate, title: string)
     title,
     icon: "tool" as const,
     details: compactDetails([
-      review !== null ? { label: t("app.review"), content: review, markdown: true } : null,
+      review !== null ? { label: t("app.review"), kind: "markdown", content: review } : null,
     ]),
   };
 }
@@ -115,20 +136,20 @@ function webSearchPresentation(item: ToolCallItem, t: Translate): ToolCallPresen
     icon: "search",
     details: compactDetails([
       item.action !== null && item.action !== undefined
-        ? { label: t("app.action"), content: jsonPreview(item.action) }
+        ? { label: t("app.action"), kind: "json", value: item.action }
         : null,
-      links.length > 0 ? { label: t("app.result"), links } : null,
+      links.length > 0 ? { label: t("app.result"), kind: "links", links } : null,
     ]),
   };
 }
 
 function compactDetails(details: Array<ToolCallDetailSection | null>) {
-  return details.filter(
-    (detail): detail is ToolCallDetailSection =>
-      detail !== null &&
-      (trimmedOrNull(detail.content) !== null ||
-        (detail.links !== undefined && detail.links.length > 0)),
-  );
+  return details.filter((detail): detail is ToolCallDetailSection => {
+    if (detail === null) return false;
+    if (detail.kind === "links") return detail.links.length > 0;
+    if (detail.kind === "json") return detail.value !== null && detail.value !== undefined;
+    return trimmedOrNull(detail.content) !== null;
+  });
 }
 
 function webSearchResultLinks(results: unknown): ToolCallResultLink[] {

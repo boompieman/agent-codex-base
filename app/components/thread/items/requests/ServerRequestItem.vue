@@ -3,13 +3,11 @@ import type { ThreadHistoryItem } from "~~/shared/types";
 import { AlertCircleIcon } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@codex-gateway/ui/badge";
-import { ScrollArea } from "@codex-gateway/ui/scroll-area";
-import { jsonPreview } from "@/utils/thread-items";
+import StaticJsonCodeBlock from "@/components/common/StaticJsonCodeBlock.vue";
 
 const props = defineProps<{ item: ThreadHistoryItem }>();
 const { t } = useI18n();
 const title = computed(() => props.item.method || "server request");
-const payload = computed(() => jsonPreview(props.item.params ?? {}));
 </script>
 
 <template>
@@ -21,8 +19,6 @@ const payload = computed(() => jsonPreview(props.item.params ?? {}));
       <span class="min-w-0 flex-1 truncate">{{ t("app.serverRequestWaiting") }} · {{ title }}</span>
       <Badge variant="outline">{{ item.status }}</Badge>
     </div>
-    <ScrollArea class="mt-2 h-40 rounded-md bg-surface/70">
-      <pre class="p-2 text-xs leading-5 text-ink-secondary">{{ payload }}</pre>
-    </ScrollArea>
+    <StaticJsonCodeBlock class="mt-2" :value="item.params ?? {}" />
   </div>
 </template>
