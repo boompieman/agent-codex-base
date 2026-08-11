@@ -226,12 +226,14 @@ test("goal progress updates the composer status strip without flooding the agent
   });
 
   const strip = page.getByTestId("composer-mode-strip");
+  const goalSummary = page.getByTestId("composer-goal-summary");
   await expect(strip.getByText(/持续 \*\*重构\*\* 输入框状态/).first()).toBeVisible();
   await expect(strip.getByText(/256 tokens/).first()).toBeVisible();
+  await expect(goalSummary).toHaveAttribute("data-goal-status", "active");
   const goalCards = page.getByTestId("thread-goal-item");
   await expect(goalCards).toHaveCount(0);
   await expect(page.locator(".thread-user-message", { hasText: "/goal 持续" })).toHaveCount(0);
-  await page.getByTestId("composer-goal-summary").click();
+  await goalSummary.click();
   const goalDialog = page.getByRole("dialog");
   await expect(goalDialog.getByText("目标详情")).toBeVisible();
   await expect(goalDialog.locator(".markdown-content strong").getByText("重构")).toBeVisible();
@@ -240,6 +242,34 @@ test("goal progress updates the composer status strip without flooding the agent
 
   await applyGatewayLiveEvent(page, {
     id: 303,
+    hostId: 1,
+    threadId,
+    method: "thread/goal/updated",
+    payload: {
+      method: "thread/goal/updated",
+      params: {
+        threadId,
+        turnId: "turn-goal-progress",
+        goal: {
+          threadId,
+          objective: goalObjective,
+          status: "blocked",
+          tokenBudget: null,
+          tokensUsed: 384,
+          timeUsedSeconds: 6,
+          createdAt: goalCreatedAt,
+          updatedAt: Date.now(),
+        },
+      },
+    },
+    createdAt: new Date().toISOString(),
+  });
+
+  await expect(goalSummary).toHaveAttribute("data-goal-status", "blocked");
+  await expect(goalSummary).toHaveClass(/bg-destructive\/10/);
+
+  await applyGatewayLiveEvent(page, {
+    id: 304,
     hostId: 1,
     threadId,
     method: "thread/goal/updated",

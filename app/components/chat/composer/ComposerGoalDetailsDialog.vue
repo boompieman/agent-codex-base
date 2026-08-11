@@ -24,7 +24,11 @@ import {
 } from "@codex-gateway/ui/dialog";
 import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { Textarea } from "@codex-gateway/ui/textarea";
-import { goalStatusI18nKey, threadGoalStatusControl } from "@/utils/thread-goal-display";
+import {
+  goalStatusI18nKey,
+  threadGoalStatusControl,
+  threadGoalStatusPresentation,
+} from "@/utils/thread-goal-display";
 
 const props = defineProps<{
   goal: ThreadGoal;
@@ -48,6 +52,7 @@ const { t } = useI18n();
 const normalizedObjective = computed(() => objectiveDraft.value.trim());
 const statusControl = computed(() => threadGoalStatusControl(props.goal.status));
 const statusLabel = computed(() => t(goalStatusI18nKey(props.goal.status)));
+const statusPresentation = computed(() => threadGoalStatusPresentation(props.goal.status));
 const canSave = computed(
   () =>
     props.pendingAction === null &&
@@ -92,11 +97,15 @@ watch(
       <button
         type="button"
         data-testid="composer-goal-summary"
-        class="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-3 py-2 text-left text-sm text-ink shadow-sm shadow-ink/5 transition hover:border-primary/40 hover:bg-primary/10 md:text-base"
+        :data-goal-status="goal.status"
+        class="flex w-full min-w-0 items-center gap-3 rounded-2xl border px-3 py-2 text-left text-sm text-ink shadow-sm shadow-ink/5 transition md:text-base"
+        :class="statusPresentation.triggerClass"
       >
-        <span class="shrink-0 font-medium text-primary">{{ $t("app.goalModeActive") }}</span>
+        <span class="shrink-0 font-medium" :class="statusPresentation.labelClass">
+          {{ $t("app.goalModeActive") }}
+        </span>
         <span class="min-w-0 flex-1 truncate text-ink-secondary">{{ goal.objective }}</span>
-        <Badge variant="outline" class="shrink-0 border-primary/30 bg-surface/70 text-primary">
+        <Badge variant="outline" class="shrink-0" :class="statusPresentation.badgeClass">
           {{ statusLabel }}
         </Badge>
         <span
