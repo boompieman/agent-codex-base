@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { LoaderCircleIcon, PencilIcon, SaveIcon, SquareIcon, Trash2Icon } from "@lucide/vue";
+import {
+  LoaderCircleIcon,
+  PencilIcon,
+  PlayIcon,
+  SaveIcon,
+  SquareIcon,
+  Trash2Icon,
+} from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import MarkdownContent from "@/components/common/MarkdownContent.vue";
 import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
 import { Button } from "@codex-gateway/ui/button";
+import { Badge } from "@codex-gateway/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +24,7 @@ import {
 } from "@codex-gateway/ui/dialog";
 import { ScrollArea } from "@codex-gateway/ui/scroll-area";
 import { Textarea } from "@codex-gateway/ui/textarea";
+import { goalStatusI18nKey, threadGoalStatusControl } from "@/utils/thread-goal-display";
 
 const props = defineProps<{
   goal: ThreadGoal;
@@ -28,13 +37,17 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [objective: string];
   stop: [];
+  resume: [];
   clear: [];
 }>();
 
 const open = ref(false);
 const editing = ref(false);
 const objectiveDraft = ref("");
+const { t } = useI18n();
 const normalizedObjective = computed(() => objectiveDraft.value.trim());
+const statusControl = computed(() => threadGoalStatusControl(props.goal.status));
+const statusLabel = computed(() => t(goalStatusI18nKey(props.goal.status)));
 const canSave = computed(
   () =>
     props.pendingAction === null &&
@@ -83,6 +96,9 @@ watch(
       >
         <span class="shrink-0 font-medium text-primary">{{ $t("app.goalModeActive") }}</span>
         <span class="min-w-0 flex-1 truncate text-ink-secondary">{{ goal.objective }}</span>
+        <Badge variant="outline" class="shrink-0 border-primary/30 bg-surface/70 text-primary">
+          {{ statusLabel }}
+        </Badge>
         <span
           class="flex shrink-0 flex-col items-end gap-0.5 font-mono text-xs text-ink-muted sm:flex-row sm:items-center sm:gap-2"
         >
@@ -171,7 +187,8 @@ watch(
 
       <DialogFooter
         data-testid="goal-details-footer"
-        class="grid shrink-0 grid-cols-3 gap-2 border-t border-hairline px-4 py-3 sm:flex sm:px-6 sm:py-4 sm:items-center sm:justify-between"
+        class="grid shrink-0 gap-2 border-t border-hairline px-4 py-3 sm:flex sm:px-6 sm:py-4 sm:items-center sm:justify-between"
+        :class="statusControl === null ? 'grid-cols-2' : 'grid-cols-3'"
       >
         <Button
           type="button"
@@ -213,6 +230,7 @@ watch(
           </template>
           <template v-else>
             <Button
+              v-if="statusControl === 'pause'"
               type="button"
               variant="outline"
               class="order-2 min-w-0 px-1 sm:order-none sm:px-2"
@@ -223,6 +241,19 @@ watch(
               <LoaderCircleIcon v-if="pendingAction === 'pause'" class="size-4 animate-spin" />
               <SquareIcon v-else class="size-4" />
               {{ $t("app.goalStop") }}
+            </Button>
+            <Button
+              v-else-if="statusControl === 'resume'"
+              type="button"
+              variant="outline"
+              class="order-2 min-w-0 px-1 sm:order-none sm:px-2"
+              data-testid="goal-details-resume"
+              :disabled="pendingAction !== null"
+              @click="emit('resume')"
+            >
+              <LoaderCircleIcon v-if="pendingAction === 'resume'" class="size-4 animate-spin" />
+              <PlayIcon v-else class="size-4" />
+              {{ $t("app.slashGoalResumeTitle") }}
             </Button>
             <Button
               type="button"

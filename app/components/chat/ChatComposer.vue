@@ -42,6 +42,7 @@ const {
   sendButtonLabel,
   saveSelectedThreadGoal,
   stopSelectedThreadGoal,
+  resumeSelectedThreadGoal,
   clearSelectedThreadGoal,
   setSelectedApprovalMode,
   setSelectedEffort,
@@ -89,6 +90,7 @@ const {
     @deactivate-plan="deactivatePlanMode"
     @save-goal="saveSelectedThreadGoal"
     @stop-goal="stopSelectedThreadGoal"
+    @resume-goal="resumeSelectedThreadGoal"
     @clear-goal="clearSelectedThreadGoal"
     @hover-slash-command="selectSlashCommandIndex"
     @select-slash-command="runSlashCommand"

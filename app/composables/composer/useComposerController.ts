@@ -152,6 +152,7 @@ export function useComposerController() {
     goalActionPending: goalControls.pendingAction,
     saveSelectedThreadGoal: goalControls.saveObjective,
     stopSelectedThreadGoal: goalControls.pause,
+    resumeSelectedThreadGoal: goalControls.resume,
     clearSelectedThreadGoal: goalControls.clear,
     selectedThreadGoal,
     selectedThreadGoalObservedAt,

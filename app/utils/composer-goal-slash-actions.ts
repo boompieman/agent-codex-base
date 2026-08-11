@@ -1,5 +1,6 @@
 import type { ThreadGoal, ThreadGoalStatus } from "~~/shared/types";
 import type { SlashMenuItem } from "@/composables/composer/useSlashCommands";
+import { threadGoalStatusControl } from "@/utils/thread-goal-display";
 
 export type GoalSlashActionId = Extract<
   SlashMenuItem["id"],
@@ -23,15 +24,10 @@ export function goalSlashActions(input: {
 }
 
 function goalActionIdsForStatus(status: ThreadGoalStatus): GoalSlashActionId[] {
-  const statusActions: Record<ThreadGoalStatus, GoalSlashActionId[]> = {
-    active: ["goal-edit", "goal-pause", "goal-clear"],
-    paused: ["goal-edit", "goal-resume", "goal-clear"],
-    blocked: ["goal-edit", "goal-resume", "goal-clear"],
-    usageLimited: ["goal-edit", "goal-resume", "goal-clear"],
-    budgetLimited: ["goal-edit", "goal-clear"],
-    complete: ["goal-edit", "goal-clear"],
-  };
-  return statusActions[status];
+  const control = threadGoalStatusControl(status);
+  const controlAction: GoalSlashActionId[] =
+    control === null ? [] : [control === "pause" ? "goal-pause" : "goal-resume"];
+  return ["goal-edit", ...controlAction, "goal-clear"];
 }
 
 function goalAction(

@@ -21,36 +21,44 @@ const emit = defineEmits<{
   deactivatePlan: [];
   saveGoal: [objective: string];
   stopGoal: [];
+  resumeGoal: [];
   clearGoal: [];
 }>();
 
 const { timestamp: now, pause, resume } = useTimestamp({ controls: true, interval: 250 });
 
-const visibleGoal = computed(() => (props.goal?.status === "active" ? props.goal : null));
-const activeGoalElapsedSeconds = computed(() => {
-  if (!visibleGoal.value) {
+const currentGoal = computed(() => props.goal);
+const goalElapsedSeconds = computed(() => {
+  if (!currentGoal.value) {
     return 0;
   }
-  const observedDelta = props.goalObservedAt
-    ? Math.max(0, (now.value - props.goalObservedAt) / 1000)
-    : 0;
-  return visibleGoal.value.timeUsedSeconds + observedDelta;
+  const observedDelta =
+    currentGoal.value.status === "active" && props.goalObservedAt
+      ? Math.max(0, (now.value - props.goalObservedAt) / 1000)
+      : 0;
+  return currentGoal.value.timeUsedSeconds + observedDelta;
 });
 
 const goalTokensLabel = computed(() =>
-  visibleGoal.value ? `${visibleGoal.value.tokensUsed.toLocaleString()} tokens` : "",
+  currentGoal.value ? `${currentGoal.value.tokensUsed.toLocaleString()} tokens` : "",
 );
 const goalBudgetLabel = computed(() => {
-  const budget = visibleGoal.value?.tokenBudget;
+  const budget = currentGoal.value?.tokenBudget;
   return budget === null || budget === undefined ? "∞" : budget.toLocaleString();
 });
-const goalElapsedLabel = computed(() => formatGoalElapsed(activeGoalElapsedSeconds.value));
-const showGoalInputHint = computed(() => props.goalInputActive && !visibleGoal.value);
+const goalElapsedLabel = computed(() => formatGoalElapsed(goalElapsedSeconds.value));
+const showGoalInputHint = computed(() => props.goalInputActive && !currentGoal.value);
 const showStrip = computed(
-  () => props.planModeActive || showGoalInputHint.value || visibleGoal.value,
+  () => props.planModeActive || showGoalInputHint.value || currentGoal.value,
 );
 
-watch(visibleGoal, (goal) => (goal ? resume() : pause()), { immediate: true });
+// A Goal remains useful context after it pauses or completes. Presence controls visibility, while
+// only the active status advances the local elapsed-time projection between app-server updates.
+watch(
+  () => currentGoal.value?.status === "active",
+  (active) => (active ? resume() : pause()),
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -84,14 +92,15 @@ watch(visibleGoal, (goal) => (goal ? resume() : pause()), { immediate: true });
     </div>
 
     <ComposerGoalDetailsDialog
-      v-if="visibleGoal"
-      :goal="visibleGoal"
+      v-if="currentGoal"
+      :goal="currentGoal"
       :elapsed-label="goalElapsedLabel"
       :tokens-label="goalTokensLabel"
       :budget-label="goalBudgetLabel"
       :pending-action="goalActionPending"
       @save="emit('saveGoal', $event)"
       @stop="emit('stopGoal')"
+      @resume="emit('resumeGoal')"
       @clear="emit('clearGoal')"
     />
   </div>
