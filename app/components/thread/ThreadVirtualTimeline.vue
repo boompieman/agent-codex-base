@@ -14,6 +14,7 @@ import { buildThreadTurnSections } from "@/components/thread/thread-turn-section
 import { useIntermediateStepsDisclosure } from "@/components/thread/useIntermediateStepsDisclosure";
 import { provideFilePreviewContext } from "@/composables/files/useFilePreviewContext";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
+import { collaborationModeFromThreadSettings } from "@/utils/thread-collaboration-mode";
 
 const props = defineProps<{
   threadId: string | null;
@@ -92,7 +93,9 @@ const rows = computed<ThreadTimelineRow[]>((previous) => {
 
 function selectedThreadMode() {
   if (!props.hostId || !props.threadId) return "default";
-  return composer.threadCollaborationModesByKey[`${props.hostId}:${props.threadId}`] ?? "default";
+  return collaborationModeFromThreadSettings(
+    composer.threadSettingsByKey[`${props.hostId}:${props.threadId}`],
+  );
 }
 
 function handleReachStart() {

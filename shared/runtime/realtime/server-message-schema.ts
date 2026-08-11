@@ -93,6 +93,20 @@ const threadSettingsSchema = z
     model: nullableString,
     effort: nullableString,
     approvalPolicy: z.enum(["untrusted", "on-request", "never"]).nullable().optional(),
+    collaborationMode: z
+      .object({
+        mode: z.enum(["default", "plan"]),
+        settings: z
+          .object({
+            model: nonEmptyString,
+            reasoningEffort: nullableString,
+            developerInstructions: nullableString,
+          })
+          .strict(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 const threadRuntimeStatusUpdateSchema = z

@@ -1,9 +1,11 @@
 import { computed, type Ref } from "vue";
 
 import type { ComposerTurnOptions } from "~~/shared/types";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
+import { buildThreadCollaborationMode } from "@/utils/thread-collaboration-mode";
 
 type AttachedFile = {
   name: string;
@@ -19,11 +21,11 @@ export function useComposerTurnSubmit(input: {
   attachedFiles: Ref<AttachedFile[]>;
   clearDraft: () => void;
   selectedTurnOptions: () => ComposerTurnOptions;
-  activeModel: Ref<string | null>;
-  selectedModel: Ref<string>;
+  collaborationModel: Ref<string>;
   selectedEffort: Ref<string>;
   fileReferencesLabel: Ref<string>;
 }) {
+  const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
   const threadView = useGatewayThreadViewStore();
   const threadTurns = useGatewayThreadTurnsStore();
@@ -33,13 +35,12 @@ export function useComposerTurnSubmit(input: {
     Boolean(input.turnText.value.trim() || input.attachedFiles.value.length),
   );
 
-  function activatePlanMode() {
-    composer.setSelectedThreadCollaborationMode("plan");
-    input.turnText.value = "";
+  async function activatePlanMode() {
+    if (await saveCollaborationMode("plan")) input.turnText.value = "";
   }
 
-  function deactivatePlanMode() {
-    composer.setSelectedThreadCollaborationMode("default");
+  async function deactivatePlanMode() {
+    await saveCollaborationMode("default");
   }
 
   async function startNewThread() {
@@ -56,7 +57,7 @@ export function useComposerTurnSubmit(input: {
     const files = [...input.attachedFiles.value];
     const remoteFiles = files.filter((file) => !file.isImage);
     const attachedImages = files.filter((file) => file.isImage);
-    const collaborationMode = planCollaborationMode();
+    const collaborationMode = composer.selectedThreadSettings.collaborationMode ?? undefined;
     input.clearDraft();
     await threadTurns.sendTurn(
       messageWithFileReferences(text, remoteFiles, input.fileReferencesLabel.value),
@@ -83,28 +84,19 @@ export function useComposerTurnSubmit(input: {
     }
   }
 
-  function planCollaborationMode() {
-    const mode = planModeActive.value ? "plan" : "default";
-    // An existing metadata-only thread may have no selectedModel even though activeModel contains
-    // a catalog fallback for display. Omitting default collaboration mode in that state lets the
-    // resumed app-server thread retain its persisted model and effort. Plan mode is an explicit
-    // user override, so it may intentionally use the displayed catalog fallback.
-    const model =
-      input.selectedModel.value !== ""
-        ? input.selectedModel.value
-        : mode === "plan"
-          ? input.activeModel.value
-          : null;
-    if (model === null || model === "") return undefined;
-    return {
+  async function saveCollaborationMode(mode: "default" | "plan") {
+    const collaborationMode = buildThreadCollaborationMode({
       mode,
-      settings: {
-        model,
-        reasoningEffort:
-          input.selectedEffort.value === "default" ? null : input.selectedEffort.value,
-        developerInstructions: null,
-      },
-    } as const;
+      modelCandidates: [input.collaborationModel.value],
+      effort: input.selectedEffort.value === "default" ? null : input.selectedEffort.value,
+    });
+    if (collaborationMode === null) {
+      gateway.setError(gateway.t("app.planModeModelUnavailable"));
+      return false;
+    }
+    // The strip reflects the app-server's accepted next-turn settings. A local-only mode flag can
+    // diverge from Codex during thread hydration, which was the regression fixed here.
+    return composer.saveSelectedThreadSettings({ collaborationMode });
   }
 
   return {

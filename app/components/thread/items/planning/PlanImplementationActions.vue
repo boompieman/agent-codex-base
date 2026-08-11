@@ -5,7 +5,12 @@ import { PlanFooter } from "@codex-gateway/ai-elements/plan";
 import { Button } from "@codex-gateway/ui/button";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
+import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
+import {
+  buildThreadCollaborationMode,
+  collaborationModeFromThreadSettings,
+} from "@/utils/thread-collaboration-mode";
 import { isThreadPlanItemCompleted } from "@/utils/thread-plan";
 
 const props = defineProps<{
@@ -16,6 +21,7 @@ const props = defineProps<{
 
 const store = useGatewayCatalogStore();
 const composer = useGatewayComposerStore();
+const navigation = useGatewayNavigationStore();
 const threadTurns = useGatewayThreadTurnsStore();
 const applying = ref(false);
 
@@ -24,7 +30,9 @@ const threadMode = computed(() => {
   if (!props.hostId || !props.threadId) {
     return "default";
   }
-  return composer.threadCollaborationModesByKey[`${props.hostId}:${props.threadId}`] ?? "default";
+  return collaborationModeFromThreadSettings(
+    composer.threadSettingsByKey[`${props.hostId}:${props.threadId}`],
+  );
 });
 const dismissed = computed(() => {
   if (!props.hostId || !props.threadId || !planItemId.value) {
@@ -52,9 +60,17 @@ async function implementPlan() {
   }
   applying.value = true;
   try {
-    composer.setThreadCollaborationMode(props.hostId, props.threadId, "default");
+    const collaborationMode = defaultCollaborationMode();
+    if (collaborationMode === null) return;
+    const updated = await composer.saveThreadSettings(
+      props.hostId,
+      props.threadId,
+      navigation.selectedProjectId,
+      { collaborationMode },
+    );
+    if (!updated) return;
     await threadTurns.sendTurn("Implement the plan.", {
-      collaborationMode: defaultCollaborationMode(),
+      collaborationMode,
     });
   } finally {
     applying.value = false;
@@ -69,19 +85,16 @@ function continuePlanning() {
 }
 
 function defaultCollaborationMode() {
-  const model =
-    composer.selectedThreadSettings.model || store.defaultModel?.model || store.defaultModel?.id;
-  if (!model) {
-    return undefined;
-  }
-  return {
-    mode: "default" as const,
-    settings: {
-      model,
-      reasoningEffort: composer.selectedThreadSettings.effort ?? null,
-      developerInstructions: null,
-    },
-  };
+  return buildThreadCollaborationMode({
+    mode: "default",
+    modelCandidates: [
+      composer.selectedThreadSettings.collaborationMode?.settings.model,
+      composer.selectedThreadSettings.model,
+      store.defaultModel?.model,
+      store.defaultModel?.id,
+    ],
+    effort: composer.selectedThreadSettings.effort,
+  });
 }
 </script>
 

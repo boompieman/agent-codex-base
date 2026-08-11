@@ -2,13 +2,11 @@ import { SERVER_TURN_CACHE_LIMIT } from "~~/shared/config";
 import { applyAppServerEventToHistory } from "~~/shared/thread-history/app-server-events";
 import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
-import type {
-  ApprovalPolicy,
-  RpcEnvelope,
-  ThreadHistoryState,
-  ThreadTimelineHistoryState,
-} from "~~/shared/types";
-import { appServerThreadStatusFromUnknown } from "~~/shared/runtime/app-server";
+import type { RpcEnvelope, ThreadHistoryState, ThreadTimelineHistoryState } from "~~/shared/types";
+import {
+  appServerThreadStatusFromUnknown,
+  threadSettingsFromAppServer,
+} from "~~/shared/runtime/app-server";
 import { idFromUnknown, recordFromUnknown } from "~~/shared/utils/records";
 import type { ThreadOpenSnapshot } from "./types";
 
@@ -20,14 +18,7 @@ type SnapshotEventReducer = (
 const snapshotEventReducers: Record<string, SnapshotEventReducer> = {
   "thread/status/changed": (snapshot, params) =>
     updateSnapshotThreadStatus(snapshot, params.status),
-  "thread/settings/updated": (snapshot, params) => ({
-    ...snapshot,
-    threadSettings: {
-      model: fieldFromRecord(params.threadSettings, "model"),
-      effort: fieldFromRecord(params.threadSettings, "effort"),
-      approvalPolicy: approvalPolicyFromRecord(params.threadSettings),
-    },
-  }),
+  "thread/settings/updated": updateSnapshotThreadSettings,
   "thread/tokenUsage/updated": (snapshot, params) => ({
     ...snapshot,
     tokenUsage: normalizeTokenUsage(params.tokenUsage) ?? snapshot.tokenUsage,
@@ -108,14 +99,10 @@ function snapshotThread(snapshot: ThreadOpenSnapshot) {
   return snapshot.history.thread;
 }
 
-function fieldFromRecord(value: unknown, key: string) {
-  const record = recordFromUnknown(value);
-  if (record === null) return null;
-  const field = record[key];
-  return typeof field === "string" ? field : null;
-}
-
-function approvalPolicyFromRecord(value: unknown): ApprovalPolicy | null {
-  const policy = fieldFromRecord(value, "approvalPolicy");
-  return policy === "untrusted" || policy === "on-request" || policy === "never" ? policy : null;
+function updateSnapshotThreadSettings(
+  snapshot: ThreadOpenSnapshot,
+  params: Record<string, unknown>,
+) {
+  const threadSettings = threadSettingsFromAppServer(params.threadSettings);
+  return threadSettings === null ? snapshot : { ...snapshot, threadSettings };
 }

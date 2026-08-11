@@ -78,8 +78,7 @@ export function useComposerController() {
     attachedFiles,
     clearDraft,
     selectedTurnOptions,
-    activeModel: settings.activeModel,
-    selectedModel: settings.selectedModel,
+    collaborationModel: settings.collaborationModel,
     selectedEffort: settings.selectedEffort,
     fileReferencesLabel: computed(() => t("app.attachedFileReferences")),
   });

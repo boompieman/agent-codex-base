@@ -25,6 +25,7 @@ export type {
   ThreadOpenResult,
   ThreadRuntimeStatus,
   ThreadRuntimeStatusUpdate,
+  ThreadCollaborationMode,
   ThreadSettingsState,
   ThreadTokenUsageState,
   ThreadTurnsPageResult,

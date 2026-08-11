@@ -11,7 +11,6 @@ import { createThreadSettingsActions } from "./actions/settings";
 
 export const useGatewayComposerStore = defineStore("gateway-composer", () => {
   const threadSettingsByKey = ref<Record<string, ThreadSettingsState>>({});
-  const threadCollaborationModesByKey = ref<Record<string, "default" | "plan">>({});
   const dismissedPlanPromptIdsByKey = ref<Record<string, Record<string, true>>>({});
   const threadGoalsByKey = ref<Record<string, ThreadGoal>>({});
   const threadGoalObservedAtByKey = ref<Record<string, number>>({});
@@ -31,7 +30,7 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
   );
   const selectedThreadCollaborationMode = computed(() =>
     selectedKey.value !== null
-      ? (threadCollaborationModesByKey.value[selectedKey.value] ?? "default")
+      ? (threadSettingsByKey.value[selectedKey.value]?.collaborationMode?.mode ?? "default")
       : "default",
   );
   const selectedThreadGoal = computed(() =>
@@ -50,7 +49,6 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
   });
   function resetState() {
     threadSettingsByKey.value = {};
-    threadCollaborationModesByKey.value = {};
     dismissedPlanPromptIdsByKey.value = {};
     threadGoalsByKey.value = {};
     threadGoalObservedAtByKey.value = {};
@@ -59,7 +57,6 @@ export const useGatewayComposerStore = defineStore("gateway-composer", () => {
 
   return {
     threadSettingsByKey,
-    threadCollaborationModesByKey,
     dismissedPlanPromptIdsByKey,
     threadGoalsByKey,
     threadGoalObservedAtByKey,

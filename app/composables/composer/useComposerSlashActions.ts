@@ -18,7 +18,7 @@ export function useComposerSlashActions(input: {
   text: Ref<string>;
   selectedThreadId: Ref<string | null>;
   startNewThread: () => Promise<void>;
-  activatePlanMode: () => void;
+  activatePlanMode: () => Promise<void>;
   missingGoalObjectiveMessage: Ref<string>;
   goalControls: ComposerGoalControls;
 }) {
@@ -30,7 +30,7 @@ export function useComposerSlashActions(input: {
       input.text.value = "";
       await input.startNewThread();
     },
-    plan: () => input.activatePlanMode(),
+    plan: input.activatePlanMode,
     goal: runGoalCommand,
   };
 

@@ -227,6 +227,7 @@
     "slashGoalClearTitle": "Clear goal",
     "slashGoalClearDescription": "Clear the current goal through app-server",
     "planModeActive": "Plan mode",
+    "planModeModelUnavailable": "The current host has not provided a model for Plan mode",
     "plan": "Plan",
     "togglePlan": "Toggle plan",
     "goalModeActive": "Goal",

@@ -1,5 +1,6 @@
 import type { HostRecord, ThreadSettingsState } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
+import { buildAppServerCollaborationMode } from "../protocol/thread-payload";
 
 export class ThreadSettingsService {
   constructor(private readonly registry: ControllerRegistry) {}
@@ -16,6 +17,9 @@ export class ThreadSettingsService {
     if ("model" in input) params.model = input.model;
     if ("effort" in input) params.effort = input.effort;
     if ("approvalPolicy" in input) params.approvalPolicy = input.approvalPolicy;
+    if (input.collaborationMode !== null && input.collaborationMode !== undefined) {
+      params.collaborationMode = buildAppServerCollaborationMode(input.collaborationMode);
+    }
     return this.registry.withScopedSubscription(host, threadId, (controller) =>
       controller.enqueue(() => controller.client.request("thread/settings/update", params)),
     );

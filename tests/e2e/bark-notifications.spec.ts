@@ -3,7 +3,6 @@ import { openApp } from "./helpers/app";
 import { configureBarkNotifications, useBarkReceiver } from "./helpers/bark";
 import { sendTextTurn } from "./helpers/remote-codex";
 import { sendRealtimeRequest } from "./helpers/realtime";
-import { setThreadCollaborationMode } from "./helpers/gateway-store";
 
 test("Bark sends ordinary turn notifications and only notifies when an app-server goal ends", async ({
   page,
@@ -113,9 +112,11 @@ test("plan-mode user questions render and notify through Sonner and Bark", async
   await configureBarkNotifications(page, bark.url);
 
   const hostName = `bark-plan-question-host-${Date.now()}`;
-  const { host, project } = await remoteWorkspace.provision({ hostName });
-  const threadId = await remoteWorkspace.startThread(project.id);
-  await setThreadCollaborationMode(page, { hostId: host.id, threadId, mode: "plan" });
+  const { project } = await remoteWorkspace.provision({ hostName });
+  await remoteWorkspace.startThread(project.id);
+  await page.getByPlaceholder("输入后续修改要求").fill("/");
+  await page.getByTestId("slash-command-plan").click();
+  await expect(page.getByTestId("composer-mode-strip").getByText("计划模式").first()).toBeVisible();
 
   const question = `请选择 E2E 方案 ${Date.now()}`;
   await page

@@ -79,6 +79,19 @@ export function useThreadSettingsControls() {
       ]) ?? ""
     );
   });
+  // Plan is an explicit app-server setting update, so it needs a concrete model even during the
+  // short interval before an existing thread's settings notification arrives. Keep this effective
+  // value separate from activeModel: using the catalog default here must not make the model picker
+  // claim that the resumed thread already selected that model.
+  const collaborationModel = computed(
+    () =>
+      firstNonEmptyString([
+        selectedThreadSettings.value.collaborationMode?.settings.model,
+        selectedModel.value,
+        defaultModel.value?.model,
+        defaultModel.value?.id,
+      ]) ?? "",
+  );
   const activeModelRecord = computed(() =>
     models.value.find(
       (candidate) => candidate.model === activeModel.value || candidate.id === activeModel.value,
@@ -155,6 +168,7 @@ export function useThreadSettingsControls() {
     selectedEffort,
     selectedApprovalMode,
     activeModel,
+    collaborationModel,
     activeModelLabel,
     activeEffortValue,
     activeEffortCompactLabel,

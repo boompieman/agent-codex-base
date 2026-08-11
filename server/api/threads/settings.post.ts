@@ -12,5 +12,6 @@ export default defineGatewayEventHandler(async (event) => {
     model: input.model,
     effort: input.effort,
     approvalPolicy: input.approvalPolicy,
+    collaborationMode: input.collaborationMode,
   });
 });

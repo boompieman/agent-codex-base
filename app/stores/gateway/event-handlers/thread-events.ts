@@ -1,6 +1,8 @@
 import { normalizeTokenUsage } from "~~/shared/token-usage";
-import { appServerThreadFromUnknown } from "~~/shared/runtime/app-server";
-import { recordFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
+import {
+  appServerThreadFromUnknown,
+  threadSettingsFromAppServer,
+} from "~~/shared/runtime/app-server";
 import { gatewayDomainEvents } from "../domain-events";
 import { threadIdFromParams } from "../thread-utils/identity";
 import { runtimeStatusFromAppThreadStatus } from "../thread-utils/status";
@@ -28,21 +30,12 @@ export const threadEventHandlers: GatewayEventHandlerRegistry = {
   },
   "thread/settings/updated": (event, params) => {
     const threadId = threadIdFromParams(params);
-    const settings = recordFromUnknown(params.threadSettings);
-    if (threadId !== null) {
+    const settings = threadSettingsFromAppServer(params.threadSettings);
+    if (threadId !== null && settings !== null) {
       gatewayDomainEvents.emit("thread-settings-detected", {
         hostId: event.hostId,
         threadId: String(threadId),
-        settings: {
-          model: stringFromUnknown(settings?.model),
-          effort: stringFromUnknown(settings?.effort),
-          approvalPolicy:
-            settings?.approvalPolicy === "untrusted" ||
-            settings?.approvalPolicy === "on-request" ||
-            settings?.approvalPolicy === "never"
-              ? settings.approvalPolicy
-              : null,
-        },
+        settings,
       });
     }
   },

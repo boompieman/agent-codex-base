@@ -460,9 +460,28 @@ export async function setThreadCollaborationMode(
   input: { hostId: number; threadId: string; mode: "default" | "plan" },
 ) {
   await page.evaluate((input) => {
-    const composer = window.__codexGatewayE2e?.composer;
-    if (!composer) throw new Error("Gateway E2E driver is unavailable");
-    composer.setThreadCollaborationMode(input.hostId, input.threadId, input.mode);
+    const driver = window.__codexGatewayE2e;
+    if (!driver) throw new Error("Gateway E2E driver is unavailable");
+    const key = `${input.hostId}:${input.threadId}`;
+    const current = driver.composer.threadSettingsByKey[key] ?? {};
+    const model =
+      current.collaborationMode?.settings.model ??
+      current.model ??
+      driver.catalog.defaultModel?.model ??
+      driver.catalog.defaultModel?.id;
+    if (model === null || model === undefined || model === "") {
+      throw new Error("A model is required to seed collaboration mode");
+    }
+    driver.composer.setThreadSettings(input.hostId, input.threadId, {
+      collaborationMode: {
+        mode: input.mode,
+        settings: {
+          model,
+          reasoningEffort: current.effort ?? null,
+          developerInstructions: null,
+        },
+      },
+    });
   }, input);
 }
 
