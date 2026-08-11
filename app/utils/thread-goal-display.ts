@@ -1,5 +1,19 @@
 import type { ThreadGoalStatus } from "~~/shared/types";
 
+export type ThreadGoalStatusControl = "pause" | "resume" | null;
+
+export function threadGoalStatusControl(status: ThreadGoalStatus): ThreadGoalStatusControl {
+  const controls: Record<ThreadGoalStatus, ThreadGoalStatusControl> = {
+    active: "pause",
+    paused: "resume",
+    blocked: "resume",
+    usageLimited: "resume",
+    budgetLimited: null,
+    complete: null,
+  };
+  return controls[status];
+}
+
 export function goalStatusI18nKey(status: ThreadGoalStatus) {
   const keys: Record<ThreadGoalStatus, string> = {
     active: "app.goalStatusActive",

@@ -91,6 +91,8 @@ test("goal controls are shared by the slash menu and details dialog", async ({ p
   await expect
     .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
     .toEqual([{ type: "status", status: "paused" }]);
+  await expect(page.getByTestId("composer-goal-summary")).toBeVisible();
+  await expect(page.getByTestId("composer-goal-summary").getByText("Paused")).toBeVisible();
 
   await composer.fill("/goal");
   await expect(page.getByTestId("slash-command-goal-resume")).toBeVisible();
@@ -128,11 +130,8 @@ test("goal controls are shared by the slash menu and details dialog", async ({ p
       { type: "status", status: "active" },
       { type: "status", status: "paused" },
     ]);
-  await expect(page.getByTestId("composer-mode-strip")).toHaveCount(0);
-
-  await composer.fill("/goal");
-  await page.getByTestId("slash-command-goal-resume").click();
-  await page.getByTestId("composer-goal-summary").click();
+  await expect(goalDialog.getByTestId("goal-details-resume")).toBeVisible();
+  await goalDialog.getByTestId("goal-details-resume").click();
   await page.getByRole("dialog").getByTestId("goal-details-clear").click();
   await expect
     .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalControls))
@@ -264,7 +263,8 @@ test("goal progress updates the composer status strip without flooding the agent
     createdAt: new Date().toISOString(),
   });
 
-  await expect(page.getByTestId("composer-mode-strip")).toHaveCount(0);
+  await expect(page.getByTestId("composer-goal-summary")).toBeVisible();
+  await expect(page.getByTestId("composer-goal-summary").getByText("Complete")).toBeVisible();
   await expect(page.getByTestId("chat-scroll-area").getByText("目标已更新")).toHaveCount(0);
   await expect(goalCards).toHaveCount(0);
 });

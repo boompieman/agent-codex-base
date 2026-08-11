@@ -57,6 +57,7 @@ const emit = defineEmits<{
   deactivatePlan: [];
   saveGoal: [objective: string];
   stopGoal: [];
+  resumeGoal: [];
   clearGoal: [];
   hoverSlashCommand: [index: number];
   selectSlashCommand: [command: SlashMenuItem];
@@ -92,6 +93,7 @@ function openAttachmentPicker() {
         @deactivate-plan="emit('deactivatePlan')"
         @save-goal="emit('saveGoal', $event)"
         @stop-goal="emit('stopGoal')"
+        @resume-goal="emit('resumeGoal')"
         @clear-goal="emit('clearGoal')"
       />
       <div
