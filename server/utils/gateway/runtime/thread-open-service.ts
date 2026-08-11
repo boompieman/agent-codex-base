@@ -318,12 +318,16 @@ export class ThreadOpenService {
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);
+    // thread/resume does not expose collaborationMode. Preserve the latest complete official
+    // thread/settings/updated projection when one exists; otherwise the resume DTO still supplies
+    // model and effort for threads that have never changed settings during this Gateway lifetime.
+    const effectiveThreadSettings = latestThreadSettingsFromEvents(recentEvents) ?? threadSettings;
     const snapshot = {
       thread,
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
-      threadSettings,
+      threadSettings: effectiveThreadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
     // During browser activation the controller is created before the cold snapshot exists. Route

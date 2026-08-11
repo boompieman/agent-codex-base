@@ -227,6 +227,7 @@
     "slashGoalClearTitle": "清除目标",
     "slashGoalClearDescription": "调用 app-server 清除当前目标",
     "planModeActive": "计划模式",
+    "planModeModelUnavailable": "当前主机尚未提供可用于计划模式的模型",
     "plan": "计划",
     "togglePlan": "展开或收起计划",
     "goalModeActive": "目标",

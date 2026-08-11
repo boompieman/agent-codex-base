@@ -25,9 +25,13 @@ export function createThreadSettingsActions() {
       settings: ThreadSettingsState | null | undefined,
     ) {
       const composer = useGatewayComposerStore();
+      const key = pinnedKey(hostId, threadId);
       composer.threadSettingsByKey = {
         ...composer.threadSettingsByKey,
-        [pinnedKey(hostId, threadId)]: normalizeThreadSettings(settings),
+        [key]: mergeThreadSettings(
+          composer.threadSettingsByKey[key] ?? {},
+          normalizeThreadSettings(settings),
+        ),
       };
     },
 
@@ -39,21 +43,6 @@ export function createThreadSettingsActions() {
       this.setThreadSettings(scope.hostId, scope.threadId, {
         ...mergeThreadSettings(composer.selectedThreadSettings, settings),
       });
-    },
-
-    setSelectedThreadCollaborationMode(mode: "default" | "plan") {
-      const navigation = useGatewayNavigationStore();
-      const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
-      if (scope === null) return;
-      this.setThreadCollaborationMode(scope.hostId, scope.threadId, mode);
-    },
-
-    setThreadCollaborationMode(hostId: number, threadId: string, mode: "default" | "plan") {
-      const composer = useGatewayComposerStore();
-      composer.threadCollaborationModesByKey = {
-        ...composer.threadCollaborationModesByKey,
-        [pinnedKey(hostId, threadId)]: mode,
-      };
     },
 
     dismissPlanImplementationPrompt(hostId: number, threadId: string, planItemId: string) {
@@ -75,25 +64,40 @@ export function createThreadSettingsActions() {
     },
 
     async saveSelectedThreadSettings(settings: ThreadSettingsState) {
-      const sessionIsCurrent = captureSessionEpoch();
-      const gateway = useGatewayBootstrapStore();
       const navigation = useGatewayNavigationStore();
       const scope = selectedThreadScope(navigation.selectedHostId, navigation.selectedThreadId);
-      if (scope === null) return;
-      const { hostId, threadId } = scope;
-      const projectId = navigation.selectedProjectId;
-      this.updateSelectedThreadSettings(settings);
+      if (scope === null) return false;
+      return this.saveThreadSettings(
+        scope.hostId,
+        scope.threadId,
+        navigation.selectedProjectId,
+        settings,
+      );
+    },
+
+    async saveThreadSettings(
+      hostId: number,
+      threadId: string,
+      projectId: number | null,
+      settings: ThreadSettingsState,
+    ) {
+      const sessionIsCurrent = captureSessionEpoch();
+      const gateway = useGatewayBootstrapStore();
       try {
         await gatewayApi("/api/threads/settings", {
           method: "POST",
           body: { hostId, threadId, ...settings },
         });
+        if (!sessionIsCurrent()) return false;
+        this.setThreadSettings(hostId, threadId, settings);
+        return true;
       } catch (error: unknown) {
-        if (!sessionIsCurrent()) return;
+        if (!sessionIsCurrent()) return false;
         gateway.setError(
           messageFromError(error, gateway.t("app.updateThreadSettingsFailed"), gateway.errorLabels),
           { hostId, projectId, threadId },
         );
+        return false;
       }
     },
   };

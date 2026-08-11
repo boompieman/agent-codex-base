@@ -71,10 +71,20 @@ export interface ThreadTurnsPageResult {
 export type ApprovalPolicy = "untrusted" | "on-request" | "never";
 export type ReasoningEffort = string;
 
+export interface ThreadCollaborationMode {
+  mode: "default" | "plan";
+  settings: {
+    model: string;
+    reasoningEffort?: ReasoningEffort | null;
+    developerInstructions?: string | null;
+  };
+}
+
 export interface ThreadSettingsState {
   model?: string | null;
   effort?: ReasoningEffort | null;
   approvalPolicy?: ApprovalPolicy | null;
+  collaborationMode?: ThreadCollaborationMode | null;
 }
 
 export interface TokenUsageBreakdown {
@@ -188,14 +198,7 @@ export interface ComposerTurnOptions {
   model?: string | null;
   effort?: ReasoningEffort | null;
   approvalPolicy?: ApprovalPolicy | null;
-  collaborationMode?: {
-    mode: "default" | "plan";
-    settings: {
-      model: string;
-      reasoningEffort?: ReasoningEffort | null;
-      developerInstructions?: string | null;
-    };
-  } | null;
+  collaborationMode?: ThreadCollaborationMode | null;
   images?: Array<{
     path?: string;
     url?: string;

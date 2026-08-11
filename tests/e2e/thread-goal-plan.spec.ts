@@ -316,6 +316,7 @@ test("plan mode shows implementation actions for a second completed turn plan", 
   await seedGatewayThread(page, {
     threadId: "e2e-repeat-plan-thread",
     currentThread: { id: "e2e-repeat-plan-thread", name: "Repeat Plan" },
+    threadSettings: { model: "gpt-5.6-luna" },
     history: {
       thread: {
         id: "e2e-repeat-plan-thread",
@@ -391,6 +392,4 @@ test("plan mode shows implementation actions for a second completed turn plan", 
   await expect(page.getByText("checked constraints before second plan")).toBeHidden();
   await expect(page.getByRole("button", { name: "执行计划" })).toBeVisible();
   await expect(page.getByRole("button", { name: "继续计划" })).toBeVisible();
-  await page.getByRole("button", { name: "退出计划模式" }).click();
-  await expect(page.getByText("计划模式")).toBeHidden();
 });

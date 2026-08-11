@@ -1,9 +1,11 @@
 import type {
   ApprovalPolicy,
   GatewayEvent,
+  ThreadCollaborationMode,
   ThreadSettingsState,
   ThreadTokenUsageState,
 } from "~~/shared/types";
+import { threadSettingsFromAppServer } from "~~/shared/runtime/app-server";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
 import { recordFromUnknown } from "~~/shared/utils/records";
 import type { TurnStartInput } from "../runtime/types";
@@ -46,16 +48,19 @@ export function buildTurnStartParams(
     approvalPolicy: input.approvalPolicy ?? null,
     collaborationMode:
       input.collaborationMode !== null && input.collaborationMode !== undefined
-        ? {
-            mode: input.collaborationMode.mode,
-            settings: {
-              model: input.collaborationMode.settings.model,
-              reasoning_effort: input.collaborationMode.settings.reasoningEffort ?? null,
-              developer_instructions:
-                input.collaborationMode.settings.developerInstructions ?? null,
-            },
-          }
+        ? buildAppServerCollaborationMode(input.collaborationMode)
         : null,
+  };
+}
+
+export function buildAppServerCollaborationMode(input: ThreadCollaborationMode) {
+  return {
+    mode: input.mode,
+    settings: {
+      model: input.settings.model,
+      reasoning_effort: input.settings.reasoningEffort ?? null,
+      developer_instructions: input.settings.developerInstructions ?? null,
+    },
   };
 }
 
@@ -66,6 +71,8 @@ function normalizeApprovalPolicy(value: unknown): ApprovalPolicy | null {
 export function extractThreadSettings(source: unknown): ThreadSettingsState {
   const sourceRecord = recordFromUnknown(source);
   const threadSettings = recordFromUnknown(sourceRecord?.threadSettings);
+  const currentProtocolSettings = threadSettingsFromAppServer(threadSettings);
+  if (currentProtocolSettings !== null) return currentProtocolSettings;
   const model = threadSettings?.model ?? sourceRecord?.model;
   const effort = threadSettings?.effort ?? sourceRecord?.reasoningEffort;
   return {
@@ -81,9 +88,8 @@ export function latestThreadSettingsFromEvents(events: GatewayEvent[]): ThreadSe
   for (const event of [...events].sort((left, right) => right.id - left.id)) {
     if (event.method !== "thread/settings/updated") continue;
     const params = recordFromUnknown(event.payload.params);
-    const settings = recordFromUnknown(params?.threadSettings);
-    if (settings === null) continue;
-    return extractThreadSettings({ threadSettings: settings });
+    const settings = threadSettingsFromAppServer(params?.threadSettings);
+    if (settings !== null) return settings;
   }
   return null;
 }

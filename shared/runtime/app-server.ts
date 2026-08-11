@@ -1,10 +1,13 @@
 import { z } from "zod";
 import type {
   AppServerThread,
+  ApprovalPolicy,
   RpcEnvelope,
+  ThreadCollaborationMode,
   ThreadGoal,
   ThreadHistoryItem,
   ThreadHistoryTurn,
+  ThreadSettingsState,
 } from "../types";
 
 const rpcIdSchema = z.union([z.string(), z.number()]);
@@ -49,6 +52,58 @@ export const rpcEnvelopeSchema = z.union([
 
 export function parseRpcEnvelope(value: unknown): RpcEnvelope {
   return rpcEnvelopeSchema.parse(value);
+}
+
+const appServerCollaborationModeSchema = z
+  .object({
+    mode: z.enum(["default", "plan"]),
+    settings: z
+      .object({
+        model: z.string().min(1),
+        reasoning_effort: z.string().nullable().optional(),
+        developer_instructions: z.string().nullable().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const appServerThreadSettingsSchema = z
+  .object({
+    model: z.string().min(1),
+    effort: z.string().nullable().optional(),
+    approvalPolicy: z.unknown(),
+    collaborationMode: appServerCollaborationModeSchema,
+  })
+  .loose();
+
+export function threadCollaborationModeFromAppServer(
+  value: unknown,
+): ThreadCollaborationMode | null {
+  const parsed = appServerCollaborationModeSchema.safeParse(value);
+  if (!parsed.success) return null;
+  return {
+    mode: parsed.data.mode,
+    settings: {
+      model: parsed.data.settings.model,
+      reasoningEffort: parsed.data.settings.reasoning_effort ?? null,
+      developerInstructions: parsed.data.settings.developer_instructions ?? null,
+    },
+  };
+}
+
+export function threadSettingsFromAppServer(value: unknown): ThreadSettingsState | null {
+  const parsed = appServerThreadSettingsSchema.safeParse(value);
+  if (!parsed.success) return null;
+  return {
+    model: parsed.data.model,
+    effort: parsed.data.effort ?? null,
+    approvalPolicy: approvalPolicyFromAppServer(parsed.data.approvalPolicy),
+    collaborationMode: threadCollaborationModeFromAppServer(parsed.data.collaborationMode),
+  };
+}
+
+function approvalPolicyFromAppServer(value: unknown): ApprovalPolicy | null {
+  return value === "untrusted" || value === "on-request" || value === "never" ? value : null;
 }
 
 const threadItemSchema = z

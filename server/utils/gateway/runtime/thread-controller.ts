@@ -11,7 +11,6 @@ import { threadSnapshotStore } from "../state/thread-snapshots";
 import { threadRuntimeEvents } from "./thread-runtime-events";
 import type { ThreadOpenSnapshot } from "./types";
 import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
-import { extractThreadSettings } from "../protocol/thread-payload";
 
 export class ThreadController {
   readonly client: CodexRpcClient;
@@ -222,16 +221,6 @@ export class ThreadController {
       runtimeStatusFromSnapshotState(snapshot.thread, snapshot.history) === "running";
   }
 
-  private publishResumedSettings(resumed: unknown) {
-    this.publish("thread/settings/updated", {
-      method: "thread/settings/updated",
-      params: {
-        threadId: this.threadId,
-        threadSettings: extractThreadSettings(resumed),
-      },
-    });
-  }
-
   private async requestResume(params: Record<string, unknown>) {
     const resumed = await this.client.request(
       "thread/resume",
@@ -240,10 +229,11 @@ export class ThreadController {
       parseThreadResumeResult,
     );
     this.subscribed = true;
-    // App-server exposes persisted model/effort in thread/resume but emits no settings event for
-    // the response itself. Publish it through the ordinary event path so snapshots and all browser
-    // peers converge on one authoritative value instead of maintaining a second settings cache.
-    this.publishResumedSettings(resumed);
+    // Do not synthesize thread/settings/updated from thread/resume. The resume DTO only contains
+    // model/effort, while the official settings notification also contains collaborationMode. A
+    // partial event under the official method name can therefore overwrite an already observed
+    // Plan mode. The open snapshot carries resume settings directly and real settings events remain
+    // the sole source for the complete app-server state.
     return resumed;
   }
 }

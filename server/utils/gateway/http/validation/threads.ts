@@ -80,6 +80,7 @@ export const threadSettingsUpdateSchema = z.object({
   hostId: z.coerce.number().int().positive(),
   threadId: z.string().trim().min(1),
   ...threadSettingFields,
+  collaborationMode: collaborationModeSchema,
 });
 
 export const turnStartSchema = z.object({

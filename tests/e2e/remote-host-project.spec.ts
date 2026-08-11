@@ -10,6 +10,8 @@ import { chatViewportBottomDistance } from "./helpers/scroll";
 import {
   activeRealtimeSocketCount,
   installRealtimeSocketProbe,
+  realtimeClientMessageCount,
+  waitForRealtimeClientMessage,
 } from "./helpers/realtime-socket-probe";
 import {
   execRemoteSsh,
@@ -116,9 +118,43 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await page.getByPlaceholder("输入后续修改要求").fill("/");
   await expect(page.getByTestId("slash-command-menu")).toBeVisible();
   await expect(page.getByTestId("slash-command-plan")).toBeVisible();
+  const planSettingsResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/threads/settings") && response.request().method() === "POST",
+  );
   await page.getByTestId("slash-command-plan").click();
+  const planSettingsResponse = await planSettingsResponsePromise;
+  expect(planSettingsResponse.ok()).toBe(true);
+  const planSettingsRequest = z
+    .object({
+      hostId: z.number(),
+      threadId: z.string(),
+      collaborationMode: z.object({
+        mode: z.literal("plan"),
+        settings: z.object({ model: z.string().min(1) }).loose(),
+      }),
+    })
+    .loose()
+    .parse(planSettingsResponse.request().postDataJSON());
+  expect(planSettingsRequest).toMatchObject({
+    hostId: host.id,
+    threadId: slashNewThreadId,
+    collaborationMode: { mode: "plan" },
+  });
   await expect(page.getByTestId("composer-mode-strip").getByText("计划模式").first()).toBeVisible();
-  await page.getByPlaceholder("输入后续修改要求").fill("");
+  const planTurnOffset = await realtimeClientMessageCount(page);
+  await page.getByPlaceholder("输入后续修改要求").fill("请为当前项目制定一个简短计划，不要执行。");
+  await page.getByTestId("send-turn-button").click();
+  const planTurnStart = z
+    .object({
+      collaborationMode: z.object({
+        mode: z.literal("plan"),
+        settings: z.object({ model: z.string().min(1) }).loose(),
+      }),
+    })
+    .loose()
+    .parse(await waitForRealtimeClientMessage(page, "turn.start", planTurnOffset));
+  expect(planTurnStart.collaborationMode.mode).toBe("plan");
 
   const threadId = await remoteWorkspace.startThread(project.id);
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
