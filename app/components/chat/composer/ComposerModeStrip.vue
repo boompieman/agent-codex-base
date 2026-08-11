@@ -52,8 +52,9 @@ const showStrip = computed(
   () => props.planModeActive || showGoalInputHint.value || currentGoal.value,
 );
 
-// A Goal remains useful context after it pauses or completes. Presence controls visibility, while
-// only the active status advances the local elapsed-time projection between app-server updates.
+// A paused or blocked Goal remains actionable and visible. The composer controller removes a
+// completed Goal from this presentation boundary, while only active Goals advance locally between
+// app-server updates.
 watch(
   () => currentGoal.value?.status === "active",
   (active) => (active ? resume() : pause()),

@@ -12,6 +12,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { latestThreadPlanItem, planItemSummary } from "@/utils/thread-plan";
+import { isThreadGoalOngoing } from "@/utils/thread-goal-display";
 import { useComposerSlashMenu } from "./useComposerSlashMenu";
 
 export function useComposerController() {
@@ -23,9 +24,22 @@ export function useComposerController() {
   const { t } = useI18n();
   const { models, loadingModels } = storeToRefs(gateway);
   const { selectedHostId, selectedProjectId, selectedThreadId } = storeToRefs(navigation);
-  const { selectedThreadGoal, selectedThreadGoalObservedAt, selectedThreadTokenUsage } =
-    storeToRefs(composer);
+  const {
+    selectedThreadGoal: selectedThreadGoalSnapshot,
+    selectedThreadGoalObservedAt: selectedThreadGoalObservedAtSnapshot,
+    selectedThreadTokenUsage,
+  } = storeToRefs(composer);
   const { history } = storeToRefs(threadView);
+  // Keep the app-server snapshot in Pinia for timeline/history projection, but stop treating a
+  // completed Goal as composer mode. Filtering once at this boundary keeps the strip and /goal
+  // actions aligned: completion returns the input to normal conversation and a new /goal starts
+  // a new objective instead of editing the completed one.
+  const selectedThreadGoal = computed(() =>
+    isThreadGoalOngoing(selectedThreadGoalSnapshot.value) ? selectedThreadGoalSnapshot.value : null,
+  );
+  const selectedThreadGoalObservedAt = computed(() =>
+    selectedThreadGoal.value === null ? null : selectedThreadGoalObservedAtSnapshot.value,
+  );
   const selectedThreadStatus = computed(() =>
     selectedHostId.value !== null && selectedThreadId.value !== null
       ? runtime.statusFor(selectedHostId.value, selectedThreadId.value)

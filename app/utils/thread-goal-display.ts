@@ -1,6 +1,10 @@
-import type { ThreadGoalStatus } from "~~/shared/types";
+import type { ThreadGoal, ThreadGoalStatus } from "~~/shared/types";
 
 export type ThreadGoalStatusControl = "pause" | "resume" | null;
+
+export function isThreadGoalOngoing(goal: ThreadGoal | null): goal is ThreadGoal {
+  return goal !== null && goal.status !== "complete";
+}
 
 export function threadGoalStatusControl(status: ThreadGoalStatus): ThreadGoalStatusControl {
   const controls: Record<ThreadGoalStatus, ThreadGoalStatusControl> = {

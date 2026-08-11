@@ -263,10 +263,15 @@ test("goal progress updates the composer status strip without flooding the agent
     createdAt: new Date().toISOString(),
   });
 
-  await expect(page.getByTestId("composer-goal-summary")).toBeVisible();
-  await expect(page.getByTestId("composer-goal-summary").getByText("Complete")).toBeVisible();
+  await expect(page.getByTestId("composer-goal-summary")).toHaveCount(0);
+  await expect(page.getByTestId("composer-mode-strip")).toHaveCount(0);
   await expect(page.getByTestId("chat-scroll-area").getByText("目标已更新")).toHaveCount(0);
   await expect(goalCards).toHaveCount(0);
+
+  const composer = page.getByPlaceholder("输入后续修改要求");
+  await composer.fill("/goal");
+  await expect(page.getByTestId("slash-command-goal-objective")).toBeVisible();
+  await expect(page.getByTestId("slash-command-goal-edit")).toHaveCount(0);
 });
 
 test("goal snapshot updates only the composer status strip without fabricating history", async ({
