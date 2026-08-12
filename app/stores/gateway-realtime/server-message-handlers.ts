@@ -49,6 +49,7 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "browser.closed" }, browser["browser.closed"])
       .with({ type: "browser.error" }, browser["browser.error"])
       .with({ type: "browser.framePolicyWarning" }, browser["browser.framePolicyWarning"])
+      .with({ type: "browser.resourceFailed" }, browser["browser.resourceFailed"])
       .with({ type: "notification.published" }, notifications["notification.published"])
       .with({ type: "host.lifecycle" }, notifications["host.lifecycle"])
       .with({ type: "host.metrics.snapshot" }, hostMetrics["host.metrics.snapshot"])

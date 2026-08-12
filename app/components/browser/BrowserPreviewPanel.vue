@@ -12,10 +12,11 @@ import { computed, ref, watch } from "vue";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { openBrowserPreview } from "@/stores/gateway-browser/transport";
 import { setBrowserPreviewInsecureTls } from "@/stores/gateway-browser/transport";
+import BrowserPreviewDiagnostics from "./BrowserPreviewDiagnostics.vue";
 
 const props = defineProps<{ panelId: string }>();
 const browser = useGatewayBrowserStore();
-const { panels, sessions, frameWarnings } = storeToRefs(browser);
+const { panels, sessions, frameWarnings, resourceFailures } = storeToRefs(browser);
 const opening = ref(false);
 const error = ref("");
 const frameKey = ref(0);
@@ -26,6 +27,9 @@ const session = computed(() =>
 );
 const warning = computed(() =>
   session.value ? frameWarnings.value[session.value.sessionId] : undefined,
+);
+const failures = computed(() =>
+  session.value ? (resourceFailures.value[session.value.sessionId] ?? []) : [],
 );
 
 watch(
@@ -60,6 +64,7 @@ watch(
 
 function reload() {
   if (!session.value) return;
+  browser.clearResourceFailures(session.value.sessionId);
   frameUrl.value = previewTargetUrl(session.value);
   frameKey.value += 1;
 }
@@ -118,6 +123,11 @@ async function toggleInsecureTls() {
         {{ $t("app.openExternally") }}
       </a>
     </div>
+    <BrowserPreviewDiagnostics
+      v-if="session && failures.length > 0"
+      :failures="failures"
+      @dismiss="browser.clearResourceFailures(session.sessionId)"
+    />
     <div v-if="opening" class="grid min-h-0 flex-1 place-items-center text-ink-muted">
       <LoaderCircleIcon class="size-5 animate-spin" />
     </div>
