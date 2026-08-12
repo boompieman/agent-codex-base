@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { ExternalLinkIcon, LoaderCircleIcon, RefreshCwIcon, ShieldAlertIcon } from "@lucide/vue";
+import {
+  WebPreview,
+  WebPreviewBody,
+  WebPreviewNavigation,
+  WebPreviewNavigationButton,
+  WebPreviewUrl,
+} from "@codex-gateway/ai-elements/web-preview";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
-import { Button } from "@codex-gateway/ui/button";
 import { useGatewayBrowserStore } from "@/stores/gateway-browser";
 import { openBrowserPreview } from "@/stores/gateway-browser/transport";
 import { setBrowserPreviewInsecureTls } from "@/stores/gateway-browser/transport";
@@ -10,15 +16,29 @@ import { setBrowserPreviewInsecureTls } from "@/stores/gateway-browser/transport
 const props = defineProps<{ panelId: string }>();
 const browser = useGatewayBrowserStore();
 const { panels, sessions, frameWarnings } = storeToRefs(browser);
-const iframe = ref<HTMLIFrameElement | null>(null);
 const opening = ref(false);
 const error = ref("");
+const frameKey = ref(0);
+const frameUrl = ref("");
 const panel = computed(() => panels.value[props.panelId] ?? null);
 const session = computed(() =>
   Object.values(sessions.value).find((item) => item.panelId === props.panelId),
 );
 const warning = computed(() =>
   session.value ? frameWarnings.value[session.value.sessionId] : undefined,
+);
+
+watch(
+  session,
+  (activeSession) => {
+    if (activeSession === undefined) {
+      frameUrl.value = "";
+      return;
+    }
+    frameUrl.value = activeSession.bootstrapUrl;
+    frameKey.value += 1;
+  },
+  { immediate: true },
 );
 
 watch(
@@ -39,11 +59,9 @@ watch(
 );
 
 function reload() {
-  if (!iframe.value || !session.value) return;
-  iframe.value.src = "about:blank";
-  void nextTick(() => {
-    if (iframe.value && session.value) iframe.value.src = previewTargetUrl(session.value);
-  });
+  if (!session.value) return;
+  frameUrl.value = previewTargetUrl(session.value);
+  frameKey.value += 1;
 }
 
 function previewTargetUrl(activeSession: NonNullable<typeof session.value>) {
@@ -59,47 +77,37 @@ async function toggleInsecureTls() {
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-    <div class="flex h-10 shrink-0 items-center gap-2 border-b border-hairline px-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        class="size-8"
-        :aria-label="$t('app.reload')"
-        @click="reload"
-      >
+  <WebPreview
+    :default-url="panel?.targetUrl ?? ''"
+    class="h-full min-h-0 overflow-hidden rounded-none border-0 bg-surface"
+  >
+    <WebPreviewNavigation class="h-10 shrink-0 gap-2 border-hairline px-2 py-0">
+      <WebPreviewNavigationButton :tooltip="$t('app.reload')" @click="reload">
         <RefreshCwIcon class="size-4" />
-      </Button>
-      <div
-        class="min-w-0 flex-1 truncate rounded-md bg-canvas-soft px-3 py-1 text-sm text-ink-muted"
-      >
-        {{ panel?.targetUrl }}
-      </div>
-      <Button
+      </WebPreviewNavigationButton>
+      <WebPreviewUrl
+        class="min-w-0 bg-canvas-soft text-ink-muted"
+        :aria-label="$t('app.browserAddress')"
+        readonly
+      />
+      <WebPreviewNavigationButton
         v-if="session && session.targetUrl.startsWith('https://')"
-        variant="ghost"
-        size="icon"
-        class="size-8"
         :class="session.allowInsecureTls ? 'text-warning' : ''"
-        :aria-label="$t('app.allowInsecureTls')"
-        :title="$t('app.allowInsecureTls')"
+        :tooltip="$t('app.allowInsecureTls')"
         @click="toggleInsecureTls"
       >
         <ShieldAlertIcon class="size-4" />
-      </Button>
-      <Button
+      </WebPreviewNavigationButton>
+      <WebPreviewNavigationButton
         v-if="session"
         as="a"
-        :href="session.previewOrigin"
+        :href="previewTargetUrl(session)"
         target="_blank"
-        variant="ghost"
-        size="icon"
-        class="size-8"
-        :aria-label="$t('app.openExternally')"
+        :tooltip="$t('app.openExternally')"
       >
         <ExternalLinkIcon class="size-4" />
-      </Button>
-    </div>
+      </WebPreviewNavigationButton>
+    </WebPreviewNavigation>
     <div
       v-if="warning"
       class="flex items-center gap-2 border-b border-warning/30 bg-warning/10 px-3 py-2 text-sm"
@@ -116,13 +124,13 @@ async function toggleInsecureTls() {
     <div v-else-if="error" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-danger">
       {{ error }}
     </div>
-    <iframe
+    <WebPreviewBody
       v-else-if="session"
-      ref="iframe"
-      :src="session.bootstrapUrl"
-      class="min-h-0 flex-1 border-0 bg-white"
+      :key="frameKey"
+      :src="frameUrl"
+      class="bg-white"
       :title="panel?.title"
       allow="clipboard-read; clipboard-write; fullscreen"
     />
-  </section>
+  </WebPreview>
 </template>

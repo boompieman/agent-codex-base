@@ -21,9 +21,9 @@ const frameSrc = computed(() => (props.src ?? url.value) || undefined);
 </script>
 
 <template>
-  <div class="flex-1">
+  <div class="min-h-0 flex-1">
     <iframe
-      :class="cn('size-full', props.class)"
+      :class="cn('block size-full border-0', props.class)"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
       :src="frameSrc"
       title="Preview"

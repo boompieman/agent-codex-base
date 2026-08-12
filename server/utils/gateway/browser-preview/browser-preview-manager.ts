@@ -36,7 +36,10 @@ export class BrowserPreviewManager {
     const sessionId = randomUUID();
     const ticket = randomBytes(32).toString("base64url");
     const cookieToken = randomBytes(32).toString("base64url");
-    const previewOrigin = previewOriginFor(userId, host.id, target);
+    // Each preview session needs its own origin. A host + target origin is not unique enough:
+    // opening two panels for the same remote service would make their HttpOnly cookies replace
+    // each other and route one iframe through the other panel's SSH session.
+    const previewOrigin = previewOriginFor(userId, host.id, target, sessionId);
     const session: BrowserPreviewSession = {
       sessionId,
       ownerId,
@@ -57,19 +60,44 @@ export class BrowserPreviewManager {
     return this.snapshot(session);
   }
 
-  exchangeTicket(hostname: string, ticket: string) {
+  exchangeTicket(
+    hostname: string,
+    ticket: string,
+    sessionId: string,
+    cookieToken: string | undefined,
+  ) {
     const session = this.tickets.get(ticket);
-    this.tickets.delete(ticket);
+    if (session !== undefined) {
+      this.tickets.delete(ticket);
+      if (
+        session.sessionId !== sessionId ||
+        session.status !== "open" ||
+        session.ticketExpiresAt < Date.now() ||
+        new URL(session.previewOrigin).hostname !== hostname
+      ) {
+        return null;
+      }
+      this.sessionsByCookie.set(session.cookieToken, session);
+      return { cookieToken: session.cookieToken, path: initialPath(session.target) };
+    }
+
+    // Dockview may destroy and recreate an iframe while moving or restoring a panel. The iframe
+    // then reloads its original bootstrap URL even though that one-time ticket was already
+    // exchanged. Re-entry is allowed only when the browser presents the HttpOnly cookie issued by
+    // the first exchange and all session coordinates still match. Do not make tickets reusable:
+    // without the cookie, a consumed or expired ticket remains invalid.
+    const cookieSession = this.resolve(hostname, cookieToken);
     if (
-      session === undefined ||
-      session.status !== "open" ||
-      session.ticketExpiresAt < Date.now()
+      cookieSession === null ||
+      cookieSession.sessionId !== sessionId ||
+      cookieSession.ticket !== ticket
     ) {
       return null;
     }
-    if (new URL(session.previewOrigin).hostname !== hostname) return null;
-    this.sessionsByCookie.set(session.cookieToken, session);
-    return { cookieToken: session.cookieToken, path: initialPath(session.target) };
+    return {
+      cookieToken: cookieSession.cookieToken,
+      path: initialPath(cookieSession.target),
+    };
   }
 
   resolve(hostname: string, cookieToken: string | undefined) {
@@ -143,7 +171,7 @@ export class BrowserPreviewManager {
       ...session.targetConfig,
       sessionId: session.sessionId,
       previewOrigin: session.previewOrigin,
-      bootstrapUrl: `${session.previewOrigin}/_gateway/preview/bootstrap#${session.ticket}`,
+      bootstrapUrl: `${session.previewOrigin}/_gateway/preview/bootstrap?sessionId=${encodeURIComponent(session.sessionId)}#${session.ticket}`,
       status: session.status,
     };
   }
@@ -163,7 +191,7 @@ function normalizeTarget(value: string) {
   return target;
 }
 
-function previewHostname(userId: number, hostId: number, target: URL) {
+function previewHostname(userId: number, hostId: number, target: URL, sessionId: string) {
   const secret = firstNonEmptyString([
     process.env.BROWSER_PREVIEW_SECRET,
     process.env.CODEX_GATEWAY_CONFIG_SECRET,
@@ -171,7 +199,7 @@ function previewHostname(userId: number, hostId: number, target: URL) {
   ]);
   if (secret === null) throw new Error("Browser preview secret is not configured");
   const digest = createHmac("sha256", secret)
-    .update(`${userId}:${hostId}:${target.origin}`)
+    .update(`${userId}:${hostId}:${target.origin}:${sessionId}`)
     .digest("hex")
     .slice(0, 32);
   const domain = trimmedOrFallback(process.env.BROWSER_PREVIEW_DOMAIN, "cloudawn.top");
@@ -183,10 +211,10 @@ export function isBrowserPreviewHostname(hostname: string) {
   return new RegExp(`^p-[0-9a-f]{32}\\.${escapeRegExp(domain)}$`, "i").test(hostname);
 }
 
-function previewOriginFor(userId: number, hostId: number, target: URL) {
+function previewOriginFor(userId: number, hostId: number, target: URL, sessionId: string) {
   const scheme = trimmedOrFallback(process.env.BROWSER_PREVIEW_SCHEME, "https");
   const port = process.env.BROWSER_PREVIEW_PUBLIC_PORT;
-  return `${scheme}://${previewHostname(userId, hostId, target)}${port === undefined || port === "" ? "" : `:${port}`}`;
+  return `${scheme}://${previewHostname(userId, hostId, target, sessionId)}${port === undefined || port === "" ? "" : `:${port}`}`;
 }
 
 function initialPath(target: URL) {
