@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import type {
+  HostGpuProcessSnapshot,
   HostMetricsCollectorStatus,
   HostMetricsSample,
   HostMetricsSnapshot,
@@ -11,6 +12,7 @@ interface HostMetricsViewState {
   status: HostMetricsCollectorStatus;
   message: string | null;
   samples: HostMetricsSample[];
+  gpuProcesses: HostGpuProcessSnapshot | null;
 }
 
 export const useGatewayHostMetricsDataStore = defineStore("gateway-host-metrics-data", () => {
@@ -23,16 +25,26 @@ export const useGatewayHostMetricsDataStore = defineStore("gateway-host-metrics-
         status: snapshot.status,
         message: snapshot.message,
         samples: snapshot.samples.slice(-MAX_SAMPLES),
+        gpuProcesses: snapshot.gpuProcesses,
       },
     };
   }
 
-  function appendSample(hostId: number, sample: HostMetricsSample) {
+  function appendSample(
+    hostId: number,
+    sample: HostMetricsSample,
+    gpuProcesses: HostGpuProcessSnapshot | null,
+  ) {
     const current = hosts.value[hostId] ?? emptyHostState();
     const samples = [...current.samples, sample].slice(-MAX_SAMPLES);
     hosts.value = {
       ...hosts.value,
-      [hostId]: { status: "collecting", message: null, samples },
+      [hostId]: {
+        status: "collecting",
+        message: null,
+        samples,
+        gpuProcesses: gpuProcesses ?? current.gpuProcesses,
+      },
     };
   }
 
@@ -55,5 +67,5 @@ export const useGatewayHostMetricsDataStore = defineStore("gateway-host-metrics-
 });
 
 function emptyHostState(): HostMetricsViewState {
-  return { status: "waiting", message: null, samples: [] };
+  return { status: "waiting", message: null, samples: [], gpuProcesses: null };
 }

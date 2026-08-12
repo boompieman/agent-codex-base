@@ -15,8 +15,8 @@ export function registerRealtimeResourceSubscribers() {
   gatewayDomainEvents.on("realtime-host-metrics-snapshot", (snapshot) => {
     useGatewayHostMetricsDataStore().applySnapshot(snapshot);
   });
-  gatewayDomainEvents.on("realtime-host-metrics-sample", ({ hostId, sample }) => {
-    useGatewayHostMetricsDataStore().appendSample(hostId, sample);
+  gatewayDomainEvents.on("realtime-host-metrics-sample", ({ hostId, sample, gpuProcesses }) => {
+    useGatewayHostMetricsDataStore().appendSample(hostId, sample, gpuProcesses);
   });
   gatewayDomainEvents.on("realtime-host-metrics-status", ({ hostId, status, message }) => {
     useGatewayHostMetricsDataStore().setStatus(hostId, status, message);

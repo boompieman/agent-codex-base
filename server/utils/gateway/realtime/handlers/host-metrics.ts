@@ -23,6 +23,7 @@ export function subscribeHostMetrics(
           type: "host.metrics.sample",
           hostId: event.hostId,
           sample: event.sample,
+          gpuProcesses: event.gpuProcesses,
         });
       } else {
         sendRealtimePeerMessage(peer, {

@@ -1,4 +1,9 @@
-import type { HostFilesystemMetrics, HostGpuMetrics, HostMetricsSample } from "~~/shared/types";
+import type {
+  HostFilesystemMetrics,
+  HostGpuMetrics,
+  HostGpuProcess,
+  HostMetricsSample,
+} from "~~/shared/types";
 
 export interface RawCpuCounters {
   total: number;
@@ -28,6 +33,7 @@ export interface RawHostMetricsSample {
   disk: RawDiskCounters;
   filesystems: HostFilesystemMetrics[];
   gpus: HostGpuMetrics[];
+  gpuProcesses: HostGpuProcess[] | null;
 }
 
 export interface HostMetricsRateState {

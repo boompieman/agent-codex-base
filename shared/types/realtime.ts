@@ -11,7 +11,11 @@ import type { ApprovalPolicy, ReasoningEffort } from "./thread";
 import type { TerminalOpenTarget, TerminalSessionSnapshot } from "./terminal";
 import type { BrowserPreviewSessionSnapshot, BrowserPreviewTarget } from "./browser";
 import type { ServerNotification } from "./notifications";
-import type { HostMetricsCollectorStatus, HostMetricsSample } from "./host-metrics";
+import type {
+  HostGpuProcessSnapshot,
+  HostMetricsCollectorStatus,
+  HostMetricsSample,
+} from "./host-metrics";
 import type { TmuxSessionsSnapshot } from "./tmux";
 
 export type RealtimeClientMessage =
@@ -232,11 +236,13 @@ export type RealtimeServerMessage =
       status: HostMetricsCollectorStatus;
       message: string | null;
       samples: HostMetricsSample[];
+      gpuProcesses: HostGpuProcessSnapshot | null;
     }
   | {
       type: "host.metrics.sample";
       hostId: number;
       sample: HostMetricsSample;
+      gpuProcesses: HostGpuProcessSnapshot | null;
     }
   | {
       type: "host.metrics.status";

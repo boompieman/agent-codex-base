@@ -1,7 +1,16 @@
-import type { HostMetricsSample, HostMetricsSnapshot } from "~~/shared/types";
+import type {
+  HostGpuProcessSnapshot,
+  HostMetricsSample,
+  HostMetricsSnapshot,
+} from "~~/shared/types";
 
 export type HostMetricsEvent =
-  | { type: "sample"; hostId: number; sample: HostMetricsSample }
+  | {
+      type: "sample";
+      hostId: number;
+      sample: HostMetricsSample;
+      gpuProcesses: HostGpuProcessSnapshot | null;
+    }
   | { type: "status"; snapshot: HostMetricsSnapshot };
 
 type HostMetricsListener = (event: HostMetricsEvent) => void;

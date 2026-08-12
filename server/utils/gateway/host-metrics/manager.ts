@@ -1,5 +1,6 @@
 import type {
   HostMetricsCollectorStatus,
+  HostGpuProcessSnapshot,
   HostMetricsSample,
   HostMetricsSnapshot,
   HostRecord,
@@ -16,6 +17,7 @@ interface HostMetricsRuntime {
   status: HostMetricsCollectorStatus;
   message: string | null;
   samples: HostMetricsSample[];
+  gpuProcesses: HostGpuProcessSnapshot | null;
 }
 
 export class HostMetricsManager {
@@ -33,6 +35,7 @@ export class HostMetricsManager {
       status: runtime?.status ?? "waiting",
       message: runtime?.message ?? null,
       samples: runtime?.samples.slice() ?? [],
+      gpuProcesses: runtime?.gpuProcesses ?? null,
     };
   }
 
@@ -55,7 +58,7 @@ export class HostMetricsManager {
     }
 
     const collector = new HostMetricsCollector(this.ssh, host, {
-      sample: (sample) => this.acceptSample(userId, host.id, sample),
+      sample: (sample, gpuProcesses) => this.acceptSample(userId, host.id, sample, gpuProcesses),
       disconnected: (message) => this.setStatus(userId, host.id, "disconnected", message),
       unsupported: (message) => this.setStatus(userId, host.id, "unsupported", message),
       error: (message) => this.setStatus(userId, host.id, "error", message),
@@ -65,13 +68,19 @@ export class HostMetricsManager {
       status: "waiting",
       message: null,
       samples: [],
+      gpuProcesses: null,
       collector,
     };
     this.runtimes.set(key, runtime);
     runtime.collector.start();
   }
 
-  private acceptSample(userId: number, hostId: number, sample: HostMetricsSample) {
+  private acceptSample(
+    userId: number,
+    hostId: number,
+    sample: HostMetricsSample,
+    gpuProcesses: HostGpuProcessSnapshot | null,
+  ) {
     const runtime = this.runtimes.get(runtimeKey(userId, hostId));
     if (runtime === undefined) return;
     runtime.samples.push(sample);
@@ -79,10 +88,12 @@ export class HostMetricsManager {
       runtime.samples.splice(0, runtime.samples.length - MAX_SAMPLES);
     runtime.status = "collecting";
     runtime.message = null;
+    if (gpuProcesses !== null) runtime.gpuProcesses = gpuProcesses;
     this.events.publish(userId, runtime.host.id, {
       type: "sample",
       hostId: runtime.host.id,
       sample,
+      gpuProcesses,
     });
   }
 
