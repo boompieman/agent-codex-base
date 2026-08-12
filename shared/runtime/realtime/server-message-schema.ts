@@ -286,6 +286,32 @@ const hostMetricsSampleSchema = z
     ),
   })
   .strict();
+const hostGpuProcessSnapshotSchema = z
+  .object({
+    sampledAt: nonEmptyString,
+    processes: z.array(
+      z
+        .object({
+          pid: z.number().int().positive(),
+          username: z.string().nullable(),
+          processName: z.string().nullable(),
+          command: z.string().nullable(),
+          elapsedSeconds: z.number().nonnegative().nullable(),
+          cpuPercent: nullableMetric,
+          hostMemoryBytes: z.number().nonnegative().nullable(),
+          devices: z.array(
+            z
+              .object({
+                gpuUuid: z.string(),
+                memoryUsedBytes: z.number().nonnegative(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 
 // Top-level Gateway messages are closed protocol objects. Nested app-server thread/envelope
 // records intentionally remain extensible because upstream adds fields between releases; their
@@ -338,6 +364,7 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         status: hostMetricsStatusSchema,
         message: z.string().nullable(),
         samples: z.array(hostMetricsSampleSchema),
+        gpuProcesses: hostGpuProcessSnapshotSchema.nullable(),
       })
       .strict(),
     z
@@ -345,6 +372,7 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         type: z.literal("host.metrics.sample"),
         hostId: positiveId,
         sample: hostMetricsSampleSchema,
+        gpuProcesses: hostGpuProcessSnapshotSchema.nullable(),
       })
       .strict(),
     z

@@ -9,6 +9,7 @@ import type {
   ThreadTokenUsageState,
   TerminalSessionSnapshot,
   GatewayConfig,
+  HostGpuProcessSnapshot,
   HostMetricsCollectorStatus,
   HostMetricsSample,
   TmuxSessionsSnapshot,
@@ -59,8 +60,13 @@ export type GatewayDomainEventMap = {
     status: HostMetricsCollectorStatus;
     message: string | null;
     samples: HostMetricsSample[];
+    gpuProcesses: HostGpuProcessSnapshot | null;
   };
-  "realtime-host-metrics-sample": { hostId: number; sample: HostMetricsSample };
+  "realtime-host-metrics-sample": {
+    hostId: number;
+    sample: HostMetricsSample;
+    gpuProcesses: HostGpuProcessSnapshot | null;
+  };
   "realtime-host-metrics-status": {
     hostId: number;
     status: HostMetricsCollectorStatus;

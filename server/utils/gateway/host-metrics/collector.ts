@@ -1,5 +1,5 @@
 import type { ClientChannel } from "ssh2";
-import type { HostRecord, HostMetricsSample } from "~~/shared/types";
+import type { HostGpuProcessSnapshot, HostRecord, HostMetricsSample } from "~~/shared/types";
 import type { SshConnectionPool } from "../infra/ssh/ssh-connection";
 import { AdaptivePollSchedule } from "../infra/background/adaptive-poll-schedule";
 import { hostMetricsRemoteCommand } from "./remote-command";
@@ -10,10 +10,11 @@ import type { RawHostMetricsSample } from "./types";
 const MIN_SAMPLE_DELAY_MS = 2_000;
 const MAX_SAMPLE_DELAY_MS = 30_000;
 const SAMPLE_TIMEOUT_MS = 45_000;
+const GPU_PROCESS_SAMPLE_DELAY_MS = 10_000;
 const FAILURE_DELAYS_MS = [5_000, 10_000, 20_000, 30_000] as const;
 
 export interface HostMetricsCollectorCallbacks {
-  sample: (sample: HostMetricsSample) => void;
+  sample: (sample: HostMetricsSample, gpuProcesses: HostGpuProcessSnapshot | null) => void;
   disconnected: (message: string | null) => void;
   unsupported: (message: string) => void;
   error: (message: string) => void;
@@ -30,6 +31,7 @@ export class HostMetricsCollector {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
   private previous: RawHostMetricsSample | null = null;
+  private nextGpuProcessSampleAt = 0;
   private readonly schedulePolicy = new AdaptivePollSchedule({
     minimumDelayMs: MIN_SAMPLE_DELAY_MS,
     maximumDelayMs: MAX_SAMPLE_DELAY_MS,
@@ -70,7 +72,11 @@ export class HostMetricsCollector {
       case "sample": {
         const sample = buildHostMetricsSample(result.raw, this.previous);
         this.previous = result.raw;
-        this.callbacks.sample(sample);
+        const gpuProcesses = gpuProcessSnapshot(result.raw);
+        if (gpuProcesses !== null) {
+          this.nextGpuProcessSampleAt = Date.now() + GPU_PROCESS_SAMPLE_DELAY_MS;
+        }
+        this.callbacks.sample(sample, gpuProcesses);
         this.schedule(this.schedulePolicy.afterSuccess(result.elapsedMs));
         return;
       }
@@ -97,7 +103,10 @@ export class HostMetricsCollector {
   }
 
   private async collectChannelOnce(startedAt: number): Promise<CollectionResult> {
-    const channel = await this.ssh.execChannelIfConnected(this.host, hostMetricsRemoteCommand());
+    const channel = await this.ssh.execChannelIfConnected(
+      this.host,
+      hostMetricsRemoteCommand(Date.now() >= this.nextGpuProcessSampleAt),
+    );
     if (channel === null) return { kind: "disconnected", message: null };
     if (!this.running) {
       channel.close();
@@ -165,4 +174,13 @@ export class HostMetricsCollector {
       void this.collect();
     }, delayMs);
   }
+}
+
+function gpuProcessSnapshot(raw: RawHostMetricsSample): HostGpuProcessSnapshot | null {
+  return raw.gpuProcesses === null
+    ? null
+    : {
+        sampledAt: new Date(raw.sampledAtMs).toISOString(),
+        processes: raw.gpuProcesses,
+      };
 }

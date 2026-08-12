@@ -7,8 +7,12 @@ export function createHostMetricsRealtimeHandlers(ctx: RealtimeServerMessageHand
       gatewayDomainEvents.emit("realtime-host-metrics-snapshot", message);
       ctx.resolveRequest(message);
     },
-    "host.metrics.sample": ({ hostId, sample }) =>
-      gatewayDomainEvents.emit("realtime-host-metrics-sample", { hostId, sample }),
+    "host.metrics.sample": ({ hostId, sample, gpuProcesses }) =>
+      gatewayDomainEvents.emit("realtime-host-metrics-sample", {
+        hostId,
+        sample,
+        gpuProcesses,
+      }),
     "host.metrics.status": ({ hostId, status, message }) =>
       gatewayDomainEvents.emit("realtime-host-metrics-status", { hostId, status, message }),
   } satisfies RealtimeHandlers;

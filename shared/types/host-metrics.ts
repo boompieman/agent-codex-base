@@ -50,6 +50,27 @@ export interface HostGpuMetrics {
   temperatureCelsius: number | null;
 }
 
+export interface HostGpuProcessDeviceUsage {
+  gpuUuid: string;
+  memoryUsedBytes: number;
+}
+
+export interface HostGpuProcess {
+  pid: number;
+  username: string | null;
+  processName: string | null;
+  command: string | null;
+  elapsedSeconds: number | null;
+  cpuPercent: number | null;
+  hostMemoryBytes: number | null;
+  devices: HostGpuProcessDeviceUsage[];
+}
+
+export interface HostGpuProcessSnapshot {
+  sampledAt: string;
+  processes: HostGpuProcess[];
+}
+
 export interface HostMetricsSample {
   sampledAt: string;
   cpu: HostCpuMetrics;
@@ -64,4 +85,5 @@ export interface HostMetricsSnapshot {
   status: HostMetricsCollectorStatus;
   message: string | null;
   samples: HostMetricsSample[];
+  gpuProcesses: HostGpuProcessSnapshot | null;
 }

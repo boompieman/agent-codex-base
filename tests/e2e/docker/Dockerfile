@@ -17,11 +17,12 @@ ARG E2E_UID=1000
 ARG E2E_GID=1000
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssh-server git ca-certificates sudo tmux \
+  && apt-get install -y --no-install-recommends openssh-server git ca-certificates sudo tmux procps \
   && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid ${E2E_GID} codex \
   && useradd --uid ${E2E_UID} --gid ${E2E_GID} --create-home --shell /bin/bash codex \
+  && useradd --create-home --shell /bin/sh trainer \
   && echo 'codex:codex' | chpasswd \
   && usermod -aG sudo codex \
   && mkdir -p /run/sshd
@@ -35,6 +36,9 @@ EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/codex-e2e-entrypoint"]
 
 FROM ssh-base AS empty-runtime
+COPY nvidia-smi /usr/local/bin/nvidia-smi
+COPY e2e-gpu-training /usr/local/bin/e2e-gpu-training
+RUN chmod +x /usr/local/bin/nvidia-smi /usr/local/bin/e2e-gpu-training
 
 FROM ssh-base AS legacy-node
 COPY --from=legacy-node-runtime /usr/local/ /usr/local/

@@ -1,4 +1,4 @@
-import type { HostFilesystemMetrics, HostGpuMetrics } from "~~/shared/types";
+import type { HostFilesystemMetrics, HostGpuMetrics, HostGpuProcess } from "~~/shared/types";
 import type { RawHostMetricsSample } from "./types";
 
 const BYTES_PER_KIBIBYTE = 1_024;
@@ -8,11 +8,23 @@ const EXCLUDED_BLOCK_DEVICE = /^(?:loop|ram|zram|dm-|md)/;
 const EXCLUDED_FILESYSTEM =
   /^(?:tmpfs|devtmpfs|proc|sysfs|cgroup2?|overlay|squashfs|tracefs|debugfs|securityfs|pstore|configfs|fusectl|mqueue|hugetlbfs|autofs|binfmt_misc|nsfs)$/;
 
-type Section = "cpu" | "load" | "mem" | "route" | "net" | "block" | "disk" | "fs" | "gpu";
+type Section =
+  | "cpu"
+  | "load"
+  | "mem"
+  | "route"
+  | "net"
+  | "block"
+  | "disk"
+  | "fs"
+  | "gpu"
+  | "gpuProcess"
+  | "gpuProcessOs";
 
 interface SampleFrame {
   sampledAtMs: number;
   sections: Record<Section, string[]>;
+  gpuProcessesIncluded: boolean;
 }
 
 export class HostMetricsRemoteParser {
@@ -38,7 +50,7 @@ export class HostMetricsRemoteParser {
     if (line.startsWith("@@BEGIN\t")) {
       const sampledAtMs = Number(line.slice("@@BEGIN\t".length));
       if (!Number.isFinite(sampledAtMs)) throw new Error("Invalid host metrics timestamp");
-      this.frame = { sampledAtMs, sections: emptySections() };
+      this.frame = { sampledAtMs, sections: emptySections(), gpuProcessesIncluded: false };
       this.section = null;
       return null;
     }
@@ -51,6 +63,9 @@ export class HostMetricsRemoteParser {
     const marker = sectionForMarker(line);
     if (marker !== null) {
       this.section = marker;
+      if (marker === "gpuProcess" && this.frame !== null) {
+        this.frame.gpuProcessesIncluded = true;
+      }
       return null;
     }
     if (this.frame !== null && this.section !== null) {
@@ -61,7 +76,19 @@ export class HostMetricsRemoteParser {
 }
 
 function emptySections(): Record<Section, string[]> {
-  return { cpu: [], load: [], mem: [], route: [], net: [], block: [], disk: [], fs: [], gpu: [] };
+  return {
+    cpu: [],
+    load: [],
+    mem: [],
+    route: [],
+    net: [],
+    block: [],
+    disk: [],
+    fs: [],
+    gpu: [],
+    gpuProcess: [],
+    gpuProcessOs: [],
+  };
 }
 
 function sectionForMarker(line: string): Section | null {
@@ -84,6 +111,10 @@ function sectionForMarker(line: string): Section | null {
       return "fs";
     case "@@GPU":
       return "gpu";
+    case "@@GPU_PROCESS":
+      return "gpuProcess";
+    case "@@GPU_PROCESS_OS":
+      return "gpuProcessOs";
     default:
       return null;
   }
@@ -99,6 +130,9 @@ function parseFrame(frame: SampleFrame): RawHostMetricsSample {
     disk: parseDisk(frame.sections.block, frame.sections.disk),
     filesystems: parseFilesystems(frame.sections.fs),
     gpus: parseGpus(frame.sections.gpu),
+    gpuProcesses: frame.gpuProcessesIncluded
+      ? parseGpuProcesses(frame.sections.gpuProcess, frame.sections.gpuProcessOs)
+      : null,
   };
 }
 
@@ -234,6 +268,83 @@ function parseGpus(lines: string[]): HostGpuMetrics[] {
       },
     ];
   });
+}
+
+interface HostProcessDetails {
+  username: string;
+  processName: string;
+  command: string;
+  elapsedSeconds: number;
+  cpuPercent: number;
+  hostMemoryBytes: number;
+}
+
+function parseGpuProcesses(gpuLines: string[], processLines: string[]): HostGpuProcess[] {
+  const processDetails = parseHostProcessDetails(processLines);
+  const processes = new Map<number, HostGpuProcess>();
+  for (const line of gpuLines) {
+    const fields = line.split(/,\s*/);
+    if (fields.length < 3) continue;
+    const pid = Number(fields[1]);
+    const memoryUsedMiB = Number(fields[2]);
+    const gpuUuid = fields[0]?.trim() ?? "";
+    if (!Number.isInteger(pid) || pid <= 0 || !Number.isFinite(memoryUsedMiB) || gpuUuid === "") {
+      continue;
+    }
+    const details = processDetails.get(pid);
+    const process = processes.get(pid) ?? {
+      pid,
+      username: details?.username ?? null,
+      processName: details?.processName ?? null,
+      command: details?.command ?? null,
+      elapsedSeconds: details?.elapsedSeconds ?? null,
+      cpuPercent: details?.cpuPercent ?? null,
+      hostMemoryBytes: details?.hostMemoryBytes ?? null,
+      devices: [],
+    };
+    process.devices.push({
+      gpuUuid,
+      memoryUsedBytes: Math.max(0, memoryUsedMiB) * BYTES_PER_MEBIBYTE,
+    });
+    processes.set(pid, process);
+  }
+  return [...processes.values()].sort(
+    (left, right) => totalGpuMemory(right) - totalGpuMemory(left) || left.pid - right.pid,
+  );
+}
+
+function parseHostProcessDetails(lines: string[]) {
+  const details = new Map<number, HostProcessDetails>();
+  for (const line of lines) {
+    const match = /^\s*(\d+)\s+(\S+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)(?:\s+(.*))?$/.exec(line);
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    const elapsedSeconds = Number(match[3]);
+    const cpuPercent = Number(match[4]);
+    const residentMemoryKiB = Number(match[5]);
+    if (
+      !Number.isInteger(pid) ||
+      pid <= 0 ||
+      !Number.isFinite(elapsedSeconds) ||
+      !Number.isFinite(cpuPercent) ||
+      !Number.isFinite(residentMemoryKiB)
+    ) {
+      continue;
+    }
+    details.set(pid, {
+      username: match[2]!,
+      elapsedSeconds,
+      cpuPercent,
+      hostMemoryBytes: Math.max(0, residentMemoryKiB) * BYTES_PER_KIBIBYTE,
+      processName: match[6]!,
+      command: (match[7] ?? match[6]!).slice(0, 4_096),
+    });
+  }
+  return details;
+}
+
+function totalGpuMemory(process: HostGpuProcess) {
+  return process.devices.reduce((total, device) => total + device.memoryUsedBytes, 0);
 }
 
 function nullableNumber(value: string | undefined) {

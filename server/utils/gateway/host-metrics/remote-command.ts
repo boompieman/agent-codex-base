@@ -1,10 +1,10 @@
 import { shellQuote } from "../infra/ssh/shell";
 
-export function hostMetricsRemoteCommand() {
-  return `sh -lc ${shellQuote(script())}`;
+export function hostMetricsRemoteCommand(includeGpuProcesses: boolean) {
+  return `sh -lc ${shellQuote(script(includeGpuProcesses))}`;
 }
 
-function script() {
+function script(includeGpuProcesses: boolean) {
   return String.raw`
 set -u
 if [ ! -r /proc/stat ] || [ ! -r /proc/meminfo ] || [ ! -r /proc/net/dev ] || [ ! -r /proc/diskstats ]; then
@@ -34,6 +34,23 @@ printf '@@GPU\n'
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi --query-gpu=index,uuid,name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null || true
 fi
+${includeGpuProcesses ? gpuProcessScript() : ""}
 printf '@@END\n'
+`;
+}
+
+function gpuProcessScript() {
+  return String.raw`printf '@@GPU_PROCESS\n'
+if command -v nvidia-smi >/dev/null 2>&1; then
+  gpu_processes="$(nvidia-smi --query-compute-apps=gpu_uuid,pid,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null || true)"
+  printf '%s\n' "$gpu_processes"
+  printf '@@GPU_PROCESS_OS\n'
+  pids="$(printf '%s\n' "$gpu_processes" | awk -F',' '{ gsub(/[[:space:]]/, "", $2); if ($2 ~ /^[0-9]+$/) print $2 }' | sort -nu | paste -sd, -)"
+  if [ -n "$pids" ] && command -v ps >/dev/null 2>&1; then
+    ps -ww -p "$pids" -o pid=,user:64=,etimes=,pcpu=,rss=,comm=,args= 2>/dev/null || true
+  fi
+else
+  printf '@@GPU_PROCESS_OS\n'
+fi
 `;
 }

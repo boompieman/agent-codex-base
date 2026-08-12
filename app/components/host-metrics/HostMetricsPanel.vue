@@ -10,6 +10,7 @@ import { formatByteRate, formatBytes, formatPercent } from "@/utils/host-metrics
 import HostMetricCard from "./HostMetricCard.vue";
 import HostMetricLineChart from "./HostMetricLineChart.client.vue";
 import HostFilesystemList from "./HostFilesystemList.vue";
+import HostGpuProcessList from "./HostGpuProcessList.vue";
 
 const props = defineProps<{ hostId: number }>();
 const root = ref<HTMLElement | null>(null);
@@ -23,6 +24,7 @@ const samples = computed(() => state.value?.samples ?? []);
 const charts = useHostMetricCharts(samples);
 const latest = charts.latest;
 const currentGpus = computed(() => latest.value?.gpus ?? []);
+const gpuProcesses = computed(() => state.value?.gpuProcesses ?? null);
 const lastUpdated = computed(() => latest.value?.sampledAt ?? null);
 useHostMetricsSubscription(root, hostId);
 </script>
@@ -115,6 +117,11 @@ useHostMetricsSubscription(root, hostId);
             />
           </HostMetricCard>
         </div>
+        <HostGpuProcessList
+          :snapshot="gpuProcesses"
+          :gpus="currentGpus"
+          :current-username="host?.username ?? null"
+        />
       </section>
 
       <div

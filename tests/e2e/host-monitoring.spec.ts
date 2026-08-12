@@ -26,7 +26,13 @@ test("streams real Linux Host metrics through the shared realtime connection", a
   await expect(panel.getByTestId("host-metric-network")).toBeVisible();
   await expect(panel.getByTestId("host-metric-disk")).toBeVisible();
   await expect(panel.getByText("实时采集中")).toBeVisible();
-  await expect(panel.getByText("GPU", { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("heading", { name: "GPU", exact: true })).toBeVisible();
+  await expect(panel.getByTestId("host-metric-gpu-0")).toContainText("E2E Training GPU");
+  const gpuProcesses = panel.getByTestId("host-gpu-processes");
+  await expect(gpuProcesses).toBeVisible();
+  await expect(gpuProcesses.getByText("trainer", { exact: true }).first()).toBeVisible();
+  await expect(gpuProcesses.getByText("/usr/local/bin/e2e-gpu-training").first()).toBeVisible();
+  await expect(gpuProcesses.getByText("6.0 GiB").first()).toBeVisible();
   await expect.poll(() => activeRealtimeSocketCount(page)).toBe(1);
 
   const monitorTab = page.getByRole("tab", { name: "主机监控" });
