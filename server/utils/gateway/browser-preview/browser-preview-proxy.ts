@@ -12,10 +12,11 @@ import {
   browserPreviewTargetPort,
   browserPreviewUpstreamConnector,
 } from "./browser-preview-upstream-connector";
+import { runtimeLog } from "../runtime/runtime-log";
 
 const BOOTSTRAP_PATH = "/_gateway/preview/bootstrap";
 const SESSION_PATH = "/_gateway/preview/session";
-const ticketRequestSchema = z.object({ ticket: z.string().min(1) });
+const ticketRequestSchema = z.object({ ticket: z.string().min(1), sessionId: z.uuid() }).strict();
 
 export async function handleBrowserPreviewRequest(
   request: IncomingMessage,
@@ -23,11 +24,15 @@ export async function handleBrowserPreviewRequest(
 ) {
   try {
     const hostname = requestHostname(request);
-    if (request.url === BOOTSTRAP_PATH && request.method === "GET") {
+    // Match only the pathname for Gateway-owned control routes. The bootstrap carries sessionId
+    // in its query string, while ordinary preview requests must retain their complete URL when
+    // forwarded upstream.
+    const pathname = requestPathname(request);
+    if (pathname === BOOTSTRAP_PATH && request.method === "GET") {
       serveBootstrap(response);
       return;
     }
-    if (request.url === SESSION_PATH && request.method === "POST") {
+    if (pathname === SESSION_PATH && request.method === "POST") {
       await exchangeTicket(request, response, hostname);
       return;
     }
@@ -95,12 +100,30 @@ async function proxyHttpRequest(
     request.once("aborted", abortUpstream);
     response.once("close", abortUpstream);
     upstream.on("error", (error) => {
+      logUpstreamFailure(session, request, error);
       if (!response.headersSent) sendText(response, 502, `Remote preview failed: ${error.message}`);
       else response.destroy(error);
       finish();
     });
     if (request.method === "GET" || request.method === "HEAD") upstream.end();
     else request.pipe(upstream);
+  });
+}
+
+function logUpstreamFailure(
+  session: BrowserPreviewSession,
+  request: IncomingMessage,
+  error: Error,
+) {
+  runtimeLog("browser preview upstream failed", {
+    userId: session.userId,
+    hostId: session.host.id,
+    hostName: session.host.name,
+    sessionId: session.sessionId,
+    targetOrigin: session.target.origin,
+    requestMethod: request.method,
+    requestPath: request.url,
+    message: error.message,
   });
 }
 
@@ -180,7 +203,12 @@ async function exchangeTicket(
   hostname: string,
 ) {
   const body = ticketRequestSchema.parse(JSON.parse(await consumeText(request)));
-  const result = browserPreviewManager.exchangeTicket(hostname, body.ticket);
+  const result = browserPreviewManager.exchangeTicket(
+    hostname,
+    body.ticket,
+    body.sessionId,
+    readCookie(request, authCookieName()),
+  );
   if (result === null) {
     sendText(response, 401, "Invalid or expired browser preview ticket");
     return;
@@ -199,12 +227,16 @@ function serveBootstrap(response: ServerResponse) {
   response.setHeader("content-type", "text/html; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(`<!doctype html><meta charset="utf-8"><title>Opening preview</title><script>
-const ticket=location.hash.slice(1);location.hash='';fetch('${SESSION_PATH}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ticket})}).then(async r=>{if(!r.ok)throw new Error(await r.text());return r.json()}).then(({path})=>location.replace(path)).catch(error=>document.body.textContent=error.message)
+const ticket=location.hash.slice(1);const sessionId=new URL(location.href).searchParams.get('sessionId');location.hash='';fetch('${SESSION_PATH}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ticket,sessionId})}).then(async r=>{if(!r.ok)throw new Error(await r.text());return r.json()}).then(({path})=>location.replace(path)).catch(error=>document.body.textContent=error.message)
 </script>`);
 }
 
 function requestHostname(request: IncomingMessage) {
   return (String(request.headers.host ?? "").split(":", 1)[0] ?? "").toLowerCase();
+}
+
+function requestPathname(request: IncomingMessage) {
+  return new URL(request.url ?? "/", "http://browser-preview.invalid").pathname;
 }
 
 export function readPreviewCookie(value: string | undefined) {

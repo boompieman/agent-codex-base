@@ -178,6 +178,7 @@
     "tmuxReasonCancelled": "Cancelled",
     "browserTargetHint": "The address is reached from the selected remote host; localhost refers to that host.",
     "browserFrameBlocked": "The remote page security policy may prevent embedded display.",
+    "browserAddress": "Preview address",
     "allowInsecureTls": "Allow insecure TLS for this preview",
     "openExternally": "Open externally",
     "reload": "Reload",
