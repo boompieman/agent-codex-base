@@ -13,3 +13,11 @@ export interface BrowserPreviewSessionSnapshot extends BrowserPreviewTarget {
   bootstrapUrl: string;
   status: "open" | "closed";
 }
+
+export interface BrowserPreviewResourceFailure {
+  statusCode: number;
+  method: string;
+  path: string;
+  destination: string;
+  occurredAt: string;
+}

@@ -1,6 +1,7 @@
 import type {
   AppServerThread,
   BrowserPreviewSessionSnapshot,
+  BrowserPreviewResourceFailure,
   ThreadHistoryItem,
   ThreadHistoryTurn,
   RealtimeServerMessage,
@@ -50,6 +51,10 @@ export type GatewayDomainEventMap = {
   "realtime-browser-closed": { sessionId: string };
   "realtime-browser-error": { message: string };
   "realtime-browser-frame-warning": { sessionId: string; value: string };
+  "realtime-browser-resource-failed": {
+    sessionId: string;
+    failure: BrowserPreviewResourceFailure;
+  };
   "realtime-notification-published": {
     notification: ServerNotification;
     actionLabel: string;

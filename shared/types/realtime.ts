@@ -9,7 +9,11 @@ import type {
 } from "./thread";
 import type { ApprovalPolicy, ReasoningEffort } from "./thread";
 import type { TerminalOpenTarget, TerminalSessionSnapshot } from "./terminal";
-import type { BrowserPreviewSessionSnapshot, BrowserPreviewTarget } from "./browser";
+import type {
+  BrowserPreviewResourceFailure,
+  BrowserPreviewSessionSnapshot,
+  BrowserPreviewTarget,
+} from "./browser";
 import type { ServerNotification } from "./notifications";
 import type {
   HostGpuProcessSnapshot,
@@ -381,6 +385,11 @@ export type RealtimeServerMessage =
       sessionId: string;
       policy: "x-frame-options" | "content-security-policy";
       value: string;
+    }
+  | {
+      type: "browser.resourceFailed";
+      sessionId: string;
+      failure: BrowserPreviewResourceFailure;
     }
   | {
       type: "error";

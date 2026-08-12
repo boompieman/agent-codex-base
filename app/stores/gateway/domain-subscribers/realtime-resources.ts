@@ -65,6 +65,9 @@ export function registerRealtimeResourceSubscribers() {
   gatewayDomainEvents.on("realtime-browser-frame-warning", ({ sessionId, value }) => {
     useGatewayBrowserStore().setFrameWarning(sessionId, value);
   });
+  gatewayDomainEvents.on("realtime-browser-resource-failed", ({ sessionId, failure }) => {
+    useGatewayBrowserStore().addResourceFailure(sessionId, failure);
+  });
   gatewayDomainEvents.on("realtime-notification-published", ({ notification, actionLabel }) => {
     projectPublishedNotification(notification);
     const action = notificationAction(notification);

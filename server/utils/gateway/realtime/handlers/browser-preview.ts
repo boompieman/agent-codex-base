@@ -79,11 +79,19 @@ export function subscribeBrowserPreviewEvents(peer: RealtimePeer) {
   state.browserPreviewUnsubscribe = browserPreviewEvents.subscribe(
     authenticatedUserId(peer),
     (event) => {
+      if (event.type === "frame-policy") {
+        sendRealtimePeerMessage(peer, {
+          type: "browser.framePolicyWarning",
+          sessionId: event.sessionId,
+          policy: event.policy,
+          value: event.value,
+        });
+        return;
+      }
       sendRealtimePeerMessage(peer, {
-        type: "browser.framePolicyWarning",
+        type: "browser.resourceFailed",
         sessionId: event.sessionId,
-        policy: event.policy,
-        value: event.value,
+        failure: event.failure,
       });
     },
   );

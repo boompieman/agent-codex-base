@@ -17,11 +17,17 @@ const server = createServer((request, response) => {
     response.end("#asset { color: rgb(20, 120, 80); }");
     return;
   }
+  if (request.url === "/missing-preview-entry.js") {
+    response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    response.end("missing preview entry");
+    return;
+  }
   response.setHeader("content-type", "text/html; charset=utf-8");
   response.end(`<!doctype html><meta charset="utf-8"><title>Remote Preview E2E</title>
     <link rel="stylesheet" href="/preview-style.css">
     <h1>remote-preview-page</h1><p id="asset">loading</p><p id="http">loading</p><p id="ws">loading</p>
     <script src="/preview-asset.js"></script>
+    <script src="/missing-preview-entry.js"></script>
     <script>
       fetch('/api/message').then(r=>r.json()).then(({message})=>document.querySelector('#http').textContent=message);
       const socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api/browser-preview/websocket?path=/socket');

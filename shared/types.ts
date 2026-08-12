@@ -34,7 +34,11 @@ export type {
 } from "./types/thread";
 export type { ModelListResult, ModelRecord } from "./types/models";
 export type { TerminalOpenTarget, TerminalScope, TerminalSessionSnapshot } from "./types/terminal";
-export type { BrowserPreviewSessionSnapshot, BrowserPreviewTarget } from "./types/browser";
+export type {
+  BrowserPreviewResourceFailure,
+  BrowserPreviewSessionSnapshot,
+  BrowserPreviewTarget,
+} from "./types/browser";
 export type {
   TmuxMonitor,
   TmuxMonitorCompletionReason,

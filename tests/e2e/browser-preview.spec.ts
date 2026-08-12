@@ -27,6 +27,7 @@ test("opens a real remote HTTP and WebSocket service through the SSH preview pro
   await expect(preview.locator("#asset")).toHaveText("remote-preview-static-asset-ok");
   await expect(preview.locator("#http")).toHaveText("remote-preview-http-ok");
   await expect(preview.locator("#ws")).toHaveText("remote-preview-websocket");
+  await expect(page.getByText("404 GET /missing-preview-entry.js")).toBeVisible();
 
   // Switching thread scopes destroys the keyed Dockview tree. Returning recreates the iframe
   // with its original bootstrap URL, matching normal desktop/mobile workspace navigation.

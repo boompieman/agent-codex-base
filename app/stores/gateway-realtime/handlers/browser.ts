@@ -19,5 +19,7 @@ export function createBrowserRealtimeHandlers(ctx: RealtimeServerMessageHandlerC
     },
     "browser.framePolicyWarning": ({ sessionId, value }) =>
       gatewayDomainEvents.emit("realtime-browser-frame-warning", { sessionId, value }),
+    "browser.resourceFailed": ({ sessionId, failure }) =>
+      gatewayDomainEvents.emit("realtime-browser-resource-failed", { sessionId, failure }),
   } satisfies RealtimeHandlers;
 }

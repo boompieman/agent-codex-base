@@ -553,6 +553,21 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
       .strict(),
     z
       .object({
+        type: z.literal("browser.resourceFailed"),
+        sessionId: nonEmptyString,
+        failure: z
+          .object({
+            statusCode: z.number().int().min(400).max(599),
+            method: nonEmptyString,
+            path: nonEmptyString,
+            destination: nonEmptyString,
+            occurredAt: nonEmptyString,
+          })
+          .strict(),
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal("error"),
         message: z.string(),
         requestId: z.string().optional(),
