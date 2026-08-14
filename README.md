@@ -1,3 +1,5 @@
+
+
 # Codex Gateway
 
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](nuxt.config.ts)
@@ -84,6 +86,7 @@ Core rules:
 ├── app/                       # Nuxt frontend, Pinia store, chat/thread/settings UI
 ├── packages/gateway-ui/       # Precompiled shadcn-vue component package
 ├── packages/gateway-ai-elements/ # Precompiled AI Elements component package
+├── packages/gateway-browser-runtime/ # Precompiled browser runtime and rendering helpers
 ├── server/api/                # Browser-facing HTTP and WebSocket API
 ├── server/tasks/              # Nitro scheduled task entrypoints
 ├── server/utils/gateway/      # SSH, Codex RPC, runtime broker, storage, notifications
