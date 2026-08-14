@@ -59,3 +59,35 @@ export interface RemoteFileWriteResult {
   lastModified: string;
   size: number;
 }
+
+export type RemoteGitFileStatus =
+  | "clean"
+  | "modified"
+  | "added"
+  | "renamed"
+  | "copied"
+  | "untracked"
+  | "conflicted"
+  | "deleted"
+  | "ignored";
+
+export type RemoteGitFileBaseline =
+  | { kind: "head"; revision: string; text: string }
+  | { kind: "empty"; revision: string | null }
+  | { kind: "unavailable"; reason: "ignored" | "tooLarge" };
+
+export type RemoteGitFileComparison =
+  | {
+      availability: "gitUnavailable" | "notRepository" | "outsideWorktree";
+    }
+  | {
+      availability: "available";
+      repositoryRoot: string;
+      relativePath: string;
+      originalPath: string | null;
+      headOid: string | null;
+      status: RemoteGitFileStatus;
+      staged: boolean;
+      unstaged: boolean;
+      baseline: RemoteGitFileBaseline;
+    };

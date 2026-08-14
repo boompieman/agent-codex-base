@@ -713,12 +713,20 @@ test("browses the current thread file workspace from a mobile sheet", async ({
 }) => {
   const { remote } = remoteWorkspace;
   await openApp(page);
-  const { host, project } = await createConfiguredHostAndProject(page, remote);
-  const rootPath = `/home/${remote.username}`;
+  const rootPath = `/home/${remote.username}/mobile-file-project-${Date.now()}`;
+  const { host, project } = await createConfiguredHostAndProject(page, remote, rootPath);
   const path = `${rootPath}/mobile-file-preview-${Date.now()}.md`;
   await execRemoteSsh(
     remote,
-    `printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${shellQuote(path)}`,
+    `set -eu
+mkdir -p ${shellQuote(rootPath)}
+printf '%s\n' '# Mobile File Baseline' 'Committed before the current edit.' > ${shellQuote(path)}
+git -C ${shellQuote(rootPath)} init -q
+git -C ${shellQuote(rootPath)} config user.email codex-gateway-e2e@example.invalid
+git -C ${shellQuote(rootPath)} config user.name 'Codex Gateway E2E'
+git -C ${shellQuote(rootPath)} add -- ${shellQuote(path)}
+git -C ${shellQuote(rootPath)} commit -qm 'test: establish mobile file baseline'
+printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${shellQuote(path)}`,
   );
   const threadId = `mobile-file-thread-${Date.now()}`;
   await seedGatewayThread(page, {
@@ -743,9 +751,19 @@ test("browses the current thread file workspace from a mobile sheet", async ({
   await expect(panel.locator(".markdown-content h1")).toHaveText("Mobile File Workspace");
   await panel.getByRole("button", { name: "源码" }).click();
   await expect(panel.getByTestId("remote-file-editor")).toContainText("Mobile File Workspace");
+  await panel.getByRole("button", { name: "变更", exact: true }).click();
+  await expect(panel.getByTestId("remote-file-diff-editor")).toContainText("Mobile File Baseline");
+  await expect(panel.getByTestId("remote-file-diff-editor")).toContainText("Mobile File Workspace");
   const panelBox = await panel.boundingBox();
   const viewport = page.viewportSize();
   expect(panelBox?.width).toBeLessThanOrEqual(viewport?.width ?? 0);
+  await expect
+    .poll(() =>
+      panel
+        .getByTestId("file-editor-toolbar")
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    )
+    .toBe(true);
 });
 
 async function openIntermediateSteps(page: Page) {
@@ -757,7 +775,11 @@ async function openIntermediateSteps(page: Page) {
   await expect(toggle).toHaveAttribute("data-state", "open");
 }
 
-async function createConfiguredHostAndProject(page: Page, remote: RemoteCodexEnv) {
+async function createConfiguredHostAndProject(
+  page: Page,
+  remote: RemoteCodexEnv,
+  projectPath = remote.projectPath,
+) {
   const host = await authenticatedFetch(
     page,
     {
@@ -783,7 +805,7 @@ async function createConfiguredHostAndProject(page: Page, remote: RemoteCodexEnv
       body: {
         hostId: host.id,
         name: `mobile-longpress-project-${Date.now()}`,
-        remotePath: remote.projectPath,
+        remotePath: projectPath,
       },
     },
     (value) => projectRecordSchema.parse(value),

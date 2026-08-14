@@ -21,6 +21,7 @@ import type {
   HostMetricsSample,
 } from "./host-metrics";
 import type { TmuxSessionsSnapshot } from "./tmux";
+import type { RemoteGitFileComparison } from "./files";
 
 export type RealtimeClientMessage =
   | {
@@ -192,6 +193,13 @@ export type RealtimeClientMessage =
       requestId: string;
       sessionId: string;
       allowInsecureTls: boolean;
+    }
+  | {
+      type: "file.git.compare";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      path: string;
     }
   | {
       type: "ping";
@@ -378,6 +386,14 @@ export type RealtimeServerMessage =
       requestId?: string;
     }
   | { type: "browser.opened"; requestId: string; session: BrowserPreviewSessionSnapshot }
+  | {
+      type: "file.git.comparison";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      path: string;
+      comparison: RemoteGitFileComparison;
+    }
   | { type: "browser.closed"; requestId: string; sessionId: string }
   | { type: "browser.error"; requestId?: string; sessionId?: string; message: string }
   | {

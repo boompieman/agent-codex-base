@@ -220,6 +220,15 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         allowInsecureTls: z.boolean(),
       })
       .strict(),
+    z
+      .object({
+        type: z.literal("file.git.compare"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        path: nonEmptyString,
+      })
+      .strict(),
     z.object({ type: z.literal("ping"), nonce: z.string().optional() }).strict(),
   ],
 );

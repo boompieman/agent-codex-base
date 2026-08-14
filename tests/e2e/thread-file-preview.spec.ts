@@ -11,7 +11,7 @@ test("the unified file workspace browses, restores, and refreshes real remote fi
   const { remote } = remoteWorkspace;
   await openApp(page);
 
-  const projectPath = `/home/${remote.username}`;
+  const projectPath = `/home/${remote.username}/codex-gateway-file-project-${Date.now()}`;
   const remotePath = `${projectPath}/codex-gateway-preview-${Date.now()}.ts`;
   const markdownPath = `${projectPath}/codex-gateway-preview-${Date.now()}.md`;
   const nestedPythonPath = `${projectPath}/deep/prefix/model_${Date.now()}.py`;
@@ -23,6 +23,10 @@ test("the unified file workspace browses, restores, and refreshes real remote fi
   const symlinkTargetPath = `/tmp/codex-gateway-symlink-target-${Date.now()}`;
   const symlinkDirectoryPath = `${projectPath}/linked-training-${Date.now()}`;
   const symlinkChildName = `checkpoint-${Date.now()}.log`;
+  const nestedRepositoryPath = `${projectPath}/nested-repository-${Date.now()}`;
+  const nestedRepositoryFilePath = `${nestedRepositoryPath}/nested-change.ts`;
+  const deletedWorktreeDirectoryPath = `${projectPath}/deleted-after-open-${Date.now()}`;
+  const deletedWorktreeFilePath = `${deletedWorktreeDirectoryPath}/tracked.txt`;
   const wideTable = `| metric | sample-a | sample-b | sample-c |
 | --- | --- | --- | --- |
 | very-long-column | ${"unbroken-value-".repeat(12)}a | ${"unbroken-value-".repeat(12)}b | ${"unbroken-value-".repeat(12)}c |`;
@@ -36,7 +40,7 @@ printf '%s\n' 'linked training checkpoint' > ${shellQuote(`${symlinkTargetPath}/
 ln -sfn ${shellQuote(symlinkTargetPath)} ${shellQuote(symlinkDirectoryPath)}
 cat > ${shellQuote(remotePath)} <<'EOF'
 export function previewMarker() {
-  return "codex-gateway-file-preview";
+  return "codex-gateway-file-baseline";
 }
 EOF
 cat > ${shellQuote(markdownPath)} <<'EOF'
@@ -57,13 +61,35 @@ EOF
 cat > ${shellQuote(outsideWorkspacePath)} <<'EOF'
 outside workspace files still open safely
 EOF
+mkdir -p ${shellQuote(deletedWorktreeDirectoryPath)}
+cat > ${shellQuote(deletedWorktreeFilePath)} <<'EOF'
+tracked file remains open while it is deleted remotely
+EOF
 for line in $(seq 1 120); do printf '# source line %s\n' "$line" >> ${shellQuote(nestedPythonPath)}; done
+git -C ${shellQuote(projectPath)} init -q
+git -C ${shellQuote(projectPath)} config user.email codex-gateway-e2e@example.invalid
+git -C ${shellQuote(projectPath)} config user.name 'Codex Gateway E2E'
+git -C ${shellQuote(projectPath)} add -- ${shellQuote(remotePath)} ${shellQuote(markdownPath)} ${shellQuote(nestedPythonPath)} ${shellQuote(deletedWorktreeFilePath)}
+git -C ${shellQuote(projectPath)} commit -qm 'test: establish file preview baseline'
+cat > ${shellQuote(remotePath)} <<'EOF'
+export function previewMarker() {
+  return "codex-gateway-file-preview";
+}
+EOF
 cat > ${shellQuote(unknownTextPath)} <<'EOF'
 feature_enabled=true
 unknown extensions still render as text
 EOF
 printf '\\000\\001\\002codex-gateway-binary' > ${shellQuote(binaryPath)}
 printf '%s\n' 'long file names stay inside the tree' > ${shellQuote(longFilePath)}
+mkdir -p ${shellQuote(nestedRepositoryPath)}
+git -C ${shellQuote(nestedRepositoryPath)} init -q
+git -C ${shellQuote(nestedRepositoryPath)} config user.email codex-gateway-e2e@example.invalid
+git -C ${shellQuote(nestedRepositoryPath)} config user.name 'Codex Gateway E2E'
+printf '%s\n' 'export const nestedValue = "baseline";' > ${shellQuote(nestedRepositoryFilePath)}
+git -C ${shellQuote(nestedRepositoryPath)} add -- ${shellQuote(nestedRepositoryFilePath)}
+git -C ${shellQuote(nestedRepositoryPath)} commit -qm 'test: establish nested repository baseline'
+printf '%s\n' 'export const nestedValue = "worktree";' > ${shellQuote(nestedRepositoryFilePath)}
 current=${shellQuote(treeStressPath)}
 mkdir -p "$current"
 for level in $(seq -w 1 14); do
@@ -120,7 +146,7 @@ done
               id: "file-preview-md-message",
               type: "agentMessage",
               phase: "final_answer",
-              text: `Open [markdown target](${origin}${markdownPath}), [nested python](${origin}${nestedPythonPath}:2), [outside workspace](${origin}${outsideWorkspacePath}), [unknown text](${origin}${unknownTextPath}), and [binary target](${origin}${binaryPath}).\n\nInline agent formula: \\(E = mc^2\\).\n\n${wideTable}`,
+              text: `Open [markdown target](${origin}${markdownPath}), [nested python](${origin}${nestedPythonPath}:2), [nested repository file](${origin}${nestedRepositoryFilePath}), [deleted worktree file](${origin}${deletedWorktreeFilePath}), [outside workspace](${origin}${outsideWorkspacePath}), [unknown text](${origin}${unknownTextPath}), and [binary target](${origin}${binaryPath}).\n\nInline agent formula: \\(E = mc^2\\).\n\n${wideTable}`,
             },
           ],
         },
@@ -298,6 +324,29 @@ done
   const initialFileTabHeight = (await fileTab(page, remotePath).boundingBox())!.height;
   await expect(panel.getByText("codex-gateway-file-preview")).toBeVisible();
   await expect(panel.getByTestId("remote-file-editor")).toBeVisible();
+  await expect(panel.locator(".cm-gitChangeMarker-modified")).toBeVisible();
+  await panel.getByRole("button", { name: "变更", exact: true }).click();
+  const trackedDiffEditor = panel.getByTestId("remote-file-diff-editor");
+  // CodeMirror's inline merge view inserts deleted text beside the replacement in the DOM.
+  // Assert its semantic decorations instead of concatenated textContent ("baselinepreview").
+  await expect(trackedDiffEditor.locator(".cm-deletedText")).toContainText("baseline");
+  await expect(trackedDiffEditor.locator(".cm-changedText")).toContainText("preview");
+  await panel.getByRole("button", { name: "下一处变更" }).click();
+  await panel.getByRole("button", { name: "源码", exact: true }).click();
+  const trackedSourceEditor = panel.getByTestId("remote-file-editor").locator(".cm-content");
+  await trackedSourceEditor.click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.insertText(
+    'export function previewMarker() {\n  return "codex-gateway-file-baseline";\n}\n',
+  );
+  const trackedSaveResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/remote/files?") && response.request().method() === "PUT",
+  );
+  await page.keyboard.press("ControlOrMeta+S");
+  expect((await trackedSaveResponse).ok()).toBe(true);
+  await expect(panel.getByText("未修改", { exact: true })).toBeVisible();
+  await expect(panel.locator(".cm-gitChangeMarker-modified")).toHaveCount(0);
 
   await page
     .getByTestId("remote-file-tree")
@@ -341,6 +390,38 @@ done
   await expect(panel.locator(".markdown-content .katex-display")).toHaveCount(1);
 
   await agentWorkspaceTab(page).click();
+  await page.getByRole("link", { name: "nested repository file" }).click();
+  await expect(fileTab(page, nestedRepositoryFilePath)).toBeVisible();
+  await expect(panel.getByText('export const nestedValue = "worktree";')).toBeVisible();
+  await expect(panel.getByText("已修改", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "变更", exact: true }).click();
+  const nestedDiffEditor = panel.getByTestId("remote-file-diff-editor");
+  await expect(nestedDiffEditor).toContainText("worktree");
+  // CodeMirror may keep a shared prefix/suffix outside either character-level mark.
+  // Assert the visible worktree value and both change semantics without coupling the
+  // user-flow test to a particular diff chunk boundary.
+  await expect(nestedDiffEditor.locator(".cm-deletedText")).not.toBeEmpty();
+  await expect(nestedDiffEditor.locator(".cm-changedText")).not.toBeEmpty();
+  await fileTab(page, nestedRepositoryFilePath).getByLabel("关闭标签页").click();
+
+  await agentWorkspaceTab(page).click();
+  await page.getByRole("link", { name: "deleted worktree file" }).click();
+  await expect(fileTab(page, deletedWorktreeFilePath)).toBeVisible();
+  await expect(
+    panel.getByText("tracked file remains open while it is deleted remotely"),
+  ).toBeVisible();
+  await execRemoteSsh(remote, `rm -rf -- ${shellQuote(deletedWorktreeDirectoryPath)}`);
+  await panel.getByRole("button", { name: "刷新 Git 变更" }).click();
+  await expect(panel.getByText("已删除", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "变更", exact: true }).click();
+  const deletedDiffEditor = panel.getByTestId("remote-file-diff-editor");
+  await expect(deletedDiffEditor).toContainText(
+    "tracked file remains open while it is deleted remotely",
+  );
+  await expect(deletedDiffEditor.locator(".cm-deletedChunk")).not.toBeEmpty();
+  await fileTab(page, deletedWorktreeFilePath).getByLabel("关闭标签页").click();
+
+  await agentWorkspaceTab(page).click();
   await page.getByRole("link", { name: "nested python" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(fileTab(page, nestedPythonPath)).toBeVisible();
@@ -365,11 +446,18 @@ done
   await expect(fileTab(page, outsideWorkspacePath)).toBeVisible();
   await expect(panel.getByText("outside workspace files still open safely")).toBeVisible();
   await expect(tree.locator("[data-selected]")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "变更", exact: true })).toHaveCount(0);
 
   await agentWorkspaceTab(page).click();
   await page.getByRole("link", { name: "unknown text" }).click();
   await expect(fileTab(page, unknownTextPath)).toBeVisible();
   await expect(panel.getByText("unknown extensions still render as text")).toBeVisible();
+  await expect(panel.getByText("未跟踪", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "变更", exact: true }).click();
+  await expect(panel.getByTestId("remote-file-diff-editor")).toContainText(
+    "unknown extensions still render as text",
+  );
+  await panel.getByRole("button", { name: "源码", exact: true }).click();
 
   await fileTab(page, nestedPythonPath).click();
   await expect
@@ -391,6 +479,10 @@ done
     .poll(async () => (await execRemoteSsh(remote, `cat ${shellQuote(unknownTextPath)}`)).stdout)
     .toContain("saved by tab switch");
 
+  // Host provisioning may still be replacing its progress toast with the success toast here.
+  // Wait for that real UI overlay to leave instead of bypassing pointer hit-testing: a user must
+  // likewise be able to click the file tab only after a notification covering it has closed.
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 45_000 });
   await fileTab(page, unknownTextPath).click();
   await editor.click();
   await page.keyboard.press("ControlOrMeta+A");
@@ -466,6 +558,8 @@ done
   await agentWorkspaceTab(page).click();
   await filesWorkspaceTab(page).click();
   await expect(panel.getByText("remote-file-refreshed")).toBeVisible();
+  await expect(panel.getByText("已修改", { exact: true })).toBeVisible();
+  await expect(panel.locator(".cm-gitChangeMarker-modified")).toBeVisible();
 
   const popupPromise = page.waitForEvent("popup");
   await page.getByTestId("dock-popout-group").last().click();

@@ -312,6 +312,39 @@ const hostGpuProcessSnapshotSchema = z
     ),
   })
   .strict();
+const remoteGitBaselineSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("head"), revision: nonEmptyString, text: z.string() }).strict(),
+  z.object({ kind: z.literal("empty"), revision: z.string().nullable() }).strict(),
+  z.object({ kind: z.literal("unavailable"), reason: z.enum(["ignored", "tooLarge"]) }).strict(),
+]);
+const remoteGitComparisonSchema = z.discriminatedUnion("availability", [
+  z.object({ availability: z.literal("gitUnavailable") }).strict(),
+  z.object({ availability: z.literal("notRepository") }).strict(),
+  z.object({ availability: z.literal("outsideWorktree") }).strict(),
+  z
+    .object({
+      availability: z.literal("available"),
+      repositoryRoot: nonEmptyString,
+      relativePath: nonEmptyString,
+      originalPath: z.string().nullable(),
+      headOid: z.string().nullable(),
+      status: z.enum([
+        "clean",
+        "modified",
+        "added",
+        "renamed",
+        "copied",
+        "untracked",
+        "conflicted",
+        "deleted",
+        "ignored",
+      ]),
+      staged: z.boolean(),
+      unstaged: z.boolean(),
+      baseline: remoteGitBaselineSchema,
+    })
+    .strict(),
+]);
 
 // Top-level Gateway messages are closed protocol objects. Nested app-server thread/envelope
 // records intentionally remain extensible because upstream adds fields between releases; their
@@ -381,6 +414,16 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         hostId: positiveId,
         status: hostMetricsStatusSchema,
         message: z.string().nullable(),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.git.comparison"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        path: nonEmptyString,
+        comparison: remoteGitComparisonSchema,
       })
       .strict(),
     z

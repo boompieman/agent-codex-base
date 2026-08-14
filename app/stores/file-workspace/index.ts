@@ -20,12 +20,14 @@ import {
 } from "./paths";
 import type { RemoteDirectoryState } from "./types";
 import type { FileWorkspaceScope } from "./types";
+import { useFileGitComparisonStore } from "./git";
 
 export { fileWorkspaceScopeKey } from "./paths";
 
 export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace", () => {
   const directories = shallowRef<Record<string, RemoteDirectoryState>>({});
   const directoryLoader = new RemoteDirectoryLoader();
+  const gitComparisons = useFileGitComparisonStore();
   const scopes = useAccountLocalStorage<Record<string, FileWorkspaceScope>>(
     "file-workspace-scopes",
     {},
@@ -129,6 +131,20 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     }
   }
 
+  async function saveDocument(document: Parameters<typeof saveFileDocument>[0], force = false) {
+    const result = await saveFileDocument(document, force);
+    if (result.ok && result.wrote) {
+      void gitComparisons.load(document, true);
+    }
+    return result.ok;
+  }
+
+  async function discardDocumentDraft(document: Parameters<typeof discardFileDocumentDraft>[0]) {
+    const result = await discardFileDocumentDraft(document);
+    void gitComparisons.load(document, true);
+    return result;
+  }
+
   function markRemoteFilesChanged(hostId: number, threadId: string, paths: string[]) {
     const scope = scopeFor(hostId, threadId);
     if (!scope) {
@@ -140,6 +156,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
       const document = documentActions.documentFor(hostId, threadId, path);
       if (document) {
         document.stale = true;
+        gitComparisons.invalidate(document.key);
       }
       for (const parent of parentPaths(path)) {
         const directory = directoryFor(hostId, threadId, parent);
@@ -174,6 +191,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     directoryLoader.reset();
     directories.value = {};
     documentActions.resetRuntime();
+    gitComparisons.reset();
   }
 
   return {
@@ -200,8 +218,8 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     deleteFile,
     markRemoteFilesChanged,
     updateDocumentDraft: updateFileDocumentDraft,
-    saveDocument: saveFileDocument,
-    discardDocumentDraft: discardFileDocumentDraft,
+    saveDocument,
+    discardDocumentDraft,
     resetRuntime,
   };
 });

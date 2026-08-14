@@ -34,6 +34,7 @@ import {
   subscribeTmuxSessions,
   unsubscribeTmuxSessions,
 } from "./handlers/tmux-sessions";
+import { compareGitFile } from "./handlers/file-git";
 
 export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "auth.authenticate": { auth: "public", handler: authenticatePeer },
@@ -64,5 +65,6 @@ export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "browser.open": openBrowserPreview,
   "browser.close": closeBrowserPreview,
   "browser.allowInsecureTls": allowInsecureBrowserPreviewTls,
+  "file.git.compare": compareGitFile,
   ping,
 });
