@@ -12,6 +12,13 @@ export function expectBrowserOpened(message: RealtimeResponseMessage) {
   return message;
 }
 
+export function expectFileGitComparison(message: RealtimeResponseMessage) {
+  if (message.type !== "file.git.comparison") {
+    unexpectedResponse("file.git.comparison", message.type);
+  }
+  return message;
+}
+
 export function expectThreadGoalUpdated(message: RealtimeResponseMessage) {
   if (message.type !== "thread.goal.updated") {
     unexpectedResponse("thread.goal.updated", message.type);

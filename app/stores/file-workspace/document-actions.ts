@@ -8,6 +8,7 @@ import {
 } from "./document-runtime";
 import { fileDocumentKey, fileWorkspaceScopeKey, parentPath } from "./paths";
 import type { FileWorkspaceScope, OpenWorkspaceFileInput } from "./types";
+import { useFileGitComparisonStore } from "./git";
 
 interface FileDocumentActionsOptions {
   scopeFor: (hostId: number, threadId: string) => FileWorkspaceScope | null;
@@ -27,6 +28,7 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
   const filesByKey = shallowRef<Record<string, File | null>>({});
   const viewPositions = ref<Record<string, { left: number; top: number }>>({});
   const loadControllers = new Map<string, AbortController>();
+  const gitComparisons = useFileGitComparisonStore();
 
   async function openFile(input: OpenWorkspaceFileInput) {
     const scope = ensureScope(input);
@@ -46,7 +48,12 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     const scope = options.scopeFor(hostId, threadId);
     if (scope === null || !scope.openPaths.includes(path)) return;
     const current = activeDocumentFor(hostId, threadId);
-    if (current?.dirty === true) await saveFileDocument(current);
+    if (current?.dirty === true) {
+      const result = await saveFileDocument(current);
+      if (result.ok && result.wrote) {
+        void gitComparisons.load(current, true);
+      }
+    }
     scope.activePath = path;
     const document = documentFor(hostId, threadId, path);
     if (document !== null && (document.stale || document.objectUrl === "") && !document.loading) {
@@ -60,6 +67,8 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     const index = scope.openPaths.indexOf(path);
     if (index < 0) return;
     const key = fileDocumentKey(hostId, threadId, path);
+    const document = documents.value[key];
+    if (document !== undefined) gitComparisons.remove(document);
     loadControllers.get(key)?.abort();
     loadControllers.delete(key);
     disposeFileDocument(documents.value[key]);
@@ -101,13 +110,13 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     return filesByKey.value[key] ?? null;
   }
 
-  function viewPositionFor(documentKey: string, view: "source" | "markdown") {
+  function viewPositionFor(documentKey: string, view: "source" | "markdown" | "changes") {
     return viewPositions.value[`${documentKey}:${view}`] ?? { left: 0, top: 0 };
   }
 
   function rememberViewPosition(
     documentKey: string,
-    view: "source" | "markdown",
+    view: "source" | "markdown" | "changes",
     position: { left: number; top: number },
   ) {
     viewPositions.value = { ...viewPositions.value, [`${documentKey}:${view}`]: position };
@@ -169,6 +178,7 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     const existing = documents.value[key];
     if (existing !== undefined) return existing;
     const document = createFileDocument(input);
+    gitComparisons.register(document);
     documents.value = { ...documents.value, [key]: document };
     return document;
   }

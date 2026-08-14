@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { StringDecoder } from "node:string_decoder";
 import { Client, type ClientChannel, type SFTPWrapper } from "ssh2";
 import type {
   CommandResult,
@@ -66,11 +67,15 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
   }
 
   runBackground<Result>(host: HostWithSecret, task: () => Promise<Result>) {
-    const connectionKey = sshConnectionKey(host, resolveSshConfig(host));
+    const connectionKey = this.connectionKeyFor(host);
     // The Client pool itself is keyed by the resolved remote identity and credentials. Use that
     // same key here: two Gateway users with identical credentials share one physical SSH transport,
     // so their best-effort collectors must share its background bulkhead as well.
     return this.backgroundTasks.run(connectionKey, task);
+  }
+
+  connectionKeyFor(host: HostWithSecret) {
+    return sshConnectionKey(host, resolveSshConfig(host));
   }
 
   async exec(
@@ -78,11 +83,18 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
     command: string,
     options: { timeoutMs?: number } = {},
   ): Promise<CommandResult> {
-    const channel = await this.execChannel(host, command);
+    const startedAt = Date.now();
+    const channel = await this.openExecChannelWithin(host, command, options.timeoutMs);
+    const remainingMs =
+      options.timeoutMs === undefined
+        ? undefined
+        : Math.max(0, options.timeoutMs - (Date.now() - startedAt));
 
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
+      const stdoutDecoder = new StringDecoder("utf8");
+      const stderrDecoder = new StringDecoder("utf8");
       let settled = false;
       const finish = (callback: () => void) => {
         if (settled) return;
@@ -91,24 +103,66 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
         callback();
       };
       const timer =
-        options.timeoutMs === undefined
+        remainingMs === undefined
           ? undefined
           : setTimeout(() => {
               finish(() =>
                 reject(new Error(`Remote command timed out after ${options.timeoutMs}ms`)),
               );
               channel.close();
-            }, options.timeoutMs);
+            }, remainingMs);
       channel.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString("utf8");
+        stdout += stdoutDecoder.write(chunk);
       });
       channel.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
+        stderr += stderrDecoder.write(chunk);
       });
       channel.on("error", (error: Error) => finish(() => reject(error)));
       channel.on("close", (code: number | null) => {
-        finish(() => resolve({ code, stdout, stderr }));
+        finish(() => {
+          stdout += stdoutDecoder.end();
+          stderr += stderrDecoder.end();
+          resolve({ code, stdout, stderr });
+        });
       });
+    });
+  }
+
+  private async openExecChannelWithin(
+    host: HostWithSecret,
+    command: string,
+    timeoutMs: number | undefined,
+  ) {
+    if (timeoutMs === undefined) return await this.execChannel(host, command);
+    return await new Promise<ClientChannel>((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        settled = true;
+        reject(new Error(`Remote command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      void this.execChannel(host, command).then(
+        (channel) => {
+          if (settled) {
+            // A timed-out channel request can still be admitted later by ssh2. Close that late
+            // channel so it cannot consume a slot on the shared transport indefinitely.
+            channel.close();
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          resolve(channel);
+        },
+        (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("Failed to open remote command channel", { cause: error }),
+          );
+        },
+      );
     });
   }
 
@@ -122,8 +176,10 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
     return new Promise((resolve, reject) => {
       client.exec(command, (error, channel) => {
         if (error) {
-          this.disconnectHost(host);
+          // Channel admission failures such as MaxSessions do not mean the shared transport died.
+          // Disconnecting here would also tear down App Server, terminals, and file operations.
           if (!retried && isConnectionLevelSshError(error)) {
+            this.disconnectHost(host);
             void this.execChannel(host, command, true).then(resolve, reject);
             return;
           }
@@ -151,8 +207,10 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
         },
         (error, channel) => {
           if (error) {
-            this.disconnectHost(host);
+            // Keep the shared connection for channel-local failures; only transport errors justify
+            // reconnecting every service that shares this Client.
             if (!retried && isConnectionLevelSshError(error)) {
+              this.disconnectHost(host);
               void this.openShell(host, options, true).then(resolve, reject);
               return;
             }

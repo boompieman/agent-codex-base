@@ -121,6 +121,12 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   );
 
   const backgroundThreadId = await remoteWorkspace.startThread(project.id);
+  // startThread resolves from the App Server response before Vue has necessarily committed the
+  // route and browser-local last-open selection. Capture storage only after the user-visible
+  // selection has settled, otherwise the second browser can legitimately restore the prior tab.
+  await expect
+    .poll(async () => currentSelectedThreadId(page), { timeout: 30_000 })
+    .toBe(backgroundThreadId);
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
   });

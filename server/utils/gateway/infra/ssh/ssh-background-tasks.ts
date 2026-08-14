@@ -1,4 +1,4 @@
-import pLimit, { type LimitFunction } from "p-limit";
+import { KeyedTaskLimiter } from "../concurrency/keyed-task-limiter";
 
 /**
  * Per-connection bulkhead for best-effort SSH work.
@@ -9,30 +9,9 @@ import pLimit, { type LimitFunction } from "p-limit";
  * background concurrency is the dependable isolation mechanism.
  */
 export class SshBackgroundTaskScheduler {
-  private readonly limits = new Map<string, LimitFunction>();
+  private readonly limiter = new KeyedTaskLimiter(1);
 
   async run<Result>(connectionKey: string, task: () => Promise<Result>) {
-    const limit = this.limitFor(connectionKey);
-    try {
-      return await limit(task);
-    } finally {
-      queueMicrotask(() => {
-        if (
-          this.limits.get(connectionKey) === limit &&
-          limit.activeCount === 0 &&
-          limit.pendingCount === 0
-        ) {
-          this.limits.delete(connectionKey);
-        }
-      });
-    }
-  }
-
-  private limitFor(connectionKey: string) {
-    const existing = this.limits.get(connectionKey);
-    if (existing !== undefined) return existing;
-    const limit = pLimit(1);
-    this.limits.set(connectionKey, limit);
-    return limit;
+    return await this.limiter.run(connectionKey, task);
   }
 }

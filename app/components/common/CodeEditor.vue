@@ -2,7 +2,7 @@
 import { basicSetup } from "codemirror";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Compartment, EditorState } from "@codemirror/state";
-import type { Extension } from "@codemirror/state";
+import type { Extension, StateCommand } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
 import { useEventListener } from "@vueuse/core";
 import { cn } from "@codex-gateway/ui/utils";
@@ -47,6 +47,7 @@ const editorView = shallowRef<EditorView | null>(null);
 const languageCompartment = new Compartment();
 const editableCompartment = new Compartment();
 const placeholderCompartment = new Compartment();
+const customExtensionsCompartment = new Compartment();
 const syncingFromEditor = ref(false);
 const editorClass = computed(() =>
   cn("min-h-0 flex-1 overflow-hidden rounded-md border border-input bg-surface", props.class),
@@ -139,6 +140,22 @@ watch(
   },
 );
 
+watch(
+  () => props.extensions,
+  (extensions) => {
+    editorView.value?.dispatch({
+      effects: customExtensionsCompartment.reconfigure(extensions),
+    });
+  },
+);
+
+function runCommand(command: StateCommand) {
+  const view = editorView.value;
+  return view === null ? false : command(view);
+}
+
+defineExpose({ runCommand });
+
 function editorExtensions(): Extension[] {
   return [
     basicSetup,
@@ -147,7 +164,7 @@ function editorExtensions(): Extension[] {
     editableCompartment.of(EditorView.editable.of(!props.readOnly)),
     placeholderCompartment.of(props.placeholder ? placeholderExtension(props.placeholder) : []),
     ...(props.lineWrapping ? [EditorView.lineWrapping] : []),
-    ...props.extensions,
+    customExtensionsCompartment.of(props.extensions),
     keymap.of([
       {
         key: "Mod-s",

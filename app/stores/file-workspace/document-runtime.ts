@@ -108,11 +108,13 @@ export function updateFileDocumentDraft(document: FilePreviewDocument, value: st
 }
 
 export async function saveFileDocument(document: FilePreviewDocument, force = false) {
-  if (document.previewKind !== "text" || (!document.dirty && !force)) return true;
+  if (document.previewKind !== "text" || (!document.dirty && !force)) {
+    return { ok: true, wrote: false } as const;
+  }
   const lock = saveLocks.get(document.key) ?? new Mutex();
   saveLocks.set(document.key, lock);
   return lock.runExclusive(async () => {
-    if (!document.dirty && !force) return true;
+    if (!document.dirty && !force) return { ok: true, wrote: false } as const;
     document.saving = true;
     document.saveError = null;
     const textToSave = document.draftText;
@@ -131,14 +133,14 @@ export async function saveFileDocument(document: FilePreviewDocument, force = fa
       document.lastModified = result.lastModified;
       document.size = result.size;
       document.stale = false;
-      return true;
+      return { ok: true, wrote: true } as const;
     } catch (error) {
       if (error instanceof RemoteFileConflictError) {
         document.conflict = { remoteEtag: "", remoteLastModified: null };
       } else {
         document.saveError = error instanceof Error ? error.message : String(error);
       }
-      return false;
+      return { ok: false, wrote: false } as const;
     } finally {
       document.saving = false;
     }

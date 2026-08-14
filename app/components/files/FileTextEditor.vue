@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { EyeIcon, FileCodeIcon, Loader2Icon, SaveIcon } from "@lucide/vue";
+import { computed, ref, toRef, watch } from "vue";
+import type { StateCommand } from "@codemirror/state";
+import { goToNextChunk, goToPreviousChunk } from "@codemirror/merge";
 import type { FilePreviewDocument } from "~~/shared/types";
-import { isMarkdownPreviewPath } from "~~/shared/file-preview";
+import { isMarkdownPreviewPath, MAX_EDITABLE_FILE_BYTES } from "~~/shared/file-preview";
 import CodeEditor from "@/components/common/CodeEditor.vue";
-import { Button } from "@codex-gateway/ui/button";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { codeEditorLanguageForPath } from "@/utils/code-editor-extensions";
 import { fileEditorExtensions } from "@/utils/file-editor-extensions";
+import { gitQuickDiffExtension, gitUnifiedDiffExtension } from "@/utils/code-editor-git-diff";
+import { useFileGitComparison } from "@/composables/files/useFileGitComparison";
 import FileMarkdownPreview from "./FileMarkdownPreview.vue";
-
-const MAX_EDITABLE_FILE_BYTES = 5 * 1024 * 1024;
-type MarkdownMode = "source" | "preview";
+import FileEditorToolbar, { type FileEditorMode } from "./FileEditorToolbar.vue";
 
 const props = defineProps<{ document: FilePreviewDocument }>();
 const emit = defineEmits<{ conflict: [] }>();
@@ -20,109 +20,104 @@ const editable = computed(() => (props.document.size ?? 0) <= MAX_EDITABLE_FILE_
 const markdown = computed(() =>
   isMarkdownPreviewPath(props.document.path, props.document.contentType),
 );
-const markdownMode = ref<MarkdownMode>(defaultMode(props.document));
+const mode = ref<FileEditorMode>(defaultMode(props.document));
 const language = computed(() => codeEditorLanguageForPath(props.document.path));
+const editorRef = ref<{ runCommand: (command: StateCommand) => boolean } | null>(null);
+const git = useFileGitComparison(toRef(props, "document"));
+const gitState = git.state;
+const gitHasChanges = git.hasChanges;
+const gitVisible = computed(() => git.available.value);
+const gitStatus = git.status;
+const editorExtensions = computed(() => {
+  const baseline = git.baselineText.value;
+  if (baseline === null) return fileEditorExtensions;
+  return [
+    ...fileEditorExtensions,
+    ...(mode.value === "changes"
+      ? [gitUnifiedDiffExtension(baseline)]
+      : [gitQuickDiffExtension(baseline)]),
+  ];
+});
 const draft = computed({
   get: () => props.document.draftText,
   set: (value) => fileWorkspace.updateDocumentDraft(props.document, value),
+});
+const editorValue = computed({
+  get: () => (mode.value === "changes" ? git.currentText.value : draft.value),
+  set: (value) => {
+    draft.value = value;
+  },
 });
 
 // Dockview keeps this editor mounted while file tabs change. Reset only when the
 // displayed document changes so Markdown opens rendered, while a user's explicit
 // source/preview choice remains stable for the current document.
 watch([() => props.document.path, () => props.document.contentType], () => {
-  markdownMode.value = defaultMode(props.document);
+  mode.value = defaultMode(props.document);
 });
 
-function defaultMode(document: FilePreviewDocument): MarkdownMode {
+watch(git.hasChanges, (hasChanges) => {
+  if (!hasChanges && mode.value === "changes") mode.value = "source";
+});
+
+function defaultMode(document: FilePreviewDocument): FileEditorMode {
   return isMarkdownPreviewPath(document.path, document.contentType) ? "preview" : "source";
 }
 
 function save() {
   if (editable.value) void fileWorkspace.saveDocument(props.document);
 }
+
+function runDiffCommand(command: StateCommand) {
+  editorRef.value?.runCommand(command);
+}
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface">
-    <div
-      class="flex min-h-10 shrink-0 items-center gap-2 border-b border-hairline bg-canvas-soft/60 px-3"
-    >
-      <div
-        v-if="markdown"
-        class="flex items-center rounded-md border border-hairline bg-surface p-0.5"
-      >
-        <Button
-          size="sm"
-          :variant="markdownMode === 'source' ? 'secondary' : 'ghost'"
-          class="h-7 gap-1.5 px-2"
-          @click="markdownMode = 'source'"
-        >
-          <FileCodeIcon class="size-3.5" />
-          {{ $t("app.fileSource") }}
-        </Button>
-        <Button
-          size="sm"
-          :variant="markdownMode === 'preview' ? 'secondary' : 'ghost'"
-          class="h-7 gap-1.5 px-2"
-          @click="markdownMode = 'preview'"
-        >
-          <EyeIcon class="size-3.5" />
-          {{ $t("app.fileRenderedPreview") }}
-        </Button>
-      </div>
-      <div class="ml-auto flex min-w-0 items-center gap-2 text-xs text-ink-muted">
-        <span v-if="!editable" class="truncate text-accent-orange-deep">
-          {{ $t("app.fileTooLargeToEdit") }}
-        </span>
-        <span v-else-if="document.saving" class="flex items-center gap-1.5">
-          <Loader2Icon class="size-3.5 animate-spin" />{{ $t("app.savingFile") }}
-        </span>
-        <span
-          v-else-if="document.saveError"
-          class="max-w-64 truncate text-destructive"
-          :title="document.saveError"
-        >
-          {{ document.saveError }}
-        </span>
-        <button
-          v-else-if="document.conflict"
-          type="button"
-          class="text-destructive underline underline-offset-2"
-          @click="emit('conflict')"
-        >
-          {{ $t("app.fileConflict") }}
-        </button>
-        <span v-else-if="document.dirty">{{ $t("app.fileUnsaved") }}</span>
-        <span v-else>{{ $t("app.fileSaved") }}</span>
-        <Button
-          v-if="editable"
-          variant="ghost"
-          size="icon"
-          class="size-7"
-          :disabled="document.saving || !document.dirty"
-          :title="$t('app.saveFile')"
-          @click="save"
-        >
-          <SaveIcon class="size-3.5" />
-        </Button>
-      </div>
-    </div>
-    <FileMarkdownPreview v-if="markdown && markdownMode === 'preview'" :document="document" />
+    <FileEditorToolbar
+      :document="document"
+      :mode="mode"
+      :markdown="markdown"
+      :editable="editable"
+      :git-visible="gitVisible"
+      :git-loading="gitState.loading"
+      :git-error="gitState.error"
+      :git-status="gitStatus"
+      :git-unavailable-reason="git.unavailableReason.value"
+      :changes-available="gitHasChanges"
+      @update:mode="mode = $event"
+      @conflict="emit('conflict')"
+      @save="save"
+      @refresh-git="git.refresh()"
+      @previous-change="runDiffCommand(goToPreviousChunk)"
+      @next-change="runDiffCommand(goToNextChunk)"
+    />
+    <FileMarkdownPreview v-if="markdown && mode === 'preview'" :document="document" />
     <CodeEditor
       v-else
-      v-model="draft"
-      test-id="remote-file-editor"
+      :key="mode"
+      ref="editorRef"
+      v-model="editorValue"
+      :test-id="mode === 'changes' ? 'remote-file-diff-editor' : 'remote-file-editor'"
       class="rounded-none border-0"
       :language="language"
-      :extensions="fileEditorExtensions"
+      :extensions="editorExtensions"
       :read-only="!editable"
       :line-wrapping="false"
       :reveal-line="document.line"
-      :initial-scroll-position="fileWorkspace.viewPositionFor(document.key, 'source')"
+      :initial-scroll-position="
+        fileWorkspace.viewPositionFor(document.key, mode === 'changes' ? 'changes' : 'source')
+      "
       @blur="save"
       @save="save"
-      @scroll-position="fileWorkspace.rememberViewPosition(document.key, 'source', $event)"
+      @scroll-position="
+        fileWorkspace.rememberViewPosition(
+          document.key,
+          mode === 'changes' ? 'changes' : 'source',
+          $event,
+        )
+      "
     />
   </div>
 </template>

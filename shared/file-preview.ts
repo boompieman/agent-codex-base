@@ -37,3 +37,5 @@ export function isMarkdownPreviewPath(path: string, contentType = "") {
     contentType.includes("markdown")
   );
 }
+export const MAX_EDITABLE_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_GIT_DIFF_BYTES = 2 * 1024 * 1024;
