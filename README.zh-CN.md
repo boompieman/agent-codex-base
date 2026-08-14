@@ -32,6 +32,74 @@ Codex Gateway 是一个面向官方 Codex app-server 的 Web 前端与连接网�
 - 需要人工检查或修复远端环境时，可以在 agent loop 旁边直接打开 SSH 终端。
 - 无需发布远端端口，即可在隔离的浏览器面板中预览远端 Web 应用。
 - 可以跨全部主机监控 tmux 中的训练、推理等长任务，并在 pane 退出或回到 shell 时及时收到通知。
+- 不离开对话工作区，就能查看 CPU、内存、网络、磁盘和 GPU 运行状态。
+
+## 功能一览
+
+以下界面均来自真实 Playwright E2E 环境。点击图片可查看完整尺寸。
+
+### Codex 工作流
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/zh/goal-progress.png"><img src="docs/images/features/zh/goal-progress.png" alt="包含目标内容、推进时间、Token 用量和控制操作的目标详情" width="100%"></a><br>
+      <strong>Goal 生命周期</strong><br>
+      <sub>同步 app-server 目标进度，并可编辑目标、暂停或恢复执行、停止和清除目标。</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/zh/plan-mode.png"><img src="docs/images/features/zh/plan-mode.png" alt="包含结构化实施计划和操作按钮的 Plan 模式" width="100%"></a><br>
+      <strong>Plan 模式</strong><br>
+      <sub>查看结构化计划，继续规划，或直接进入实施阶段。</sub>
+    </td>
+  </tr>
+</table>
+
+### 远端工作区
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/zh/file-workspace.png"><img src="docs/images/features/zh/file-workspace.png" alt="包含远端文件树和 Markdown 渲染预览的可停靠文件工作区" width="100%"></a><br>
+      <strong>文件、编辑与预览</strong><br>
+      <sub>在 Agent 旁浏览远端文件树、编辑文本，并预览 Markdown、LaTeX、图片、PDF 和 Office 文档。</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/zh/browser-preview.png"><img src="docs/images/features/zh/browser-preview.png" alt="包含 HTTP、WebSocket 和资源错误诊断的远端浏览器预览" width="100%"></a><br>
+      <strong>远端浏览器预览</strong><br>
+      <sub>通过 SSH 打开 Host 内部 Web 服务，完整转发同源 HTTP/WebSocket 请求，并直接展示资源错误。</sub>
+    </td>
+  </tr>
+</table>
+
+### 运维与通知
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/zh/host-monitoring.png"><img src="docs/images/features/zh/host-monitoring.png" alt="CPU、内存、网络和磁盘实时监控曲线" width="100%"></a><br>
+      <strong>主机实时指标</strong><br>
+      <sub>通过 Gateway 共享实时连接持续采集 CPU、内存、网络和磁盘指标。</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/zh/gpu-process-monitoring.png"><img src="docs/images/features/zh/gpu-process-monitoring.png" alt="GPU 指标和进程归属表格" width="100%"></a><br>
+      <strong>GPU 进程归属</strong><br>
+      <sub>查看利用率、温度、显存，以及远端训练任务的用户、PID、用时、内存和命令。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/zh/tmux-monitoring.png"><img src="docs/images/features/zh/tmux-monitoring.png" alt="集中展示多主机 session、pane 和活动任务的 tmux 监控" width="100%"></a><br>
+      <strong>跨主机 tmux 监控</strong><br>
+      <sub>集中发现 pane、查看近期输出，并选择监控当前一次运行或后续每次运行。</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/zh/notifications.png"><img src="docs/images/features/zh/notifications.png" alt="可直接打开对应会话的任务完成通知" width="100%"></a><br>
+      <strong>浏览器与 Bark 通知</strong><br>
+      <sub>接收去重后的完成通知，并直接跳转到对应对话或 tmux pane。</sub>
+    </td>
+  </tr>
+</table>
 
 ## 架构
 
@@ -64,12 +132,13 @@ Browser
 - **Codex runtime 管理**：检测远端 Codex 版本，升级旧版本，重启 stale app-server，并自动重连。
 - **会话发现与恢复**：从远端状态发现 Codex 会话，打开 thread 时优先加载较小的缓存 turn 窗口。
 - **实时 turn**：通过 WebSocket 发起新 turn、steer 运行中的 turn、中断 active turn，并响应 app-server 动态请求。
-- **Plan 和 Goal 模式**：斜杠命令支持 Codex plan mode 和 goal progress，并在输入框上方展示 token/耗时状态。
+- **Plan 和 Goal 模式**：查看并执行结构化计划；设置、编辑、暂停、恢复、停止或清除 app-server goal，并在输入框和详情弹窗中查看 token/耗时进度。
 - **Agent loop UI**：展示思考、命令执行、终端等待、文件编辑、流式 diff、图片、上下文压缩、sleep、MCP/tool 调用、通知和子代理侧边栏。
 - **可停靠 IDE 工作区**：Agent、Files、Terminal、Browser 和 Sub-agent 面板支持分屏、缩放、浮动和弹出窗口，并按对话在本地保存布局。
 - **远程文件工作区**：浏览当前项目文件树、编辑文本文件，并直接预览 Markdown、代码、图片、PDF 和 Office 文件，无需先下载。
 - **远程终端 tab**：基于 `@xterm/xterm` 打开独立 SSH PTY 终端，和 agent loop 并排显示；终端 session 按用户和 host 隔离。
-- **远程浏览器 tab**：通过 SSH 在 Dockview 中预览 Host 上的 `localhost` HTTP/HTTPS 应用，同时代理 WebSocket，不需要额外暴露 Gateway 端口。
+- **远程浏览器 tab**：通过 SSH 在 Dockview 中预览 Host 上的 `localhost` HTTP/HTTPS 应用，完整代理同源资源和 WebSocket，不需要额外暴露 Gateway 端口；资源失败会直接显示在预览界面中。
+- **主机与 GPU 可观测性**：通过共享实时连接采集 CPU、内存、网络、磁盘、GPU 利用率、温度和显存指标；GPU 进程表会标明远端用户、PID、运行时间、内存和命令。
 - **用户级 tmux 监控**：集中扫描所有已配置 Host 的 tmux session，查看最新 pane 输出，并把监控绑定到相关 Codex thread。一次性监控会在当前任务退出或回到 shell 时通知；永久监控会等待后续任务再次运行，并在每次运行结束后通知。活动监控和历史记录持久化到 SQLite。
 - **多客户端同步**：多个浏览器 tab 打开同一个 thread 时，通过 Gateway 接收同一条 app-server 事件流。
 - **状态修复**：SSH/app-server 重连后，Gateway 会刷新 running thread 状态；Nitro 定时任务也会扫描 stale running thread。

@@ -32,6 +32,74 @@ The goal is simple: open Codex sessions from many servers in a browser while kee
 - Open a direct SSH terminal next to the agent loop when you need to inspect or fix the remote environment manually.
 - Preview remote web applications in an isolated Browser panel without publishing their ports.
 - Monitor long-running training or inference jobs in tmux across all hosts and get notified when a pane exits or returns to its shell.
+- Watch CPU, memory, network, disk, and GPU activity without leaving the conversation workspace.
+
+## Feature Tour
+
+These views are captured from the real Playwright E2E environment. Select any image to open it at full resolution.
+
+### Codex workflows
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/en/goal-progress.png"><img src="docs/images/features/en/goal-progress.png" alt="Goal details with objective, elapsed time, token usage, and controls" width="100%"></a><br>
+      <strong>Goal lifecycle</strong><br>
+      <sub>Track app-server goal progress, edit the objective, pause or resume execution, and clear completed work.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/en/plan-mode.png"><img src="docs/images/features/en/plan-mode.png" alt="Plan mode with a structured implementation plan and actions" width="100%"></a><br>
+      <strong>Plan mode</strong><br>
+      <sub>Review a structured plan, continue planning, or move directly into implementation.</sub>
+    </td>
+  </tr>
+</table>
+
+### Remote workspace
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/en/file-workspace.png"><img src="docs/images/features/en/file-workspace.png" alt="Dockable file workspace with a remote tree and rendered Markdown preview" width="100%"></a><br>
+      <strong>Files, editing, and previews</strong><br>
+      <sub>Browse remote trees, edit text, and preview Markdown, LaTeX, images, PDF, and Office documents beside the agent.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/en/browser-preview.png"><img src="docs/images/features/en/browser-preview.png" alt="Remote browser preview with HTTP, WebSocket, and resource diagnostics" width="100%"></a><br>
+      <strong>Remote browser preview</strong><br>
+      <sub>Open a Host's private web service through SSH with full-origin HTTP/WebSocket forwarding and visible resource errors.</sub>
+    </td>
+  </tr>
+</table>
+
+### Operations and notifications
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/en/host-monitoring.png"><img src="docs/images/features/en/host-monitoring.png" alt="Live CPU, memory, network, and disk monitoring charts" width="100%"></a><br>
+      <strong>Live host metrics</strong><br>
+      <sub>Stream CPU, memory, network, and disk telemetry over the shared Gateway realtime connection.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/en/gpu-process-monitoring.png"><img src="docs/images/features/en/gpu-process-monitoring.png" alt="GPU metrics and process ownership table" width="100%"></a><br>
+      <strong>GPU process attribution</strong><br>
+      <sub>Inspect utilization, temperature, VRAM, users, PIDs, runtimes, and commands for remote training jobs.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/features/en/tmux-monitoring.png"><img src="docs/images/features/en/tmux-monitoring.png" alt="Cross-host tmux monitor with sessions, panes, and active jobs" width="100%"></a><br>
+      <strong>Cross-host tmux monitoring</strong><br>
+      <sub>Discover panes, inspect recent output, and monitor one run or every future run from one user-wide view.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/images/features/en/notifications.png"><img src="docs/images/features/en/notifications.png" alt="Actionable conversation completion notification" width="100%"></a><br>
+      <strong>Browser and Bark notifications</strong><br>
+      <sub>Receive de-duplicated completion alerts and open the matching conversation or tmux pane directly.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Architecture
 
@@ -64,12 +132,13 @@ Core rules:
 - **Codex runtime management**: detects remote Codex versions, upgrades old installs, restarts stale app-server processes, and reconnects automatically.
 - **Thread discovery and restore**: discovers Codex sessions from remote state and opens threads with a small cached turn window first.
 - **Realtime turns**: start new turns, steer running turns, interrupt active turns, and answer app-server dynamic requests over WebSocket.
-- **Plan and goal modes**: slash commands expose Codex plan mode and goal progress, including token/time status in the composer.
+- **Plan and goal modes**: review and execute structured plans; set, edit, pause, resume, stop, or clear app-server goals with token/time progress in the composer and details dialog.
 - **Agent loop UI**: reasoning, command execution, terminal waits, file edits, streaming diffs, images, context compaction, sleep, MCP/tool calls, notifications, and sub-agent side panels.
 - **Dockable IDE workspace**: split, resize, float, or pop out Agent, Files, Terminal, Browser, and Sub-agent panels with per-thread layouts persisted locally.
 - **Remote file workspace**: browse the current project's file tree, edit text files, and preview Markdown, code, images, PDF, and Office files without downloading them first.
 - **Remote terminal tabs**: open independent SSH PTY terminals beside the agent loop with `@xterm/xterm`; terminal sessions are isolated per user and host.
-- **Remote browser tabs**: preview a Host's `localhost` HTTP/HTTPS application in Dockview through SSH, including WebSocket traffic, without exposing an additional Gateway port.
+- **Remote browser tabs**: preview a Host's `localhost` HTTP/HTTPS application in Dockview through SSH, including full-origin resources and WebSocket traffic, without exposing an additional Gateway port. Per-resource failures are reported inside the preview.
+- **Host and GPU observability**: stream CPU, memory, network, disk, GPU utilization, temperature, and VRAM metrics over the shared realtime connection. GPU process tables identify the remote user, PID, runtime, memory, and command behind each workload.
 - **User-wide tmux monitoring**: scan tmux sessions across every configured Host, inspect recent pane output, and bind a monitor to the relevant Codex thread. One-shot monitors notify when the current job exits or returns to its shell; permanent monitors wait for later runs and notify after each completed run. Active monitors and history are persisted in SQLite.
 - **Multi-client sync**: multiple browser tabs can subscribe to the same thread and receive the same gateway-side app-server event stream.
 - **State repair**: after SSH/app-server reconnect, Gateway refreshes running thread state; a Nitro scheduled task also checks stale running threads.
