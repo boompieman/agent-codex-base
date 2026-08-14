@@ -56,6 +56,16 @@ watch([() => props.document.path, () => props.document.contentType], () => {
   mode.value = defaultMode(props.document);
 });
 
+watch(
+  () => props.document.requestedView,
+  (requestedView) => {
+    if (requestedView === null) return;
+    mode.value = requestedView;
+    fileWorkspace.consumeDocumentViewRequest(props.document);
+  },
+  { immediate: true },
+);
+
 watch(git.hasChanges, (hasChanges) => {
   if (!hasChanges && mode.value === "changes") mode.value = "source";
 });

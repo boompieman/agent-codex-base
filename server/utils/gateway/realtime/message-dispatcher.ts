@@ -58,6 +58,9 @@ export class RealtimeMessageDispatcher {
       .with({ type: "file.git.compare" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
+      .with({ type: "file.git.workspace.inspect" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "host.lifecycle.unsubscribe" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )

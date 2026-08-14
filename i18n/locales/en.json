@@ -62,6 +62,13 @@
     "fileGitRefresh": "Refresh Git changes",
     "fileGitPreviousChange": "Previous change",
     "fileGitNextChange": "Next change",
+    "fileGitExpandAll": "Expand all change folders",
+    "fileGitCollapseAll": "Collapse all change folders",
+    "fileGitWorkspaceUnavailable": "The workspace is not inside a Git repository",
+    "fileGitDescendantChanges": "{count} changed files in this folder",
+    "fileGitSelectChange": "Select a changed file to review",
+    "fileGitOpenReview": "Open full change review",
+    "fileGitReviewTab": "Review Changes",
     "fileGitStatus": {
       "clean": "Unmodified",
       "modified": "Modified",

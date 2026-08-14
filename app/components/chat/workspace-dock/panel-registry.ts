@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   BotIcon,
   FilesIcon,
+  GitCompareArrowsIcon,
   GlobeIcon,
   MonitorIcon,
   TerminalIcon,
@@ -24,6 +25,12 @@ export const workspacePanelRegistry = {
     dynamic: false,
   },
   files: { component: "WorkspaceDockFilesPanel", icon: FilesIcon, closable: false, dynamic: false },
+  gitReview: {
+    component: "WorkspaceDockGitReviewPanel",
+    icon: GitCompareArrowsIcon,
+    closable: true,
+    dynamic: true,
+  },
   terminal: {
     component: "WorkspaceDockTerminalPanel",
     icon: TerminalIcon,

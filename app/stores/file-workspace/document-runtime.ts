@@ -35,6 +35,7 @@ export function createFileDocument(input: OpenWorkspaceFileInput) {
     etag: null,
     lastModified: null,
     stale: true,
+    requestedView: input.view ?? null,
   });
 }
 

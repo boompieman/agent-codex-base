@@ -229,6 +229,15 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         path: nonEmptyString,
       })
       .strict(),
+    z
+      .object({
+        type: z.literal("file.git.workspace.inspect"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        rootPath: nonEmptyString,
+      })
+      .strict(),
     z.object({ type: z.literal("ping"), nonce: z.string().optional() }).strict(),
   ],
 );

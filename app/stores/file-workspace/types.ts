@@ -25,4 +25,5 @@ export interface OpenWorkspaceFileInput {
   threadId: string;
   path: string;
   line?: number | null;
+  view?: "source" | "changes";
 }

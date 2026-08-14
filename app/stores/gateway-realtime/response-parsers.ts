@@ -19,6 +19,13 @@ export function expectFileGitComparison(message: RealtimeResponseMessage) {
   return message;
 }
 
+export function expectFileGitWorkspaceSnapshot(message: RealtimeResponseMessage) {
+  if (message.type !== "file.git.workspace.snapshot") {
+    unexpectedResponse("file.git.workspace.snapshot", message.type);
+  }
+  return message;
+}
+
 export function expectThreadGoalUpdated(message: RealtimeResponseMessage) {
   if (message.type !== "thread.goal.updated") {
     unexpectedResponse("thread.goal.updated", message.type);

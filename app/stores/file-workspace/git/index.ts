@@ -3,131 +3,145 @@ import { reactive, shallowRef } from "vue";
 import { MAX_EDITABLE_FILE_BYTES } from "~~/shared/file-preview";
 import type { FilePreviewDocument, RemoteGitFileComparison } from "~~/shared/types";
 import { compareRemoteGitFile } from "./transport";
-import type { FileGitComparisonState } from "./types";
+import type { FileGitComparisonState, FileGitComparisonTarget } from "./types";
 
 export const useFileGitComparisonStore = defineStore("file-git-comparisons", () => {
   const states = shallowRef<Record<string, FileGitComparisonState>>({});
-  const owners = new Map<string, FilePreviewDocument>();
   const requestTokens = new Map<string, symbol>();
   const pendingLoads = new Map<string, Promise<FileGitComparisonState>>();
 
-  function register(document: FilePreviewDocument): FileGitComparisonState {
-    if (owners.get(document.key) === document) return stateFor(document);
-    supersede(document.key);
-    pendingLoads.delete(document.key);
-    owners.set(document.key, document);
-    const state = createState(document.key);
-    states.value = { ...states.value, [document.key]: state };
+  function register(document: FilePreviewDocument) {
+    return document.projectId === null
+      ? stateForUnavailableDocument(document.key)
+      : stateForTarget(target(document));
+  }
+
+  function stateFor(document: FilePreviewDocument) {
+    return register(document);
+  }
+
+  function stateForTarget(input: FileGitComparisonTarget) {
+    const key = comparisonKey(input);
+    const existing = states.value[key];
+    if (existing !== undefined) return existing;
+    const state = createState(key);
+    states.value = { ...states.value, [key]: state };
     return state;
   }
 
-  function stateFor(document: FilePreviewDocument): FileGitComparisonState {
-    const owner = owners.get(document.key);
-    if (owner === undefined) return register(document);
-    const existing = states.value[document.key];
-    if (existing === undefined) return register(document);
-    return existing;
+  function stateForUnavailableDocument(documentKey: string) {
+    const key = `unavailable:${documentKey}`;
+    const existing = states.value[key];
+    if (existing !== undefined) return existing;
+    const state = createState(key);
+    states.value = { ...states.value, [key]: state };
+    return state;
   }
 
-  function load(document: FilePreviewDocument, force = false): Promise<FileGitComparisonState> {
+  function load(document: FilePreviewDocument, force = false) {
     const state = stateFor(document);
-    // File keys are stable across close/reopen, but each document object is one lifecycle
-    // generation. Late save/load continuations from a closed generation must never invalidate or
-    // replace the comparison owned by the reopened editor.
-    if (owners.get(document.key) !== document) return Promise.resolve(state);
-    if (force) invalidate(document.key);
-    if (!canCompare(document)) {
-      supersede(document.key);
+    if (!canCompare(document) || document.projectId === null) {
       clearResult(state);
       state.stale = false;
       state.loading = false;
       return Promise.resolve(state);
     }
+    return loadTarget(target(document), force);
+  }
+
+  function loadTarget(
+    input: FileGitComparisonTarget,
+    force = false,
+  ): Promise<FileGitComparisonState> {
+    const state = stateForTarget(input);
+    if (force) invalidateTarget(input);
     if (!force && state.loaded && !state.stale) return Promise.resolve(state);
-    const pending = pendingLoads.get(document.key);
+    const pending = pendingLoads.get(state.key);
     if (pending !== undefined) {
-      // A save or remote file event can invalidate an in-flight request. Wait for its SSH channel
-      // to close, then start one fresh comparison instead of opening competing exec channels.
-      return pending.then(() => (state.stale ? load(document) : state));
+      // One path has one browser-side comparison request regardless of whether the Files editor or
+      // the review panel asked first. Invalidations wait for that request to settle before issuing
+      // a fresh read, matching the server's per-host SSH singleflight.
+      return pending.then(() => (state.stale ? loadTarget(input) : state));
     }
 
-    const token = Symbol(document.key);
-    requestTokens.set(document.key, token);
+    const token = Symbol(state.key);
+    requestTokens.set(state.key, token);
     state.loading = true;
     state.error = null;
-    const operation = performLoad(document, state, token);
     let tracked: Promise<FileGitComparisonState>;
-    tracked = operation.finally(() => {
-      if (pendingLoads.get(document.key) === tracked) pendingLoads.delete(document.key);
+    tracked = performLoad(input, state, token).finally(() => {
+      if (pendingLoads.get(state.key) === tracked) pendingLoads.delete(state.key);
     });
-    pendingLoads.set(document.key, tracked);
+    pendingLoads.set(state.key, tracked);
     return tracked;
   }
 
   async function performLoad(
-    document: FilePreviewDocument,
+    input: FileGitComparisonTarget,
     state: FileGitComparisonState,
     token: symbol,
   ) {
     try {
-      const comparison = await compareRemoteGitFile({
-        hostId: document.hostId,
-        projectId: document.projectId!,
-        path: document.path,
-      });
-      if (requestTokens.get(document.key) !== token) return state;
+      const comparison = await compareRemoteGitFile(input);
+      if (requestTokens.get(state.key) !== token) return state;
       state.comparison = comparison;
       state.baselineText = baselineText(comparison);
       state.loaded = true;
       state.stale = false;
       return state;
     } catch (error: unknown) {
-      if (requestTokens.get(document.key) !== token) return state;
+      if (requestTokens.get(state.key) !== token) return state;
       state.error = error instanceof Error ? error.message : String(error);
       state.stale = true;
       return state;
     } finally {
-      if (requestTokens.get(document.key) === token) {
-        requestTokens.delete(document.key);
+      if (requestTokens.get(state.key) === token) {
+        requestTokens.delete(state.key);
         state.loading = false;
       }
     }
   }
 
-  function invalidate(key: string) {
-    const state = states.value[key];
-    if (state !== undefined) state.stale = true;
-    supersede(key);
+  function invalidate(document: FilePreviewDocument) {
+    if (document.projectId !== null) invalidateTarget(target(document));
   }
 
-  function supersede(key: string) {
+  function invalidateTarget(input: FileGitComparisonTarget) {
+    const key = comparisonKey(input);
+    const state = states.value[key];
+    if (state !== undefined) state.stale = true;
     requestTokens.delete(key);
   }
 
-  function remove(document: FilePreviewDocument) {
-    if (owners.get(document.key) !== document) return;
-    owners.delete(document.key);
-    supersede(document.key);
-    // Closing a file ends the UI lifecycle of its request. The WebSocket response may still arrive,
-    // but a quick reopen must create a loading state and a fresh generation instead of waiting on
-    // an invisible promise owned by the removed document. Server-side singleflight deduplicates the
-    // underlying SSH comparison while both generations overlap.
-    pendingLoads.delete(document.key);
-    if (states.value[document.key] === undefined) return;
-    const next = { ...states.value };
-    delete next[document.key];
-    states.value = next;
-  }
-
   function reset() {
-    owners.clear();
     requestTokens.clear();
     pendingLoads.clear();
     states.value = {};
   }
 
-  return { states, register, stateFor, load, invalidate, remove, reset };
+  return {
+    states,
+    register,
+    stateFor,
+    stateForTarget,
+    load,
+    loadTarget,
+    invalidate,
+    invalidateTarget,
+    reset,
+  };
 });
+
+function target(document: FilePreviewDocument): FileGitComparisonTarget {
+  if (document.projectId === null) {
+    throw new Error("A project is required to compare a remote Git file");
+  }
+  return { hostId: document.hostId, projectId: document.projectId, path: document.path };
+}
+
+function comparisonKey(input: FileGitComparisonTarget) {
+  return `${input.hostId}:${input.projectId}:${input.path}`;
+}
 
 function createState(key: string) {
   return reactive<FileGitComparisonState>({

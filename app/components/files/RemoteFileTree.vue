@@ -5,6 +5,7 @@ import { computed, nextTick, ref, useTemplateRef } from "vue";
 import type { RemoteDirectoryEntry } from "~~/shared/types";
 import { Button } from "@codex-gateway/ui/button";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
+import { useFileGitWorkspace } from "@/composables/files/useFileGitWorkspace";
 import RemoteFileDeleteDialog from "./RemoteFileDeleteDialog.vue";
 import RemoteFileTreeRow from "./RemoteFileTreeRow.vue";
 import { useRemoteFileTreeActions } from "./useRemoteFileTreeActions";
@@ -19,6 +20,7 @@ interface FileTreeNode {
 
 const props = defineProps<{
   hostId: number;
+  projectId: number | null;
   threadId: string;
   rootPath: string;
   visible: boolean;
@@ -29,6 +31,11 @@ const emit = defineEmits<{
 }>();
 
 const fileWorkspace = useGatewayFileWorkspaceStore();
+const gitWorkspace = useFileGitWorkspace({
+  hostId: () => props.hostId,
+  projectId: () => props.projectId,
+  rootPath: () => props.rootPath,
+});
 const fileActions = useRemoteFileTreeActions({
   hostId: () => props.hostId,
   threadId: () => props.threadId,
@@ -173,6 +180,12 @@ function fileTreeNode(value: unknown) {
           :key="item._id"
           :node="fileTreeNode(item.value)"
           :level="item.level"
+          :git-status="gitWorkspace.changeForPath(fileTreeNode(item.value).path)?.status ?? null"
+          :descendant-change-count="
+            fileTreeNode(item.value).type === 'directory'
+              ? gitWorkspace.descendantChangeCount(fileTreeNode(item.value).path)
+              : 0
+          "
           @download="fileActions.downloadFile"
           @copy-path="fileActions.copyAbsolutePath"
           @delete="fileActions.requestDelete"

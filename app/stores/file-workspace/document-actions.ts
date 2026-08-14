@@ -40,6 +40,7 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     };
     const document = ensureDocument(input);
     document.line = input.line ?? document.line;
+    document.requestedView = input.view ?? document.requestedView;
     document.updatedAt = Date.now();
     if (document.objectUrl === "" && !document.loading) await loadDocument(document);
   }
@@ -67,8 +68,8 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     const index = scope.openPaths.indexOf(path);
     if (index < 0) return;
     const key = fileDocumentKey(hostId, threadId, path);
-    const document = documents.value[key];
-    if (document !== undefined) gitComparisons.remove(document);
+    // Git comparisons are path-scoped and may still be rendered by the Changes review panel.
+    // Closing one editor owns only its document; page-level resetRuntime clears shared baselines.
     loadControllers.get(key)?.abort();
     loadControllers.delete(key);
     disposeFileDocument(documents.value[key]);
@@ -120,6 +121,10 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     position: { left: number; top: number },
   ) {
     viewPositions.value = { ...viewPositions.value, [`${documentKey}:${view}`]: position };
+  }
+
+  function consumeDocumentViewRequest(document: FilePreviewDocument) {
+    document.requestedView = null;
   }
 
   async function restoreScopeDocuments(hostId: number, threadId: string) {
@@ -203,6 +208,7 @@ export function createFileDocumentActions(options: FileDocumentActionsOptions) {
     fileForDocument,
     viewPositionFor,
     rememberViewPosition,
+    consumeDocumentViewRequest,
     restoreScopeDocuments,
     reloadDocument,
     revalidateActiveFile,

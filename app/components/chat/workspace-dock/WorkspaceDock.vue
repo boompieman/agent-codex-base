@@ -36,6 +36,7 @@ const {
   browserPanels,
   tmuxPanels,
   hostMetricsPanel,
+  gitReviewPanel,
   fileWorkspaceRoot,
 } = useWorkspacePanels({
   selectedHostId: workspace.selectedHostId,
@@ -49,6 +50,7 @@ const panels = useWorkspaceDockPanels({
   browserPanels,
   tmuxPanels,
   hostMetricsPanel,
+  gitReviewPanel,
   scopeKey,
 });
 const fileRequestScopeKey = computed(() =>
@@ -62,6 +64,7 @@ const panelIds = computed(() => [
   browserPanels.value.map(({ id }) => id),
   tmuxPanels.value.map(({ id }) => id),
   hostMetricsPanel.value.map(({ id }) => id),
+  gitReviewPanel.value.map(({ id }) => id),
 ]);
 const browserDialogOpen = ref(false);
 const dockviewHost = ref<HTMLElement | null>(null);

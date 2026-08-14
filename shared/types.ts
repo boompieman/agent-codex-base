@@ -80,6 +80,8 @@ export type {
   RemoteGitFileBaseline,
   RemoteGitFileComparison,
   RemoteGitFileStatus,
+  RemoteGitWorkspaceFile,
+  RemoteGitWorkspaceSnapshot,
   RemoteDirectoryEntry,
   RemoteDirectoryResult,
   UploadedFileRecord,

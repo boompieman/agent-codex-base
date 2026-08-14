@@ -24,3 +24,23 @@ export async function compareGitFile(
     comparison,
   });
 }
+
+export async function inspectGitWorkspace(
+  peer: RealtimePeer,
+  request: Extract<RealtimeClientMessage, { type: "file.git.workspace.inspect" }>,
+) {
+  const host = requireRecord(hostStore.getWithSecret(request.hostId), "Host not found");
+  const project = requireRecord(projectStore.get(request.projectId), "Project not found");
+  if (project.hostId !== host.id) {
+    throw new Error(`Project ${project.id} does not belong to host ${host.id}`);
+  }
+  const snapshot = await remoteGitFiles.inspectWorkspace(host, project, request.rootPath);
+  sendRealtimePeerMessage(peer, {
+    type: "file.git.workspace.snapshot",
+    requestId: request.requestId,
+    hostId: host.id,
+    projectId: project.id,
+    rootPath: request.rootPath,
+    snapshot,
+  });
+}

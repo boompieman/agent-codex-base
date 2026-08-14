@@ -21,6 +21,7 @@ import {
 import type { RemoteDirectoryState } from "./types";
 import type { FileWorkspaceScope } from "./types";
 import { useFileGitComparisonStore } from "./git";
+import { useFileGitWorkspaceStore } from "./git/workspace";
 
 export { fileWorkspaceScopeKey } from "./paths";
 
@@ -28,6 +29,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
   const directories = shallowRef<Record<string, RemoteDirectoryState>>({});
   const directoryLoader = new RemoteDirectoryLoader();
   const gitComparisons = useFileGitComparisonStore();
+  const gitWorkspaces = useFileGitWorkspaceStore();
   const scopes = useAccountLocalStorage<Record<string, FileWorkspaceScope>>(
     "file-workspace-scopes",
     {},
@@ -129,12 +131,14 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
       directory.stale = true;
       await loadDirectory(hostId, threadId, directoryPath, true);
     }
+    invalidateGitWorkspace(hostId, threadId);
   }
 
   async function saveDocument(document: Parameters<typeof saveFileDocument>[0], force = false) {
     const result = await saveFileDocument(document, force);
     if (result.ok && result.wrote) {
       void gitComparisons.load(document, true);
+      invalidateGitWorkspace(document.hostId, document.threadId);
     }
     return result.ok;
   }
@@ -142,6 +146,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
   async function discardDocumentDraft(document: Parameters<typeof discardFileDocumentDraft>[0]) {
     const result = await discardFileDocumentDraft(document);
     void gitComparisons.load(document, true);
+    invalidateGitWorkspace(document.hostId, document.threadId);
     return result;
   }
 
@@ -150,13 +155,20 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     if (!scope) {
       return;
     }
+    if (scope.projectId !== null) {
+      gitWorkspaces.invalidate({
+        hostId: scope.hostId,
+        projectId: scope.projectId,
+        rootPath: scope.rootPath,
+      });
+    }
     const directoriesToRefresh = new Set<string>();
     for (const sourcePath of paths) {
       const path = absolutePath(scope.rootPath, sourcePath);
       const document = documentActions.documentFor(hostId, threadId, path);
       if (document) {
         document.stale = true;
-        gitComparisons.invalidate(document.key);
+        gitComparisons.invalidate(document);
       }
       for (const parent of parentPaths(path)) {
         const directory = directoryFor(hostId, threadId, parent);
@@ -181,6 +193,16 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     return state;
   }
 
+  function invalidateGitWorkspace(hostId: number, threadId: string) {
+    const scope = scopeFor(hostId, threadId);
+    if (scope?.projectId === null || scope?.projectId === undefined) return;
+    gitWorkspaces.invalidate({
+      hostId: scope.hostId,
+      projectId: scope.projectId,
+      rootPath: scope.rootPath,
+    });
+  }
+
   function clearScopeDirectories(scope: string) {
     directories.value = Object.fromEntries(
       Object.entries(directories.value).filter(([key]) => !key.startsWith(`${scope}:`)),
@@ -192,6 +214,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     directories.value = {};
     documentActions.resetRuntime();
     gitComparisons.reset();
+    gitWorkspaces.reset();
   }
 
   return {
@@ -207,6 +230,7 @@ export const useGatewayFileWorkspaceStore = defineStore("gateway-file-workspace"
     fileForDocument: documentActions.fileForDocument,
     viewPositionFor: documentActions.viewPositionFor,
     rememberViewPosition: documentActions.rememberViewPosition,
+    consumeDocumentViewRequest: documentActions.consumeDocumentViewRequest,
     restoreScope,
     reloadDocument: documentActions.reloadDocument,
     revalidateActiveFile: documentActions.revalidateActiveFile,

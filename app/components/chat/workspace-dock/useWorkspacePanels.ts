@@ -18,6 +18,8 @@ import {
 import type { WorkspacePanelSelection } from "./types";
 import { useGatewayHostMetricsPanelStore } from "@/stores/gateway-host-metrics/panels";
 import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
+import { useFileGitReviewPanelStore } from "@/stores/file-workspace/git/review-panel";
+import { GIT_REVIEW_WORKSPACE_PANEL_ID } from "@/stores/gateway/workspace-panels";
 import { HOST_METRICS_WORKSPACE_PANEL_ID } from "@/stores/gateway/workspace-panels";
 
 export function useWorkspacePanels(selection: WorkspacePanelSelection) {
@@ -28,6 +30,7 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
   const browserStore = useGatewayBrowserStore();
   const tmuxStore = useGatewayTmuxStore();
   const hostMetricsPanels = useGatewayHostMetricsPanelStore();
+  const gitReviewPanels = useFileGitReviewPanelStore();
   const { terminalSessions } = storeToRefs(terminalStore);
   const { threadViews, currentThread, visibleSubAgentPanels } = storeToRefs(threadView);
 
@@ -95,6 +98,14 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
       ? [{ id: HOST_METRICS_WORKSPACE_PANEL_ID, hostId }]
       : [];
   });
+  const gitReviewPanel = computed(() => {
+    const scopeKey = workspaceLayoutScopeKey(
+      selection.selectedHostId.value,
+      selection.selectedProjectId.value,
+      selection.selectedThreadId.value,
+    );
+    return gitReviewPanels.isOpen(scopeKey) ? [{ id: GIT_REVIEW_WORKSPACE_PANEL_ID }] : [];
+  });
 
   const fileWorkspaceRoot = computed(() => {
     const cwd = currentThread.value?.cwd ?? "";
@@ -108,6 +119,7 @@ export function useWorkspacePanels(selection: WorkspacePanelSelection) {
     browserPanels,
     tmuxPanels,
     hostMetricsPanel,
+    gitReviewPanel,
     fileWorkspaceRoot,
   };
 }
