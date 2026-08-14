@@ -47,6 +47,7 @@ export interface FilePreviewDocument {
   etag: string | null;
   lastModified: string | null;
   stale: boolean;
+  requestedView: "source" | "changes" | null;
 }
 
 export interface RemoteFileConflict {
@@ -90,4 +91,25 @@ export type RemoteGitFileComparison =
       staged: boolean;
       unstaged: boolean;
       baseline: RemoteGitFileBaseline;
+    };
+
+export interface RemoteGitWorkspaceFile {
+  relativePath: string;
+  originalPath: string | null;
+  status: Exclude<RemoteGitFileStatus, "clean" | "ignored">;
+  staged: boolean;
+  unstaged: boolean;
+}
+
+export type RemoteGitWorkspaceSnapshot =
+  | {
+      availability: "gitUnavailable" | "notRepository" | "outsideWorktree";
+    }
+  | {
+      availability: "available";
+      repositoryRoot: string;
+      workspaceRelativePath: string;
+      headOid: string | null;
+      branch: string | null;
+      files: RemoteGitWorkspaceFile[];
     };

@@ -169,7 +169,14 @@ export function useWorkspaceDockLifecycle(options: {
   );
   watch(
     () => workspaceLayout.panelActivationRequest,
-    (request) => request && activate(request.panelId),
+    (request) => {
+      if (!request || !api.value) return;
+      // Dynamic panels are represented by domain stores, while activation is a layout request.
+      // Both updates are synchronous, but their Vue watchers are not ordered. Reconcile here before
+      // activation so opening a panel never depends on the panel-list watcher winning that race.
+      options.reconcile(api.value);
+      activate(request.panelId);
+    },
   );
   watch(
     () => fileWorkspace.workspaceOpenRequest,

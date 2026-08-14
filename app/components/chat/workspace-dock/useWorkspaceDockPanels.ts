@@ -15,6 +15,7 @@ import {
 import { workspaceDockPanelParamsFromUnknown, type WorkspaceDockPanelParams } from "./types";
 import { workspacePanelPolicy } from "./panel-registry";
 import { useGatewayHostMetricsPanelStore } from "@/stores/gateway-host-metrics/panels";
+import { useFileGitReviewPanelStore } from "@/stores/file-workspace/git/review-panel";
 
 interface PanelDefinition {
   id: string;
@@ -34,6 +35,7 @@ export function useWorkspaceDockPanels(options: {
   browserPanels: ComputedRef<Array<{ id: string; panel: { panelId: string; title: string } }>>;
   tmuxPanels: ComputedRef<Array<{ id: string }>>;
   hostMetricsPanel: ComputedRef<Array<{ id: string; hostId: number }>>;
+  gitReviewPanel: ComputedRef<Array<{ id: string }>>;
   scopeKey: ComputedRef<string>;
 }) {
   const { t } = useI18n();
@@ -43,6 +45,7 @@ export function useWorkspaceDockPanels(options: {
   const browserStore = useGatewayBrowserStore();
   const tmuxStore = useGatewayTmuxStore();
   const hostMetricsPanels = useGatewayHostMetricsPanelStore();
+  const gitReviewPanels = useFileGitReviewPanelStore();
 
   function definitions(): PanelDefinition[] {
     const panels: PanelDefinition[] = [
@@ -62,6 +65,12 @@ export function useWorkspaceDockPanels(options: {
       });
     }
     panels.push(
+      ...options.gitReviewPanel.value.map(({ id }) => ({
+        id,
+        title: t("app.fileGitReviewTab"),
+        component: workspacePanelPolicy("gitReview").component,
+        params: { kind: "gitReview" as const },
+      })),
       ...options.terminalPanels.value.map(({ id, session }) => ({
         id,
         title: session.title,
@@ -200,6 +209,12 @@ export function useWorkspaceDockPanels(options: {
       case "hostMetrics":
         hostMetricsPanels.close(options.scopeKey.value);
         break;
+      case "gitReview":
+        gitReviewPanels.close(options.scopeKey.value);
+        // Source-control review is launched from Files. Returning there is deterministic on both
+        // desktop and locked mobile Dockview; the generic dynamic-panel fallback prefers Agent.
+        workspaceLayout.requestPanelActivation(FILES_WORKSPACE_PANEL_ID);
+        return;
       case "agent":
       case "files":
         return;

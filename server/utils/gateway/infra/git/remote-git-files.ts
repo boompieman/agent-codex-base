@@ -4,6 +4,7 @@ import type {
   RemoteGitFileBaseline,
   RemoteGitFileComparison,
   RemoteGitFileStatus,
+  RemoteGitWorkspaceSnapshot,
 } from "~~/shared/types";
 import { MAX_GIT_DIFF_BYTES } from "~~/shared/file-preview";
 import { remoteLoginShellCommand } from "../ssh/remote-command";
@@ -11,8 +12,12 @@ import { shellQuote } from "../ssh/shell";
 import type { SshConnectionPool } from "../ssh/ssh-connection";
 import type { HostWithSecret } from "../ssh/ssh-types";
 import { KeyedTaskLimiter } from "../concurrency/keyed-task-limiter";
+import { parseGitStatusRecords } from "./git-status-parser";
 
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
+const MAX_GIT_METADATA_OUTPUT_BYTES = 256 * 1024;
+const MAX_GIT_WORKSPACE_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_GIT_WORKSPACE_FILES = 20_000;
 
 interface GitMetadata {
   repositoryRoot: string;
@@ -27,6 +32,7 @@ interface GitMetadata {
 
 export class RemoteGitFileService {
   private readonly pending = new Map<string, Promise<RemoteGitFileComparison>>();
+  private readonly pendingWorkspace = new Map<string, Promise<RemoteGitWorkspaceSnapshot>>();
   private readonly transportLimiter = new KeyedTaskLimiter(2);
 
   constructor(private readonly ssh: SshConnectionPool) {}
@@ -50,7 +56,9 @@ export class RemoteGitFileService {
     const signal = AbortSignal.timeout(GIT_COMMAND_TIMEOUT_MS);
     let tracked: Promise<RemoteGitFileComparison>;
     tracked = this.transportLimiter
-      .run(transportKey, () => this.compareOnce(host, projectPath, path, deadline), { signal })
+      .run(transportKey, () => this.compareOnce(host, projectPath, path, deadline, signal), {
+        signal,
+      })
       .catch((error: unknown) => {
         if (signal.aborted) {
           throw new Error(`Remote Git comparison timed out after ${GIT_COMMAND_TIMEOUT_MS}ms`, {
@@ -66,28 +74,97 @@ export class RemoteGitFileService {
     return await tracked;
   }
 
+  async inspectWorkspace(
+    host: HostWithSecret,
+    project: ProjectRecord,
+    requestedRootPath: string,
+  ): Promise<RemoteGitWorkspaceSnapshot> {
+    const rootPath = posix.normalize(requestedRootPath.trim());
+    const projectPath = posix.normalize(project.remotePath.trim());
+    if (!rootPath.startsWith("/") || !projectPath.startsWith("/")) {
+      return { availability: "outsideWorktree" };
+    }
+    const transportKey = this.ssh.connectionKeyFor(host);
+    const requestKey = `${transportKey}\0${projectPath}\0${rootPath}`;
+    const existing = this.pendingWorkspace.get(requestKey);
+    if (existing !== undefined) return await existing;
+
+    const signal = AbortSignal.timeout(GIT_COMMAND_TIMEOUT_MS);
+    const deadline = Date.now() + GIT_COMMAND_TIMEOUT_MS;
+    let tracked: Promise<RemoteGitWorkspaceSnapshot>;
+    tracked = this.transportLimiter
+      .run(
+        transportKey,
+        () => this.inspectWorkspaceOnce(host, projectPath, rootPath, deadline, signal),
+        { signal },
+      )
+      .catch((error: unknown) => {
+        if (signal.aborted) {
+          throw new Error(
+            `Remote Git workspace inspection timed out after ${GIT_COMMAND_TIMEOUT_MS}ms`,
+            {
+              cause: error,
+            },
+          );
+        }
+        throw error;
+      })
+      .finally(() => {
+        if (this.pendingWorkspace.get(requestKey) === tracked) {
+          this.pendingWorkspace.delete(requestKey);
+        }
+      });
+    this.pendingWorkspace.set(requestKey, tracked);
+    return await tracked;
+  }
+
   private async compareOnce(
     host: HostWithSecret,
     projectPath: string,
     path: string,
     deadline: number,
+    signal: AbortSignal,
   ) {
     const result = await this.ssh.exec(host, metadataCommand(projectPath, path), {
       timeoutMs: remainingTimeout(deadline),
+      signal,
+      maxOutputBytes: MAX_GIT_METADATA_OUTPUT_BYTES,
     });
     if (result.code !== 0) {
       throw new Error(result.stderr.trim() || "Failed to inspect remote Git file state");
     }
     const parsed = parseMetadata(result.stdout);
     if (parsed.availability !== "available") return parsed;
-    const baseline = await this.readBaseline(host, parsed.metadata, deadline);
+    const baseline = await this.readBaseline(host, parsed.metadata, deadline, signal);
     return comparisonFromMetadata(parsed.metadata, baseline);
+  }
+
+  private async inspectWorkspaceOnce(
+    host: HostWithSecret,
+    projectPath: string,
+    rootPath: string,
+    deadline: number,
+    signal: AbortSignal,
+  ): Promise<RemoteGitWorkspaceSnapshot> {
+    const result = await this.ssh.exec(host, workspaceCommand(projectPath, rootPath), {
+      timeoutMs: remainingTimeout(deadline),
+      signal,
+      // Porcelain output is machine-readable but unbounded. A generated directory with hundreds of
+      // thousands of untracked files must fail as one inspection instead of exhausting Gateway
+      // memory or producing a WebSocket frame that the browser cannot safely materialize.
+      maxOutputBytes: MAX_GIT_WORKSPACE_OUTPUT_BYTES,
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr.trim() || "Failed to inspect remote Git workspace");
+    }
+    return parseWorkspaceSnapshot(result.stdout);
   }
 
   private async readBaseline(
     host: HostWithSecret,
     metadata: GitMetadata,
     deadline: number,
+    signal: AbortSignal,
   ): Promise<RemoteGitFileBaseline> {
     if (metadata.status === "ignored") {
       return { kind: "unavailable", reason: "ignored" };
@@ -102,6 +179,8 @@ export class RemoteGitFileService {
     const object = `${metadata.headOid}:${objectPath}`;
     const result = await this.ssh.exec(host, baselineCommand(metadata.repositoryRoot, object), {
       timeoutMs: remainingTimeout(deadline),
+      signal,
+      maxOutputBytes: MAX_GIT_DIFF_BYTES,
     });
     if (result.code === 45) return { kind: "empty", revision: metadata.headOid };
     if (result.code === 46) return { kind: "unavailable", reason: "tooLarge" };
@@ -341,54 +420,20 @@ function statusMetadata(
       null,
     );
   }
-  const kind = record[0];
-  const parts = record.split(" ");
-  const xy = parts[1] ?? "..";
-  const staged = xy[0] !== ".";
-  const unstaged = xy[1] !== ".";
-  if (kind === "u") {
-    return baseMetadata(
-      repositoryRoot,
-      relativePath,
-      headOid,
-      fileSize,
-      "conflicted",
-      staged,
-      unstaged,
-      null,
-    );
+  const statusRecord = parseGitStatusRecords(records)[0];
+  if (statusRecord === undefined) {
+    throw new Error("Remote Git status did not describe the requested changed file");
   }
-  if (kind === "2") {
-    const code = xy.includes("R") ? "renamed" : "copied";
-    return baseMetadata(
-      repositoryRoot,
-      relativePath,
-      headOid,
-      fileSize,
-      code,
-      staged,
-      unstaged,
-      records[1] === undefined || records[1] === "" ? null : records[1],
-    );
-  }
-  if (kind !== "1") throw new Error("Remote Git status returned an unsupported record");
-  const status = statusFromXY(xy);
   return baseMetadata(
     repositoryRoot,
     relativePath,
     headOid,
     fileSize,
-    status,
-    staged,
-    unstaged,
-    null,
+    statusRecord.status,
+    statusRecord.staged,
+    statusRecord.unstaged,
+    statusRecord.originalPath,
   );
-}
-
-function statusFromXY(xy: string): RemoteGitFileStatus {
-  if (xy.includes("D")) return "deleted";
-  if (xy.includes("A")) return "added";
-  return "modified";
 }
 
 function baseMetadata(
@@ -410,5 +455,92 @@ function baseMetadata(
     status,
     staged,
     unstaged,
+  };
+}
+
+function workspaceCommand(projectPath: string, rootPath: string) {
+  const script = `
+set -eu
+project_path=$1
+requested_root_path=$2
+if ! command -v git >/dev/null 2>&1; then
+  printf 'gitUnavailable\\0'
+  exit 0
+fi
+if [ "$project_path" != / ]; then
+  case "$requested_root_path" in
+    "$project_path"|"$project_path"/*) ;;
+    *) printf 'outsideWorktree\\0'; exit 0 ;;
+  esac
+fi
+if ! cd -- "$requested_root_path" 2>/dev/null; then
+  printf 'outsideWorktree\\0'
+  exit 0
+fi
+physical_root=$(pwd -P)
+repo_root=$(GIT_OPTIONAL_LOCKS=0 git --no-optional-locks -C "$physical_root" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$repo_root" ]; then
+  printf 'notRepository\\0'
+  exit 0
+fi
+repo_root=$(cd -- "$repo_root" && pwd -P)
+head_oid=$(GIT_OPTIONAL_LOCKS=0 git --no-optional-locks -C "$repo_root" rev-parse --verify HEAD 2>/dev/null || true)
+branch=$(GIT_OPTIONAL_LOCKS=0 git --no-optional-locks -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+if [ "$repo_root" = "$physical_root" ]; then
+  workspace_relative=
+else
+  case "$physical_root" in
+    "$repo_root"/*) workspace_relative=\${physical_root#"$repo_root"/} ;;
+    *) printf 'outsideWorktree\\0'; exit 0 ;;
+  esac
+fi
+printf 'available\\0%s\\0%s\\0%s\\0%s\\0' "$repo_root" "$workspace_relative" "$head_oid" "$branch"
+if [ -n "$workspace_relative" ]; then
+  GIT_OPTIONAL_LOCKS=0 git --no-optional-locks -C "$repo_root" status --porcelain=v2 -z --untracked-files=all -- "$workspace_relative"
+else
+  GIT_OPTIONAL_LOCKS=0 git --no-optional-locks -C "$repo_root" status --porcelain=v2 -z --untracked-files=all
+fi
+`;
+  return remoteLoginShellCommand(
+    `sh -c ${shellQuote(script)} sh ${shellQuote(projectPath)} ${shellQuote(rootPath)}`,
+  );
+}
+
+function parseWorkspaceSnapshot(output: string): RemoteGitWorkspaceSnapshot {
+  const fields = output.split("\0");
+  const availability = fields[0];
+  if (
+    availability === "gitUnavailable" ||
+    availability === "notRepository" ||
+    availability === "outsideWorktree"
+  ) {
+    return { availability };
+  }
+  if (availability !== "available") {
+    throw new Error("Remote Git workspace inspection returned an invalid capability state");
+  }
+  const repositoryRoot = fields[1];
+  if (repositoryRoot === undefined || repositoryRoot === "") {
+    throw new Error("Remote Git workspace inspection omitted the repository root");
+  }
+  const workspaceRelativePath = fields[2];
+  if (workspaceRelativePath === undefined) {
+    throw new Error("Remote Git workspace inspection omitted the workspace path");
+  }
+  const headOid = fields[3] === undefined || fields[3] === "" ? null : fields[3];
+  const branch = fields[4] === undefined || fields[4] === "" ? null : fields[4];
+  const files = parseGitStatusRecords(fields.slice(5)).sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath),
+  );
+  if (files.length > MAX_GIT_WORKSPACE_FILES) {
+    throw new Error(`Remote Git workspace contains more than ${MAX_GIT_WORKSPACE_FILES} changes`);
+  }
+  return {
+    availability: "available",
+    repositoryRoot,
+    workspaceRelativePath,
+    headOid,
+    branch,
+    files,
   };
 }

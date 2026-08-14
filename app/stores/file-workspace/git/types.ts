@@ -9,3 +9,9 @@ export interface FileGitComparisonState {
   comparison: RemoteGitFileComparison | null;
   baselineText: string | null;
 }
+
+export interface FileGitComparisonTarget {
+  hostId: number;
+  projectId: number;
+  path: string;
+}

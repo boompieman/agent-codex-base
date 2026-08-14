@@ -27,6 +27,10 @@ test("the unified file workspace browses, restores, and refreshes real remote fi
   const nestedRepositoryFilePath = `${nestedRepositoryPath}/nested-change.ts`;
   const deletedWorktreeDirectoryPath = `${projectPath}/deleted-after-open-${Date.now()}`;
   const deletedWorktreeFilePath = `${deletedWorktreeDirectoryPath}/tracked.txt`;
+  const reviewRenamedOriginalPath = `${projectPath}/rename-before-review.txt`;
+  const reviewRenamedPath = `${projectPath}/rename-after-review.txt`;
+  const reviewDeletedPath = `${projectPath}/deleted-before-review.txt`;
+  const reviewAddedPath = `${projectPath}/added-before-review.txt`;
   const wideTable = `| metric | sample-a | sample-b | sample-c |
 | --- | --- | --- | --- |
 | very-long-column | ${"unbroken-value-".repeat(12)}a | ${"unbroken-value-".repeat(12)}b | ${"unbroken-value-".repeat(12)}c |`;
@@ -65,12 +69,18 @@ mkdir -p ${shellQuote(deletedWorktreeDirectoryPath)}
 cat > ${shellQuote(deletedWorktreeFilePath)} <<'EOF'
 tracked file remains open while it is deleted remotely
 EOF
+printf '%s\n' 'renamed file baseline' > ${shellQuote(reviewRenamedOriginalPath)}
+printf '%s\n' 'deleted file baseline' > ${shellQuote(reviewDeletedPath)}
 for line in $(seq 1 120); do printf '# source line %s\n' "$line" >> ${shellQuote(nestedPythonPath)}; done
 git -C ${shellQuote(projectPath)} init -q
 git -C ${shellQuote(projectPath)} config user.email codex-gateway-e2e@example.invalid
 git -C ${shellQuote(projectPath)} config user.name 'Codex Gateway E2E'
-git -C ${shellQuote(projectPath)} add -- ${shellQuote(remotePath)} ${shellQuote(markdownPath)} ${shellQuote(nestedPythonPath)} ${shellQuote(deletedWorktreeFilePath)}
+git -C ${shellQuote(projectPath)} add -- ${shellQuote(remotePath)} ${shellQuote(markdownPath)} ${shellQuote(nestedPythonPath)} ${shellQuote(deletedWorktreeFilePath)} ${shellQuote(reviewRenamedOriginalPath)} ${shellQuote(reviewDeletedPath)}
 git -C ${shellQuote(projectPath)} commit -qm 'test: establish file preview baseline'
+git -C ${shellQuote(projectPath)} mv -- ${shellQuote(reviewRenamedOriginalPath)} ${shellQuote(reviewRenamedPath)}
+rm -- ${shellQuote(reviewDeletedPath)}
+printf '%s\n' 'staged added file' > ${shellQuote(reviewAddedPath)}
+git -C ${shellQuote(projectPath)} add -- ${shellQuote(reviewAddedPath)}
 cat > ${shellQuote(remotePath)} <<'EOF'
 export function previewMarker() {
   return "codex-gateway-file-preview";
@@ -221,6 +231,55 @@ done
   const symlinkDirectoryRow = symlinkDirectoryLabel.locator("xpath=..");
   await expect(longFileLabel).toBeVisible();
   await expect(symlinkDirectoryLabel).toBeVisible();
+  await expect(tree.getByTitle(remotePath, { exact: true }).locator("xpath=..")).toContainText("M");
+
+  await panel.getByRole("tab", { name: /变更/ }).click();
+  const changesTree = panel.getByTestId("git-changes-tree");
+  await expect(changesTree).toBeVisible();
+  await expect(
+    changesTree.locator(`[data-git-change-path=${JSON.stringify(remotePath)}]`),
+  ).toContainText("M");
+  await expect(
+    changesTree.locator(`[data-git-change-path=${JSON.stringify(reviewRenamedPath)}]`),
+  ).toContainText("R");
+  await expect(
+    changesTree.locator(`[data-git-change-path=${JSON.stringify(reviewDeletedPath)}]`),
+  ).toContainText("D");
+  await expect(
+    changesTree.locator(`[data-git-change-path=${JSON.stringify(reviewAddedPath)}]`),
+  ).toContainText("A");
+  await expect(
+    changesTree.locator(`[data-git-change-path=${JSON.stringify(unknownTextPath)}]`),
+  ).toContainText("U");
+  await changesTree.locator(`[data-git-change-path=${JSON.stringify(remotePath)}]`).click();
+  await expect(panel.getByTestId("remote-file-diff-editor")).toContainText(
+    "codex-gateway-file-baseline",
+  );
+
+  await panel.getByRole("button", { name: "打开完整变更审查" }).click();
+  const reviewPanel = page.getByTestId("git-review-panel");
+  await expect(reviewPanel).toBeVisible();
+  await page
+    .getByRole("region", { name: "审查变更" })
+    .getByRole("button", { name: "关闭标签页" })
+    .click();
+  await expect(reviewPanel).toBeHidden();
+  await changesTree.locator(`[data-git-change-path=${JSON.stringify(reviewDeletedPath)}]`).click();
+  await expect(reviewPanel).toBeVisible();
+  await reviewPanel
+    .getByTestId("git-changes-tree")
+    .locator(`[data-git-change-path=${JSON.stringify(reviewDeletedPath)}]`)
+    .click();
+  await expect(reviewPanel.getByTestId("git-review-diff-editor")).toContainText(
+    "deleted file baseline",
+  );
+  await page
+    .getByRole("region", { name: "审查变更" })
+    .getByRole("button", { name: "关闭标签页" })
+    .click();
+  await expect(reviewPanel).toBeHidden();
+  await filesWorkspaceTab(page).click();
+  await panel.getByRole("tab", { name: "文件", exact: true }).click();
   await symlinkDirectoryRow.click({ button: "right", position: { x: 20, y: 16 } });
   await page.getByRole("menuitem", { name: "复制绝对路径" }).click();
   await expect(

@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { FileTextIcon, XIcon } from "@lucide/vue";
 import type { FilePreviewDocument } from "~~/shared/types";
+import { useFileGitWorkspace } from "@/composables/files/useFileGitWorkspace";
+import GitStatusBadge from "./git/GitStatusBadge.vue";
 
-defineProps<{
+const props = defineProps<{
   documents: FilePreviewDocument[];
   activePath: string | null;
+  hostId: number;
+  projectId: number | null;
+  rootPath: string;
 }>();
+
+const gitWorkspace = useFileGitWorkspace({
+  hostId: () => props.hostId,
+  projectId: () => props.projectId,
+  rootPath: () => props.rootPath,
+});
 
 const emit = defineEmits<{
   activate: [path: string];
@@ -35,6 +46,7 @@ const emit = defineEmits<{
       >
         <FileTextIcon class="size-3.5 shrink-0" />
         <span class="min-w-0 flex-1 truncate">{{ document.title }}</span>
+        <GitStatusBadge :status="gitWorkspace.changeForPath(document.path)?.status ?? null" />
         <span
           v-if="document.saving"
           class="size-3 shrink-0 animate-spin rounded-full border border-primary border-t-transparent"

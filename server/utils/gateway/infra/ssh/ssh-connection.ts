@@ -20,6 +20,26 @@ const SSH_READY_TIMEOUT_MS = 30_000;
 const SSH_KEEPALIVE_INTERVAL_MS = 30_000;
 const SSH_KEEPALIVE_COUNT_MAX = 10;
 
+interface ExecOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  maxOutputBytes?: number;
+}
+
+function abortReason(signal: AbortSignal | undefined) {
+  return signal?.reason instanceof Error
+    ? signal.reason
+    : new Error("Remote command was aborted", { cause: signal?.reason });
+}
+
+function outputLimitExceeded(outputBytes: number, maxOutputBytes: number | undefined) {
+  return maxOutputBytes !== undefined && outputBytes > maxOutputBytes;
+}
+
+function outputLimitError(maxOutputBytes: number | undefined) {
+  return new Error(`Remote command output exceeded the ${maxOutputBytes ?? 0} byte limit`);
+}
+
 type SshConnectionPoolEvents = {
   ready: { userId: number; host: HostWithSecret };
 };
@@ -81,10 +101,15 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
   async exec(
     host: HostWithSecret,
     command: string,
-    options: { timeoutMs?: number } = {},
+    options: ExecOptions = {},
   ): Promise<CommandResult> {
     const startedAt = Date.now();
-    const channel = await this.openExecChannelWithin(host, command, options.timeoutMs);
+    const channel = await this.openExecChannelWithin(
+      host,
+      command,
+      options.timeoutMs,
+      options.signal,
+    );
     const remainingMs =
       options.timeoutMs === undefined
         ? undefined
@@ -93,6 +118,7 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
+      let outputBytes = 0;
       const stdoutDecoder = new StringDecoder("utf8");
       const stderrDecoder = new StringDecoder("utf8");
       let settled = false;
@@ -100,7 +126,12 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
         if (settled) return;
         settled = true;
         if (timer !== undefined) clearTimeout(timer);
+        options.signal?.removeEventListener("abort", abort);
         callback();
+      };
+      const abort = () => {
+        finish(() => reject(abortReason(options.signal)));
+        channel.close();
       };
       const timer =
         remainingMs === undefined
@@ -111,10 +142,27 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
               );
               channel.close();
             }, remainingMs);
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted === true) {
+        abort();
+        return;
+      }
       channel.on("data", (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputLimitExceeded(outputBytes, options.maxOutputBytes)) {
+          finish(() => reject(outputLimitError(options.maxOutputBytes)));
+          channel.close();
+          return;
+        }
         stdout += stdoutDecoder.write(chunk);
       });
       channel.stderr.on("data", (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputLimitExceeded(outputBytes, options.maxOutputBytes)) {
+          finish(() => reject(outputLimitError(options.maxOutputBytes)));
+          channel.close();
+          return;
+        }
         stderr += stderrDecoder.write(chunk);
       });
       channel.on("error", (error: Error) => finish(() => reject(error)));
@@ -132,14 +180,34 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
     host: HostWithSecret,
     command: string,
     timeoutMs: number | undefined,
+    signal: AbortSignal | undefined,
   ) {
-    if (timeoutMs === undefined) return await this.execChannel(host, command);
+    if (timeoutMs === undefined && signal === undefined)
+      return await this.execChannel(host, command);
     return await new Promise<ClientChannel>((resolve, reject) => {
       let settled = false;
-      const timer = setTimeout(() => {
+      const cleanup = () => {
+        if (timer !== undefined) clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
+      };
+      const fail = (error: Error) => {
+        if (settled) return;
         settled = true;
-        reject(new Error(`Remote command timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+        cleanup();
+        reject(error);
+      };
+      const abort = () => fail(abortReason(signal));
+      const timer =
+        timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+              fail(new Error(`Remote command timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted === true) {
+        abort();
+        return;
+      }
       void this.execChannel(host, command).then(
         (channel) => {
           if (settled) {
@@ -149,13 +217,13 @@ export class SshConnectionPool extends EventEmitter<SshConnectionPoolEvents> {
             return;
           }
           settled = true;
-          clearTimeout(timer);
+          cleanup();
           resolve(channel);
         },
         (error: unknown) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timer);
+          cleanup();
           reject(
             error instanceof Error
               ? error

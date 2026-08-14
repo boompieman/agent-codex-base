@@ -62,6 +62,13 @@
     "fileGitRefresh": "刷新 Git 变更",
     "fileGitPreviousChange": "上一处变更",
     "fileGitNextChange": "下一处变更",
+    "fileGitExpandAll": "展开所有变更目录",
+    "fileGitCollapseAll": "折叠所有变更目录",
+    "fileGitWorkspaceUnavailable": "当前工作区不在 Git 仓库中",
+    "fileGitDescendantChanges": "此文件夹包含 {count} 个变更文件",
+    "fileGitSelectChange": "选择一个变更文件进行审查",
+    "fileGitOpenReview": "打开完整变更审查",
+    "fileGitReviewTab": "审查变更",
     "fileGitStatus": {
       "clean": "未修改",
       "modified": "已修改",

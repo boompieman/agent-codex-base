@@ -747,6 +747,24 @@ printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${she
   await page.getByRole("button", { name: "文件树", exact: true }).click();
   const tree = page.getByTestId("remote-file-tree");
   await expect(tree).toBeVisible();
+  await page.getByRole("tab", { name: /变更/ }).click();
+  await expect(
+    page.getByTestId("git-changes-tree").locator(`[data-git-change-path=${JSON.stringify(path)}]`),
+  ).toContainText("M");
+  await page.getByRole("button", { name: "打开完整变更审查" }).click();
+  const reviewPanel = page.getByTestId("git-review-panel");
+  await expect(reviewPanel).toBeVisible();
+  await expect(tree).toBeHidden();
+  await expect(reviewPanel.getByTestId("git-review-diff-editor")).toContainText(
+    "Mobile File Baseline",
+  );
+  await page
+    .getByRole("region", { name: "审查变更" })
+    .getByRole("button", { name: "关闭标签页" })
+    .click();
+  await page.getByRole("button", { name: "文件树", exact: true }).click();
+  await expect(tree).toBeVisible();
+  await page.getByRole("tab", { name: "文件", exact: true }).click();
   await tree.getByText(path.split("/").pop()!, { exact: true }).click();
   await expect(panel.locator(".markdown-content h1")).toHaveText("Mobile File Workspace");
   await panel.getByRole("button", { name: "源码" }).click();
@@ -764,6 +782,37 @@ printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${she
         .evaluate((element) => element.scrollWidth <= element.clientWidth),
     )
     .toBe(true);
+
+  const plainRootPath = `/home/${remote.username}/mobile-plain-project-${Date.now()}`;
+  await execRemoteSsh(remote, `mkdir -p ${shellQuote(plainRootPath)}`);
+  const plainProject = await authenticatedFetch(
+    page,
+    {
+      url: "/api/projects",
+      method: "POST",
+      body: {
+        hostId: host.id,
+        name: `mobile-plain-project-${Date.now()}`,
+        remotePath: plainRootPath,
+      },
+    },
+    (value) => projectRecordSchema.parse(value),
+  );
+  const plainThreadId = `mobile-plain-thread-${Date.now()}`;
+  await seedGatewayThread(page, {
+    hostId: host.id,
+    projectId: plainProject.id,
+    host: { ...host },
+    project: { ...plainProject },
+    threadId: plainThreadId,
+    currentThread: { id: plainThreadId, name: "Mobile Plain Files", cwd: plainRootPath },
+    history: { thread: { id: plainThreadId, turns: [] } },
+    status: "completed",
+  });
+  await page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]').click();
+  await page.getByRole("button", { name: "文件树", exact: true }).click();
+  await page.getByRole("tab", { name: /变更/ }).click();
+  await expect(page.getByText("当前工作区不在 Git 仓库中", { exact: true })).toBeVisible();
 });
 
 async function openIntermediateSteps(page: Page) {

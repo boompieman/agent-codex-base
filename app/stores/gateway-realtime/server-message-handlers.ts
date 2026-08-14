@@ -51,6 +51,7 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "browser.framePolicyWarning" }, browser["browser.framePolicyWarning"])
       .with({ type: "browser.resourceFailed" }, browser["browser.resourceFailed"])
       .with({ type: "file.git.comparison" }, (response) => ctx.resolveRequest(response))
+      .with({ type: "file.git.workspace.snapshot" }, (response) => ctx.resolveRequest(response))
       .with({ type: "notification.published" }, notifications["notification.published"])
       .with({ type: "host.lifecycle" }, notifications["host.lifecycle"])
       .with({ type: "host.metrics.snapshot" }, hostMetrics["host.metrics.snapshot"])

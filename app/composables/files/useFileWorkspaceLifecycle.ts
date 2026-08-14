@@ -3,6 +3,7 @@ import type { MaybeRefOrGetter } from "vue";
 import { toValue, watch } from "vue";
 import { useAuthStore } from "@/stores/auth";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
+import { useFileGitWorkspaceStore } from "@/stores/file-workspace/git/workspace";
 
 export function useFileWorkspaceLifecycle(input: {
   hostId: MaybeRefOrGetter<number>;
@@ -12,6 +13,7 @@ export function useFileWorkspaceLifecycle(input: {
   active: MaybeRefOrGetter<boolean>;
 }) {
   const workspace = useGatewayFileWorkspaceStore();
+  const gitWorkspace = useFileGitWorkspaceStore();
   const auth = useAuthStore();
   auth.hydrate();
 
@@ -20,7 +22,15 @@ export function useFileWorkspaceLifecycle(input: {
     return Promise.all([
       workspace.revalidateActiveFile(toValue(input.hostId), toValue(input.threadId)),
       workspace.refreshExpandedDirectories(toValue(input.hostId), toValue(input.threadId)),
+      refreshGitWorkspace(),
     ]);
+  };
+
+  const refreshGitWorkspace = () => {
+    const projectId = toValue(input.projectId);
+    const rootPath = toValue(input.rootPath);
+    if (projectId === null || rootPath === "") return Promise.resolve(null);
+    return gitWorkspace.load({ hostId: toValue(input.hostId), projectId, rootPath });
   };
 
   watch(
@@ -36,6 +46,7 @@ export function useFileWorkspaceLifecycle(input: {
       if (!rootPath || !authenticated) return;
       workspace.setScopeRoot({ hostId, projectId, threadId, rootPath });
       await workspace.restoreScope(hostId, threadId);
+      if (projectId !== null) await gitWorkspace.load({ hostId, projectId, rootPath });
     },
     { immediate: true },
   );

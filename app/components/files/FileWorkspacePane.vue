@@ -17,7 +17,7 @@ import FileCloseDialog from "./FileCloseDialog.vue";
 import FileConflictDialog from "./FileConflictDialog.vue";
 import FileWorkspaceSplitPane from "./FileWorkspaceSplitPane.vue";
 import FileWorkspaceTabs from "./FileWorkspaceTabs.vue";
-import RemoteFileTree from "./RemoteFileTree.vue";
+import FileWorkspaceSidebar from "./FileWorkspaceSidebar.vue";
 
 const props = defineProps<{
   layout: "desktop" | "mobile";
@@ -40,13 +40,14 @@ const activeDocument = computed(() =>
   fileWorkspace.activeDocumentFor(props.hostId, props.threadId),
 );
 
-function openFile(path: string) {
+function openFile(path: string, view?: "source" | "changes") {
   mobileTreeOpen.value = false;
   void fileWorkspace.openFile({
     hostId: props.hostId,
     projectId: props.projectId,
     threadId: props.threadId,
     path,
+    view,
   });
 }
 </script>
@@ -55,12 +56,14 @@ function openFile(path: string) {
   <div data-testid="workspace-file-panel" class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <FileWorkspaceSplitPane v-if="layout === 'desktop'">
       <template #tree>
-        <RemoteFileTree
+        <FileWorkspaceSidebar
           :host-id="hostId"
+          :project-id="projectId"
           :thread-id="threadId"
           :root-path="rootPath"
           :visible="active"
           @open="openFile"
+          @review-opened="mobileTreeOpen = false"
         />
       </template>
       <template #preview>
@@ -68,6 +71,9 @@ function openFile(path: string) {
           <FileWorkspaceTabs
             :documents="documents"
             :active-path="scope?.activePath ?? null"
+            :host-id="hostId"
+            :project-id="projectId"
+            :root-path="rootPath"
             @activate="fileWorkspace.activateFile(hostId, threadId, $event)"
             @close="guards.requestClose"
           />
@@ -106,6 +112,9 @@ function openFile(path: string) {
             class="min-w-0 flex-1 border-b-0"
             :documents="documents"
             :active-path="scope?.activePath ?? null"
+            :host-id="hostId"
+            :project-id="projectId"
+            :root-path="rootPath"
             @activate="fileWorkspace.activateFile(hostId, threadId, $event)"
             @close="guards.requestClose"
           />
@@ -132,12 +141,14 @@ function openFile(path: string) {
             <SheetTitle>{{ $t("app.fileTree") }}</SheetTitle>
             <SheetDescription>{{ rootPath }}</SheetDescription>
           </SheetHeader>
-          <RemoteFileTree
+          <FileWorkspaceSidebar
             :host-id="hostId"
+            :project-id="projectId"
             :thread-id="threadId"
             :root-path="rootPath"
             :visible="mobileTreeOpen"
             @open="openFile"
+            @review-opened="mobileTreeOpen = false"
           />
         </SheetContent>
       </Sheet>

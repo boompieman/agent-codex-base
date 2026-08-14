@@ -9,7 +9,7 @@ import {
   Trash2Icon,
 } from "@lucide/vue";
 import { TreeItem } from "reka-ui";
-import type { RemoteDirectoryEntry } from "~~/shared/types";
+import type { RemoteDirectoryEntry, RemoteGitFileStatus } from "~~/shared/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,6 +17,8 @@ import {
   ContextMenuTrigger,
 } from "@codex-gateway/ui/context-menu";
 import { useLongPressContextMenu } from "@/composables/interactions/useLongPressContextMenu";
+import { gitStatusTextClass } from "@/utils/git-status-presentation";
+import GitStatusBadge from "./git/GitStatusBadge.vue";
 
 interface FileTreeNode {
   name: string;
@@ -28,6 +30,8 @@ interface FileTreeNode {
 defineProps<{
   node: FileTreeNode;
   level: number;
+  gitStatus: RemoteGitFileStatus | null;
+  descendantChangeCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -63,7 +67,19 @@ const { longPressContextMenuHandlers } = useLongPressContextMenu({ menuWidthEsti
         />
         <FolderIcon v-else-if="node.type === 'directory'" class="size-4 shrink-0 text-primary" />
         <FileIcon v-else class="size-4 shrink-0 text-ink-faint" />
-        <span class="whitespace-nowrap" :title="node.path">{{ node.name }}</span>
+        <span
+          class="whitespace-nowrap"
+          :class="gitStatus ? gitStatusTextClass(gitStatus) : ''"
+          :title="node.path"
+        >
+          {{ node.name }}
+        </span>
+        <GitStatusBadge v-if="gitStatus" class="ml-auto pl-3" :status="gitStatus" />
+        <span
+          v-else-if="descendantChangeCount > 0"
+          class="ml-auto size-1.5 shrink-0 rounded-full bg-accent-orange"
+          :aria-label="$t('app.fileGitDescendantChanges', { count: descendantChangeCount })"
+        />
       </TreeItem>
     </ContextMenuTrigger>
     <ContextMenuContent
