@@ -152,8 +152,19 @@ elif command -v rg >/dev/null 2>&1; then
     -g '!.git/**' -g '!node_modules/**' -g '!dist/**' -g '!build/**' \\
     -g '!.next/**' -g '!coverage/**' -g '!__pycache__/**' -g '!vendor/**' \\
     -g '!venv/**' -g '!.venv/**'
+elif command -v find >/dev/null 2>&1; then
+  # File mentions are a baseline remote-files feature, so they cannot require
+  # optional developer tools. Keep git and rg as the fast paths, then use the
+  # standard remote filesystem walker for plain directories and minimal hosts.
+  find . \\
+    \\( -type d \\( \\
+      -name .git -o -name node_modules -o -name dist -o -name build -o \\
+      -name .next -o -name coverage -o -name __pycache__ -o -name vendor -o \\
+      -name venv -o -name .venv \\
+    \\) -prune \\) -o \\
+    -type f -exec printf '%s\\0' {} +
 else
-  echo 'Project file search requires git or ripgrep on the remote host' >&2
+  echo 'Project file search requires a usable find command on the remote host' >&2
   exit 127
 fi
 `;
