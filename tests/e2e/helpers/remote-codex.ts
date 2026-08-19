@@ -253,6 +253,15 @@ export async function selectSidebarThread(page: Page, threadId: string) {
   // proves input delivery; waiting on the public selected state prevents subsequent composer
   // operations from racing the previous thread under a loaded E2E or production browser.
   await expect(button).toHaveAttribute("data-selected", "true");
+  await expect
+    .poll(async () => new URL(page.url()).searchParams.get("threadId"), { timeout: 30_000 })
+    .toBe(threadId);
+  await expect
+    .poll(
+      () => page.evaluate(() => window.__codexGatewayE2e?.navigation.selectedThreadId ?? null),
+      { timeout: 30_000 },
+    )
+    .toBe(threadId);
 }
 
 export async function sendSteerText(page: Page, marker: string) {

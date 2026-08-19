@@ -69,6 +69,14 @@ const imageInputSchema = z
     message: "Image must include path or url",
   });
 
+const fileReferenceSchema = z
+  .object({
+    type: z.literal("file"),
+    path: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+  })
+  .strict();
+
 export const threadStartSchema = z.object({
   hostId: z.coerce.number().int().positive(),
   projectId: optionalPositiveInt,
@@ -85,6 +93,7 @@ export const threadSettingsUpdateSchema = z.object({
 
 export const turnStartSchema = z.object({
   hostId: z.coerce.number().int().positive(),
+  projectId: z.coerce.number().int().positive(),
   threadId: z.string().trim().min(1),
   text: z.string().trim().default(""),
   clientUserMessageId: z.string().trim().nullable().optional(),
@@ -103,15 +112,18 @@ export const turnStartSchema = z.object({
       }),
     )
     .default([]),
+  references: z.array(fileReferenceSchema).max(10).default([]),
 });
 
 export const turnSteerSchema = z.object({
   hostId: z.coerce.number().int().positive(),
+  projectId: z.coerce.number().int().positive(),
   threadId: z.string().trim().min(1),
   expectedTurnId: z.string().trim().min(1),
   text: z.string().trim().default(""),
   clientUserMessageId: z.string().trim().nullable().optional(),
   images: z.array(imageInputSchema).default([]),
+  references: z.array(fileReferenceSchema).max(10).default([]),
 });
 
 export const turnInterruptSchema = z.object({

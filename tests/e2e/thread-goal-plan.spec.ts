@@ -33,9 +33,9 @@ test("goal slash input derives the goal tag and requires an objective before sub
     page.getByTestId("slash-command-goal-objective").getByText("设置目标"),
   ).toBeVisible();
   await page.keyboard.press("Enter");
-  await expect(composer).toHaveValue("/goal ");
+  await expect(composer).toHaveAttribute("data-value", "/goal ");
   await page.keyboard.press("Enter");
-  await expect(composer).toHaveValue("/goal ");
+  await expect(composer).toHaveAttribute("data-value", "/goal ");
   await expect(page.getByText("请输入目标内容")).toBeVisible();
   await expect(page.getByTestId("chat-scroll-area").getByText("请输入目标内容")).toHaveCount(0);
   await expect
@@ -47,7 +47,7 @@ test("goal slash input derives the goal tag and requires an objective before sub
   await expect
     .poll(() => page.evaluate(() => window.__codexGatewayE2e?.captures.goalObjective))
     .toBe("完成当前重构");
-  await expect(composer).toHaveValue("");
+  await expect(composer).toHaveAttribute("data-value", "");
   await expect(
     page.getByTestId("composer-mode-strip").getByText("完成当前重构").first(),
   ).toBeVisible();
@@ -120,7 +120,7 @@ test("goal controls are shared by the slash menu and details dialog", async ({ p
     .toBe("在目标详情中直接编辑");
   await expect(objectiveInput).toHaveCount(0);
   await expect(goalDialog.getByText("在目标详情中直接编辑")).toBeVisible();
-  await expect(composer).toHaveValue("");
+  await expect(composer).toHaveAttribute("data-value", "");
 
   await goalDialog.getByTestId("goal-details-stop").click();
   await expect

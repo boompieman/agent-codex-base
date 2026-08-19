@@ -101,6 +101,7 @@ export type RealtimeClientMessage =
       requestId: string;
       hostId: number;
       threadId: string;
+      projectId: number;
       text: string;
       clientUserMessageId?: string | null;
       cwd?: string | null;
@@ -110,16 +111,19 @@ export type RealtimeClientMessage =
       collaborationMode?: ComposerTurnOptions["collaborationMode"];
       images?: ComposerTurnOptions["images"];
       files?: ComposerTurnOptions["files"];
+      references?: ComposerTurnOptions["references"];
     }
   | {
       type: "turn.steer";
       requestId: string;
       hostId: number;
       threadId: string;
+      projectId: number;
       expectedTurnId: string;
       text: string;
       clientUserMessageId?: string | null;
       images?: ComposerTurnOptions["images"];
+      references?: ComposerTurnOptions["references"];
     }
   | {
       type: "turn.interrupt";

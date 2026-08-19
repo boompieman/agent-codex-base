@@ -1,0 +1,383 @@
+<script setup lang="ts">
+import { basicSetup } from "codemirror";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import {
+  EditorState,
+  Prec,
+  StateEffect,
+  type Extension,
+  type Range,
+  type Text,
+} from "@codemirror/state";
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  WidgetType,
+  placeholder as placeholderExtension,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
+import type { FileReference } from "~~/shared/types";
+import type { ComposerFileReference } from "@/stores/gateway/types";
+import { gatewayApi } from "@/utils/gateway-api";
+import ComposerFileMentionMenu from "./ComposerFileMentionMenu.vue";
+
+const MAX_REFERENCES = 10;
+
+const props = defineProps<{
+  modelValue: string;
+  references: ComposerFileReference[];
+  scopeKey: string;
+  projectId: number | null;
+  disabled: boolean;
+  placeholder: string;
+  limitMessage: string;
+}>();
+
+const emit = defineEmits<{
+  "update:modelValue": [value: string, scopeKey: string];
+  "update:references": [value: ComposerFileReference[], scopeKey: string];
+  keydown: [event: KeyboardEvent];
+  paste: [event: ClipboardEvent];
+  limit: [message: string];
+}>();
+
+const container = ref<HTMLElement | null>(null);
+const view = shallowRef<EditorView | null>(null);
+const menuOpen = ref(false);
+const query = ref("");
+const queryFrom = ref(0);
+const files = ref<FileReference[]>([]);
+const selectedIndex = ref(0);
+const loading = ref(false);
+const searchError = ref<string | null>(null);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchController: AbortController | null = null;
+let syncing = false;
+
+class FileReferenceWidget extends WidgetType {
+  constructor(private readonly reference: ComposerFileReference) {
+    super();
+  }
+
+  override eq(other: FileReferenceWidget) {
+    return other.reference.id === this.reference.id && other.reference.name === this.reference.name;
+  }
+
+  override toDOM() {
+    const reference = document.createElement("span");
+    reference.className = "cm-file-reference";
+    reference.dataset.fileReference = this.reference.path;
+    reference.textContent = `@${this.reference.name}`;
+    return reference;
+  }
+}
+
+onMounted(() => {
+  if (!container.value) return;
+  view.value = new EditorView({
+    parent: container.value,
+    state: EditorState.create({ doc: props.modelValue, extensions: extensions() }),
+  });
+});
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchController?.abort();
+  view.value?.destroy();
+  view.value = null;
+});
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    const editor = view.value;
+    if (!editor || editor.state.doc.toString() === value) return;
+    syncing = true;
+    try {
+      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
+    } finally {
+      syncing = false;
+    }
+  },
+);
+
+watch(
+  () => props.references,
+  () => reconfigure(),
+  { deep: true },
+);
+watch(() => props.disabled, reconfigure);
+watch(() => props.placeholder, reconfigure);
+
+function reconfigure() {
+  const editor = view.value;
+  if (!editor) return;
+  editor.dispatch({ effects: StateEffect.reconfigure.of(extensions()) });
+}
+
+function extensions(): Extension[] {
+  const mentionPlugin = ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(editor: EditorView) {
+        this.decorations = mentionDecorations(editor.state.doc);
+      }
+      update(update: ViewUpdate) {
+        if (update.docChanged) this.decorations = mentionDecorations(update.state.doc);
+      }
+    },
+    { decorations: (plugin) => plugin.decorations },
+  );
+  return [
+    basicSetup,
+    EditorView.lineWrapping,
+    EditorView.editable.of(!props.disabled),
+    placeholderExtension(props.placeholder),
+    mentionPlugin,
+    EditorView.atomicRanges.of(
+      (editor) => editor.plugin(mentionPlugin)?.decorations ?? Decoration.none,
+    ),
+    Prec.high(
+      EditorView.domEventHandlers({
+        keydown: (event) => {
+          if (handleMentionKeydown(event)) return true;
+          emit("keydown", event);
+          return event.defaultPrevented;
+        },
+        paste: (event) => {
+          emit("paste", event);
+          return event.defaultPrevented;
+        },
+      }),
+    ),
+    EditorView.contentAttributes.of({
+      "aria-label": props.placeholder,
+      placeholder: props.placeholder,
+      "data-testid": "composer-input",
+      "data-value": props.modelValue,
+    }),
+    EditorView.updateListener.of(handleUpdate),
+  ];
+}
+
+function mentionDecorations(doc: Text) {
+  const ranges: Array<Range<Decoration>> = [];
+  for (const reference of props.references) {
+    const literal = `@${reference.path}`;
+    let offset = 0;
+    while (offset < doc.length) {
+      const found = doc.sliceString(offset).indexOf(literal);
+      if (found < 0) break;
+      const from = offset + found;
+      const to = from + literal.length;
+      ranges.push(
+        Decoration.replace({
+          widget: new FileReferenceWidget(reference),
+        }).range(from, to),
+      );
+      offset = to;
+    }
+  }
+  return Decoration.set(ranges.sort((left, right) => left.from - right.from));
+}
+
+function handleUpdate(update: ViewUpdate) {
+  if (update.docChanged) {
+    const text = update.state.doc.toString();
+    update.view.contentDOM.dataset.value = text;
+    if (!syncing) {
+      emit("update:modelValue", text, props.scopeKey);
+      const retained = props.references.filter((reference) => text.includes(`@${reference.path}`));
+      if (retained.length !== props.references.length)
+        emit("update:references", retained, props.scopeKey);
+    }
+  }
+  if (update.docChanged || update.selectionSet) updateMentionQuery(update.view);
+}
+
+function updateMentionQuery(editor: EditorView) {
+  if (props.disabled || props.projectId === null || editor.state.selection.ranges.length !== 1) {
+    dismissMenu();
+    return;
+  }
+  const cursor = editor.state.selection.main.head;
+  const line = editor.state.doc.lineAt(cursor);
+  const before = editor.state.doc.sliceString(line.from, cursor);
+  const match = /(?:^|\s)@([^\s@]*)$/u.exec(before);
+  if (!match) {
+    dismissMenu();
+    return;
+  }
+  query.value = match[1] ?? "";
+  queryFrom.value = cursor - query.value.length - 1;
+  menuOpen.value = true;
+  selectedIndex.value = 0;
+  scheduleSearch();
+}
+
+function scheduleSearch() {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchController?.abort();
+  searchTimer = setTimeout(() => void search(), 100);
+}
+
+async function search() {
+  if (!menuOpen.value || props.projectId === null) return;
+  const controller = new AbortController();
+  searchController = controller;
+  loading.value = true;
+  searchError.value = null;
+  try {
+    const result = await gatewayApi<{ files: FileReference[] }>(
+      `/api/projects/${props.projectId}/files`,
+      {
+        query: { q: query.value },
+        signal: controller.signal,
+      },
+    );
+    if (controller.signal.aborted) return;
+    files.value = result.files;
+    selectedIndex.value = 0;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    files.value = [];
+    searchError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (searchController === controller) {
+      loading.value = false;
+      searchController = null;
+    }
+  }
+}
+
+function moveSelection(delta: number) {
+  if (!menuOpen.value) return false;
+  if (files.value.length === 0) return true;
+  selectedIndex.value = (selectedIndex.value + delta + files.value.length) % files.value.length;
+  return true;
+}
+
+function selectCurrent() {
+  if (!menuOpen.value) return false;
+  if (files.value.length === 0) return true;
+  selectFile(files.value[selectedIndex.value]!);
+  return true;
+}
+
+function handleMentionKeydown(event: KeyboardEvent) {
+  if (!menuOpen.value || event.isComposing) return false;
+  const handlers: Partial<Record<string, () => boolean>> = {
+    ArrowDown: () => moveSelection(1),
+    ArrowUp: () => moveSelection(-1),
+    Enter: selectCurrent,
+    Escape: dismissMenu,
+  };
+  return handlers[event.key]?.() ?? false;
+}
+
+function selectFile(file: FileReference) {
+  const editor = view.value;
+  if (!editor) return;
+  const existing = props.references.find((reference) => reference.path === file.path);
+  if (!existing && props.references.length >= MAX_REFERENCES) {
+    emit("limit", props.limitMessage);
+    return;
+  }
+  const cursor = editor.state.selection.main.head;
+  editor.dispatch({
+    changes: { from: queryFrom.value, to: cursor, insert: `@${file.path} ` },
+    selection: { anchor: queryFrom.value + file.path.length + 2 },
+  });
+  if (!existing) {
+    emit(
+      "update:references",
+      [
+        ...props.references,
+        { ...file, id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${file.path}` },
+      ],
+      props.scopeKey,
+    );
+  }
+  dismissMenu();
+  editor.focus();
+}
+
+function dismissMenu() {
+  if (!menuOpen.value) return false;
+  menuOpen.value = false;
+  files.value = [];
+  searchError.value = null;
+  searchController?.abort();
+  return true;
+}
+</script>
+
+<template>
+  <ComposerFileMentionMenu
+    :open="menuOpen"
+    :files="files"
+    :selected-index="selectedIndex"
+    :loading="loading"
+    :query="query"
+    :error="searchError"
+    @hover="selectedIndex = $event"
+    @select="selectFile"
+  />
+  <div ref="container" data-testid="composer-editor" class="composer-editor" />
+</template>
+
+<style>
+.composer-editor .cm-editor {
+  max-height: min(28dvh, 10rem);
+  min-height: 3.25rem;
+  background: transparent;
+}
+.composer-editor .cm-scroller {
+  overflow: auto;
+  font-family: inherit;
+}
+.composer-editor .cm-content {
+  min-height: 3.25rem;
+  padding: 0.5rem 0.25rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  caret-color: var(--ink);
+}
+.composer-editor .cm-focused {
+  outline: none;
+}
+.composer-editor .cm-gutters {
+  display: none;
+}
+.composer-editor .cm-activeLine,
+.composer-editor .cm-activeLineGutter {
+  background: transparent;
+}
+.composer-editor .cm-file-reference {
+  display: inline-flex;
+  max-width: min(100%, 28rem);
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  padding: 0.0625rem 0.25rem 0.0625rem 0.375rem;
+  color: var(--primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+@media (min-width: 48rem) {
+  .composer-editor .cm-editor {
+    max-height: min(24vh, 12rem);
+    min-height: clamp(3.75rem, 10vh, 6rem);
+  }
+  .composer-editor .cm-content {
+    min-height: clamp(3.75rem, 10vh, 6rem);
+    line-height: 1.75rem;
+  }
+}
+</style>

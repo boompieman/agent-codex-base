@@ -1,6 +1,7 @@
 import { computed, type Ref } from "vue";
 
 import type { ComposerTurnOptions } from "~~/shared/types";
+import type { ComposerFileReference } from "@/stores/gateway/types";
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
@@ -19,6 +20,7 @@ type AttachedFile = {
 export function useComposerTurnSubmit(input: {
   turnText: Ref<string>;
   attachedFiles: Ref<AttachedFile[]>;
+  fileReferences: Ref<ComposerFileReference[]>;
   clearDraft: () => void;
   selectedTurnOptions: () => ComposerTurnOptions;
   collaborationModel: Ref<string>;
@@ -57,6 +59,11 @@ export function useComposerTurnSubmit(input: {
     const files = [...input.attachedFiles.value];
     const remoteFiles = files.filter((file) => !file.isImage);
     const attachedImages = files.filter((file) => file.isImage);
+    const references = input.fileReferences.value.map(({ type, path, name }) => ({
+      type,
+      path,
+      name,
+    }));
     const collaborationMode = composer.selectedThreadSettings.collaborationMode ?? undefined;
     input.clearDraft();
     await threadTurns.sendTurn(
@@ -68,6 +75,7 @@ export function useComposerTurnSubmit(input: {
           .map((file) => ({ url: file.dataUrl, detail: "auto" as const }))
           .filter((image): image is { url: string; detail: "auto" } => Boolean(image.url)),
         files: remoteFiles,
+        references,
       },
     );
   }

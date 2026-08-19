@@ -173,6 +173,9 @@ importers:
       ensure-error:
         specifier: ^5.0.0
         version: 5.0.0
+      fuse.js:
+        specifier: ^7.5.0
+        version: 7.5.0
       h3:
         specifier: 1.15.11
         version: 1.15.11(srvx@0.11.22)

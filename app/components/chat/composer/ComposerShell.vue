@@ -9,16 +9,18 @@ import type {
   ThreadTokenUsageState,
 } from "~~/shared/types";
 import type { ComposerAttachment } from "@/composables/composer/useComposerDraft";
+import type { ComposerFileReference } from "@/stores/gateway/types";
 import type { ComposerGoalPendingAction } from "@/composables/composer/useComposerGoalControls";
 import type { SlashMenuItem } from "@/composables/composer/useSlashCommands";
 import AttachmentChips from "@/components/chat/composer/AttachmentChips.vue";
 import ComposerModeStrip from "@/components/chat/composer/ComposerModeStrip.vue";
 import ComposerToolbar from "@/components/chat/composer/ComposerToolbar.vue";
 import SlashCommandMenu from "@/components/chat/composer/SlashCommandMenu.vue";
-import { Textarea } from "@codex-gateway/ui/textarea";
+import ComposerEditor from "@/components/chat/composer/ComposerEditor.vue";
 
-defineProps<{
+const props = defineProps<{
   modelValue: string;
+  fileReferences: ComposerFileReference[];
   attachedFiles: ComposerAttachment[];
   planModeActive: boolean;
   planSummary: string;
@@ -32,6 +34,7 @@ defineProps<{
   composerInputEnabled: boolean;
   uploadingAttachments: boolean;
   selectedThreadId: string | null;
+  selectedProjectId: number | null;
   selectedApprovalMode: ApprovalPolicy | "custom";
   selectedThreadTokenUsage: ThreadTokenUsageState | null;
   models: ModelRecord[];
@@ -54,6 +57,7 @@ defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
+  "update:fileReferences": [value: ComposerFileReference[]];
   deactivatePlan: [];
   saveGoal: [objective: string];
   stopGoal: [];
@@ -65,6 +69,7 @@ const emit = defineEmits<{
   paste: [event: ClipboardEvent];
   removeAttachment: [id: string];
   keydown: [event: KeyboardEvent];
+  fileReferenceLimit: [message: string];
   primaryAction: [];
   updateSelectedApprovalMode: [mode: ApprovalPolicy | "custom"];
   selectModel: [model: string];
@@ -75,6 +80,18 @@ const uploadInput = ref<HTMLInputElement | null>(null);
 
 function openAttachmentPicker() {
   uploadInput.value?.click();
+}
+
+function composerScopeKey() {
+  return `${props.selectedProjectId ?? "none"}:${props.selectedThreadId ?? "new"}`;
+}
+
+function updateModelValue(value: string, sourceScopeKey: string) {
+  if (sourceScopeKey === composerScopeKey()) emit("update:modelValue", value);
+}
+
+function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: string) {
+  if (sourceScopeKey === composerScopeKey()) emit("update:fileReferences", value);
 }
 </script>
 
@@ -114,14 +131,20 @@ function openAttachmentPicker() {
           @change="emit('attachmentChange', $event)"
         />
         <AttachmentChips :files="attachedFiles" @remove="emit('removeAttachment', $event)" />
-        <Textarea
+        <ComposerEditor
+          :key="composerScopeKey()"
           :model-value="modelValue"
-          class="max-h-[min(28dvh,10rem)] min-h-[3.25rem] border-0 bg-transparent px-1 text-base leading-6 shadow-none ring-0 placeholder:text-base placeholder:text-ink-faint focus-visible:ring-0 md:max-h-[min(24vh,12rem)] md:min-h-[clamp(3.75rem,10vh,6rem)] md:leading-7 md:text-base"
-          :placeholder="$t('app.askFollowUp')"
+          :references="fileReferences"
+          :scope-key="composerScopeKey()"
+          :project-id="selectedProjectId"
           :disabled="!composerInputEnabled"
-          @update:model-value="emit('update:modelValue', String($event))"
+          :placeholder="$t('app.askFollowUp')"
+          :limit-message="$t('app.fileReferenceLimit', { count: 10 })"
+          @update:model-value="updateModelValue"
+          @update:references="updateFileReferences"
           @keydown="emit('keydown', $event)"
           @paste="emit('paste', $event)"
+          @limit="emit('fileReferenceLimit', $event)"
         />
         <ComposerToolbar
           :uploading-attachments="uploadingAttachments"

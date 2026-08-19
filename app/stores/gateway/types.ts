@@ -7,6 +7,7 @@ import type {
   TerminalSessionSnapshot,
   ThreadRuntimeStatus,
   UploadedFileRecord,
+  FileReference,
 } from "~~/shared/types";
 
 export type { ThreadRuntimeStatus };
@@ -55,6 +56,11 @@ export interface SubAgentPanelState {
 export interface ComposerDraft {
   text: string;
   attachedFiles: Array<UploadedFileRecord & { id: string; dataUrl?: string }>;
+  fileReferences: ComposerFileReference[];
+}
+
+export interface ComposerFileReference extends FileReference {
+  id: string;
 }
 
 export interface TerminalSessionState extends TerminalSessionSnapshot {

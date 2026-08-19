@@ -106,6 +106,7 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         type: z.literal("turn.start"),
         ...requestIdField,
         ...threadScopeFields,
+        projectId: positiveId,
         text: z.string(),
         clientUserMessageId: nullableString,
         cwd: nullableString,
@@ -115,6 +116,18 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         collaborationMode,
         images: z.array(imageInput).optional(),
         files: z.array(fileInput).optional(),
+        references: z
+          .array(
+            z
+              .object({
+                type: z.literal("file"),
+                path: nonEmptyString,
+                name: nonEmptyString,
+              })
+              .strict(),
+          )
+          .max(10)
+          .optional(),
       })
       .strict(),
     z
@@ -122,10 +135,23 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         type: z.literal("turn.steer"),
         ...requestIdField,
         ...threadScopeFields,
+        projectId: positiveId,
         expectedTurnId: nonEmptyString,
         text: z.string(),
         clientUserMessageId: nullableString,
         images: z.array(imageInput).optional(),
+        references: z
+          .array(
+            z
+              .object({
+                type: z.literal("file"),
+                path: nonEmptyString,
+                name: nonEmptyString,
+              })
+              .strict(),
+          )
+          .max(10)
+          .optional(),
       })
       .strict(),
     z

@@ -21,6 +21,163 @@ import {
   waitForSelectedThreadId,
 } from "./helpers/remote-codex";
 
+test("references real project files as structured turn context", async ({
+  page,
+  remoteWorkspace,
+}) => {
+  await installRealtimeSocketProbe(page);
+  await openApp(page);
+  const { remote } = remoteWorkspace;
+  const { host, project } = await remoteWorkspace.provision({
+    hostName: `file-reference-host-${Date.now()}`,
+  });
+  const threadId = await remoteWorkspace.startThread(project.id);
+  await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
+  await selectSidebarThread(page, threadId);
+
+  const suffix = Date.now();
+  const fileName = `e2e-file-reference-${suffix}.txt`;
+  const rootFileName = `e2e-file-reference-${suffix}-root.txt`;
+  const directory = [
+    `deep-${"a".repeat(110)}`,
+    `nested-${"b".repeat(110)}`,
+    `leaf-${"c".repeat(110)}`,
+  ].join("/");
+  const path = `${directory}/${fileName}`;
+  const marker = `STRUCTURED_FILE_REFERENCE_${suffix}`;
+  await execRemoteSsh(
+    remote,
+    `mkdir -p -- ${shellQuote(`${project.remotePath}/${directory}`)} && printf '%s\\n' ${shellQuote(marker)} > ${shellQuote(`${project.remotePath}/${path}`)} && printf '%s\\n' root > ${shellQuote(`${project.remotePath}/${rootFileName}`)}`,
+  );
+
+  const searchResult = await authenticatedFetch(
+    page,
+    { url: `/api/projects/${project.id}/files?q=${encodeURIComponent(`reference-${suffix}`)}` },
+    (value) =>
+      z
+        .object({
+          files: z.array(
+            z.object({ type: z.literal("file"), path: z.string(), name: z.string() }).strict(),
+          ),
+        })
+        .parse(value),
+  );
+  expect(searchResult.files).toContainEqual({ type: "file", path, name: fileName });
+  expect(searchResult.files).toContainEqual({
+    type: "file",
+    path: rootFileName,
+    name: rootFileName,
+  });
+
+  const composer = page.getByPlaceholder("输入后续修改要求");
+  await composer.fill(`@reference-${suffix}`);
+  const menu = page.getByTestId("file-mention-menu");
+  await expect(menu).toBeVisible();
+  const nestedOption = menu.getByRole("option").filter({ hasText: fileName });
+  const rootOption = menu.getByRole("option").filter({ hasText: rootFileName });
+  await expect(nestedOption).toHaveCount(1);
+  await expect(rootOption).toHaveCount(1);
+  await expect(nestedOption).toHaveCSS("justify-content", "flex-start");
+  await expect(nestedOption.getByTestId("file-mention-name")).toHaveText(fileName);
+  await expect(nestedOption.getByTestId("file-mention-directory")).toHaveText(directory);
+  await expect(rootOption.getByTestId("file-mention-directory")).toHaveCount(0);
+  const [nameBox, directoryBox, nestedOptionBox, rootOptionBox] = await Promise.all([
+    nestedOption.getByTestId("file-mention-name").boundingBox(),
+    nestedOption.getByTestId("file-mention-directory").boundingBox(),
+    nestedOption.boundingBox(),
+    rootOption.boundingBox(),
+  ]);
+  expect(nameBox).not.toBeNull();
+  expect(directoryBox).not.toBeNull();
+  expect(nestedOptionBox).not.toBeNull();
+  expect(rootOptionBox).not.toBeNull();
+  expect(
+    Math.min(nameBox!.y + nameBox!.height, directoryBox!.y + directoryBox!.height),
+  ).toBeGreaterThan(Math.max(nameBox!.y, directoryBox!.y));
+  expect(Math.abs(nestedOptionBox!.y - rootOptionBox!.y)).toBeGreaterThanOrEqual(
+    Math.min(nestedOptionBox!.height, rootOptionBox!.height) - 1,
+  );
+  const label = nestedOption.getByTestId("file-mention-label");
+  await expect(label).toHaveCSS("overflow", "hidden");
+  await expect(label).toHaveCSS("text-overflow", "ellipsis");
+  await expect(label).toHaveCSS("white-space", "nowrap");
+  expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await nestedOption.click();
+  const chip = page.locator(".cm-file-reference", { hasText: `@${fileName}` });
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveText(`@${fileName}`);
+  await expect(chip).not.toContainText(directory);
+  await expect(composer).toHaveAttribute("data-value", `@${path} `);
+
+  await composer.press("Backspace");
+  await expect(chip).toBeVisible();
+  await expect(composer).toHaveAttribute("data-value", `@${path}`);
+  await composer.press("Backspace");
+  await expect(chip).toBeHidden();
+  await expect(composer).toHaveAttribute("data-value", "");
+
+  await composer.fill(`@reference-${suffix}`);
+  const realtimeOffset = await realtimeClientMessageCount(page);
+  await expect(menu.getByTestId("file-mention-option-0")).toHaveAttribute("aria-selected", "true");
+  await composer.press("ArrowDown");
+  await expect(menu.getByTestId("file-mention-option-1")).toHaveAttribute("aria-selected", "true");
+  await composer.press("ArrowUp");
+  await expect(menu.getByTestId("file-mention-option-0")).toHaveAttribute("aria-selected", "true");
+  await composer.press("Enter");
+  await expect(menu).toBeHidden();
+  await expect(composer).toHaveAttribute("data-value", `@${searchResult.files[0]!.path} `);
+  await expect(page.locator(".cm-file-reference")).toHaveText(`@${searchResult.files[0]!.name}`);
+  const messageTypesAfterKeyboardSelection = await page.evaluate(
+    (offset) =>
+      (window.__gatewayRealtimeProbe?.messages ?? []).slice(offset).map((message) => message.type),
+    realtimeOffset,
+  );
+  expect(messageTypesAfterKeyboardSelection).not.toContain("turn.start");
+  await composer.press("Backspace");
+  await composer.press("Backspace");
+
+  await composer.fill(`@reference-${suffix}`);
+  await menu.getByRole("option").filter({ hasText: fileName }).click();
+  await expect(chip).toBeVisible();
+
+  await composer.press("End");
+  await composer.pressSequentially(" 请读取这个引用文件，并且只回复文件中的唯一标记。");
+  const messageOffset = await realtimeClientMessageCount(page);
+  await page.getByTestId("send-turn-button").click();
+  const message = z
+    .object({
+      projectId: z.number(),
+      text: z.string(),
+      references: z.array(
+        z.object({ type: z.literal("file"), path: z.string(), name: z.string() }).strict(),
+      ),
+    })
+    .loose()
+    .parse(await waitForRealtimeClientMessage(page, "turn.start", messageOffset));
+  expect(message.projectId).toBe(project.id);
+  expect(message.text).toContain(`@${path}`);
+  expect(message.references).toEqual([{ type: "file", path, name: fileName }]);
+  expect(JSON.stringify(message)).not.toContain(marker);
+
+  const traversalResponse = await sendRealtimeRawRequest(page, {
+    type: "turn.start",
+    requestId: randomUUID(),
+    hostId: host.id,
+    projectId: project.id,
+    threadId,
+    text: "invalid reference",
+    references: [{ type: "file", path: "../outside.txt", name: "outside.txt" }],
+  });
+  expect(traversalResponse.type).toBe("error");
+  if (traversalResponse.type === "error") {
+    expect(traversalResponse.message).toContain("path traversal");
+  }
+  await execRemoteSsh(
+    remote,
+    `rm -rf -- ${shellQuote(`${project.remotePath}/${directory}`)} && rm -f -- ${shellQuote(`${project.remotePath}/${rootFileName}`)}`,
+  );
+});
+
 test("connects to a real SSH Codex host and lists a project thread created by app-server", async ({
   page,
   remoteWorkspace,
@@ -166,12 +323,15 @@ test("connects to a real SSH Codex host and lists a project thread created by ap
   await selectSidebarThread(page, threadId);
   await page.getByPlaceholder("输入后续修改要求").fill(firstDraft);
   await selectSidebarThread(page, secondThreadId);
-  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue("");
+  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveAttribute("data-value", "");
   await page.getByPlaceholder("输入后续修改要求").fill(secondDraft);
   await selectSidebarThread(page, threadId);
-  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue(firstDraft);
+  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveAttribute("data-value", firstDraft);
   await selectSidebarThread(page, secondThreadId);
-  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveValue(secondDraft);
+  await expect(page.getByPlaceholder("输入后续修改要求")).toHaveAttribute(
+    "data-value",
+    secondDraft,
+  );
   await page.getByPlaceholder("输入后续修改要求").fill("");
 
   await selectSidebarThread(page, threadId);

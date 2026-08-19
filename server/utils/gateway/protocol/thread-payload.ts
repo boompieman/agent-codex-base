@@ -50,6 +50,7 @@ export function buildTurnStartParams(
       input.collaborationMode !== null && input.collaborationMode !== undefined
         ? buildAppServerCollaborationMode(input.collaborationMode)
         : null,
+    additionalContext: input.additionalContext ?? {},
   };
 }
 
