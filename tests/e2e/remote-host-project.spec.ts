@@ -29,10 +29,9 @@ test("references real project files as structured turn context", async ({
   await openApp(page);
   const { remote } = remoteWorkspace;
   const projectPath = `/tmp/codex-gateway-file-reference-${Date.now()}`;
-  await execRemoteSsh(
-    remote,
-    `mkdir -p -- ${shellQuote(projectPath)} && git init -q -- ${shellQuote(projectPath)}`,
-  );
+  // This deliberately remains a plain directory. File mentions must work on
+  // minimal remote hosts without relying on a Git worktree or ripgrep.
+  await execRemoteSsh(remote, `mkdir -p -- ${shellQuote(projectPath)}`);
   const { host, project } = await remoteWorkspace.provision({
     hostName: `file-reference-host-${Date.now()}`,
     remotePath: projectPath,
