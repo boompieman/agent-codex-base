@@ -183,11 +183,12 @@ export async function addRemoteProject(
   remote: RemoteCodexEnv,
   hostId: number,
   name = `remote-project-${Date.now()}`,
+  remotePath = remote.projectPath,
 ) {
   await page.getByTestId(`host-button-${hostId}`).click({ button: "right" });
   await page.getByRole("menuitem", { name: /添加项目|Add project/ }).click();
   await page.getByTestId("project-name-input").fill(name);
-  await page.getByTestId("project-path-input").fill(remote.projectPath);
+  await page.getByTestId("project-path-input").fill(remotePath);
 
   const projectResponsePromise = page.waitForResponse(
     (response) =>

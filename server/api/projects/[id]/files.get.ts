@@ -1,4 +1,4 @@
-import { getRouterParam, getValidatedQuery } from "h3";
+import { getRouterParam, getValidatedQuery, setResponseHeader } from "h3";
 import { z } from "zod";
 import {
   defineGatewayEventHandler,
@@ -17,5 +17,7 @@ export default defineGatewayEventHandler(async (event) => {
   const project = requireRecord(projectStore.get(projectId), "Project not found");
   const host = requireRecord(hostStore.getWithSecret(project.hostId), "Host not found");
   setGatewayRequestLogContext(event, "project file search", { hostId: host.id, projectId });
-  return { files: await projectFileIndex.search(host, project, query.q) };
+  const result = await projectFileIndex.search(host, project, query.q);
+  setResponseHeader(event, "x-gateway-project-file-index", result.cacheState);
+  return { files: result.files };
 });

@@ -30,23 +30,37 @@ interface CachedIndex {
   files: FileReference[];
 }
 
+export type ProjectFileIndexCacheState = "built" | "shared" | "cached";
+
+export interface ProjectFileSearchResult {
+  files: FileReference[];
+  cacheState: ProjectFileIndexCacheState;
+}
+
 class ProjectFileIndexService {
   private readonly cache = new Map<string, CachedIndex>();
   private readonly pending = new Map<string, Promise<FileReference[]>>();
 
-  async search(host: HostRecord, project: ProjectRecord, query: string) {
+  async search(
+    host: HostRecord,
+    project: ProjectRecord,
+    query: string,
+  ): Promise<ProjectFileSearchResult> {
     if (project.hostId !== host.id) {
       throw new Error(`Project ${project.id} does not belong to host ${host.id}`);
     }
-    const files = await this.getIndex(host, project);
+    const { files, cacheState } = await this.getIndex(host, project);
     const normalizedQuery = query.trim();
     if (normalizedQuery === "") {
-      return [...files]
-        .sort(
-          (left, right) =>
-            pathDepth(left.path) - pathDepth(right.path) || left.path.localeCompare(right.path),
-        )
-        .slice(0, MAX_RESULTS);
+      return {
+        files: [...files]
+          .sort(
+            (left, right) =>
+              pathDepth(left.path) - pathDepth(right.path) || left.path.localeCompare(right.path),
+          )
+          .slice(0, MAX_RESULTS),
+        cacheState,
+      };
     }
 
     const needle = normalizedQuery.toLocaleLowerCase();
@@ -59,26 +73,33 @@ class ProjectFileIndexService {
       includeScore: true,
       ignoreLocation: true,
     });
-    return fuse
-      .search(normalizedQuery, { limit: MAX_RESULTS })
-      .sort((left, right) => {
-        const leftPriority = matchPriority(left.item, needle);
-        const rightPriority = matchPriority(right.item, needle);
-        return (
-          leftPriority - rightPriority ||
-          (left.score ?? 1) - (right.score ?? 1) ||
-          left.item.path.localeCompare(right.item.path)
-        );
-      })
-      .map((result) => result.item);
+    return {
+      files: fuse
+        .search(normalizedQuery, { limit: MAX_RESULTS })
+        .sort((left, right) => {
+          const leftPriority = matchPriority(left.item, needle);
+          const rightPriority = matchPriority(right.item, needle);
+          return (
+            leftPriority - rightPriority ||
+            (left.score ?? 1) - (right.score ?? 1) ||
+            left.item.path.localeCompare(right.item.path)
+          );
+        })
+        .map((result) => result.item),
+      cacheState,
+    };
   }
 
   private async getIndex(host: HostRecord, project: ProjectRecord) {
     const key = `${currentGatewayUserId() ?? "anonymous"}:${host.id}:${hostRuntimeFingerprint(host)}:${project.id}:${project.remotePath}`;
     const cached = this.cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.files;
+    if (cached && cached.expiresAt > Date.now()) {
+      return { files: cached.files, cacheState: "cached" as const };
+    }
     const existing = this.pending.get(key);
-    if (existing) return await existing;
+    if (existing) {
+      return { files: await existing, cacheState: "shared" as const };
+    }
 
     const request = this.buildIndex(host, project).then((files) => {
       this.cache.set(key, { files, expiresAt: Date.now() + INDEX_TTL_MS });
@@ -86,7 +107,7 @@ class ProjectFileIndexService {
     });
     this.pending.set(key, request);
     try {
-      return await request;
+      return { files: await request, cacheState: "built" as const };
     } finally {
       if (this.pending.get(key) === request) this.pending.delete(key);
     }
