@@ -9,6 +9,7 @@ const {
   activeModelLabel,
   activePlanSummary,
   attachedFiles,
+  fileReferences,
   canInterruptTurn,
   canUsePrimaryAction,
   composerInputEnabled,
@@ -37,6 +38,7 @@ const {
   selectedThreadGoal,
   selectedThreadGoalObservedAt,
   selectedThreadId,
+  selectedProjectId,
   selectedThreadStatus,
   selectedThreadTokenUsage,
   sendButtonLabel,
@@ -50,12 +52,14 @@ const {
   slashMenuOpen,
   turnText,
   uploadingAttachments,
+  handleFileReferenceLimit,
 } = useComposerController();
 </script>
 
 <template>
   <ComposerShell
     v-model="turnText"
+    v-model:file-references="fileReferences"
     :attached-files="attachedFiles"
     :plan-mode-active="planModeActive"
     :plan-summary="activePlanSummary"
@@ -69,6 +73,7 @@ const {
     :composer-input-enabled="composerInputEnabled"
     :uploading-attachments="uploadingAttachments"
     :selected-thread-id="selectedThreadId"
+    :selected-project-id="selectedProjectId"
     :selected-approval-mode="selectedApprovalMode"
     :selected-thread-token-usage="selectedThreadTokenUsage"
     :models="models"
@@ -98,6 +103,7 @@ const {
     @paste="handlePaste"
     @remove-attachment="removeAttachment"
     @keydown="handleComposerKeydown"
+    @file-reference-limit="handleFileReferenceLimit"
     @primary-action="handlePrimaryAction"
     @update-selected-approval-mode="setSelectedApprovalMode"
     @select-model="setSelectedModel"

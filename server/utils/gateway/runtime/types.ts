@@ -54,6 +54,7 @@ export interface TurnStartInput {
     size: number;
     isImage: boolean;
   }>;
+  additionalContext?: Record<string, { value: string; kind: "untrusted" | "application" }>;
 }
 
 export interface TurnSteerInput {
@@ -65,6 +66,7 @@ export interface TurnSteerInput {
     url?: string;
     detail?: "low" | "high" | "auto" | "original";
   }>;
+  additionalContext?: Record<string, { value: string; kind: "untrusted" | "application" }>;
 }
 
 export interface ServerRequestResponseInput {

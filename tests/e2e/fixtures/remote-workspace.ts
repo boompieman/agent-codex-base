@@ -13,12 +13,13 @@ import {
 interface ProvisionRemoteWorkspaceOptions {
   hostName?: string;
   projectName?: string;
+  remotePath?: string;
 }
 
 export interface RemoteWorkspaceFixture {
   readonly remote: RemoteCodexEnv;
   addHost(name?: string): Promise<UiHost>;
-  addProject(hostId: number, name?: string): Promise<UiProject>;
+  addProject(hostId: number, name?: string, remotePath?: string): Promise<UiProject>;
   startThread(projectId: number): Promise<string>;
   sendImageTurn(
     targetPage: Page,
@@ -56,8 +57,8 @@ export const test = base.extend<RemoteWorkspaceTestFixtures, RemoteWorkspaceWork
   remoteWorkspace: async ({ page, remoteCodexEnvironment }, use) => {
     const addHost = async (name?: string) =>
       await addRemoteHost(page, remoteCodexEnvironment, name);
-    const addProject = async (hostId: number, name?: string) =>
-      await addRemoteProject(page, remoteCodexEnvironment, hostId, name);
+    const addProject = async (hostId: number, name?: string, remotePath?: string) =>
+      await addRemoteProject(page, remoteCodexEnvironment, hostId, name, remotePath);
 
     await use({
       remote: remoteCodexEnvironment,
@@ -69,7 +70,7 @@ export const test = base.extend<RemoteWorkspaceTestFixtures, RemoteWorkspaceWork
         await sendImageTurnThroughGateway(targetPage, remoteCodexEnvironment, params),
       async provision(options = {}) {
         const host = await addHost(options.hostName);
-        const project = await addProject(host.id, options.projectName);
+        const project = await addProject(host.id, options.projectName, options.remotePath);
         return { host, project };
       },
     });

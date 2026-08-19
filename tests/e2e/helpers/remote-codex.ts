@@ -183,11 +183,12 @@ export async function addRemoteProject(
   remote: RemoteCodexEnv,
   hostId: number,
   name = `remote-project-${Date.now()}`,
+  remotePath = remote.projectPath,
 ) {
   await page.getByTestId(`host-button-${hostId}`).click({ button: "right" });
   await page.getByRole("menuitem", { name: /添加项目|Add project/ }).click();
   await page.getByTestId("project-name-input").fill(name);
-  await page.getByTestId("project-path-input").fill(remote.projectPath);
+  await page.getByTestId("project-path-input").fill(remotePath);
 
   const projectResponsePromise = page.waitForResponse(
     (response) =>
@@ -253,6 +254,15 @@ export async function selectSidebarThread(page: Page, threadId: string) {
   // proves input delivery; waiting on the public selected state prevents subsequent composer
   // operations from racing the previous thread under a loaded E2E or production browser.
   await expect(button).toHaveAttribute("data-selected", "true");
+  await expect
+    .poll(async () => new URL(page.url()).searchParams.get("threadId"), { timeout: 30_000 })
+    .toBe(threadId);
+  await expect
+    .poll(
+      () => page.evaluate(() => window.__codexGatewayE2e?.navigation.selectedThreadId ?? null),
+      { timeout: 30_000 },
+    )
+    .toBe(threadId);
 }
 
 export async function sendSteerText(page: Page, marker: string) {

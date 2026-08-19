@@ -194,6 +194,13 @@ export interface ThreadTokenUsageState {
   modelContextWindow: number | null;
 }
 
+export interface FileReference {
+  type: "file";
+  /** Normalized path relative to the selected project root. */
+  path: string;
+  name: string;
+}
+
 export interface ComposerTurnOptions {
   model?: string | null;
   effort?: ReasoningEffort | null;
@@ -211,4 +218,5 @@ export interface ComposerTurnOptions {
     size: number;
     isImage: boolean;
   }>;
+  references?: FileReference[];
 }

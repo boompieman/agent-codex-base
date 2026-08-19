@@ -58,6 +58,11 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
   }
 
   const projectId = navigation.selectedProjectId;
+  if (projectId === null) {
+    gateway.setError(t("app.projectRequiredForFileReferences"), { hostId, threadId });
+    if (!shouldSteerActiveTurn) runtimeStore.setThreadStatus(hostId, threadId, "completed");
+    return;
+  }
   const cwd = catalog.projects.find((project) => project.id === projectId)?.remotePath ?? null;
   const requestKind = shouldSteerActiveTurn ? "steer" : "start";
   const executeTurnRequest =
@@ -66,12 +71,22 @@ export async function sendTurn(t: Translate, text: string, options: ComposerTurn
           requestTurnSteer({
             hostId,
             threadId,
+            projectId,
             expectedTurnId: steerTurnId,
             text,
             clientUserMessageId,
             options,
           })
-      : () => requestTurnStart({ hostId, threadId, text, clientUserMessageId, cwd, options });
+      : () =>
+          requestTurnStart({
+            hostId,
+            threadId,
+            projectId,
+            text,
+            clientUserMessageId,
+            cwd,
+            options,
+          });
 
   views.loading = true;
   gateway.clearError();

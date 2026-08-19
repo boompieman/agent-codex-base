@@ -7,6 +7,7 @@ import { useComposerSlashActions } from "./useComposerSlashActions";
 import { useComposerTurnSubmit } from "./useComposerTurnSubmit";
 import { useThreadSettingsControls } from "./useThreadSettingsControls";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
@@ -17,6 +18,7 @@ import { useComposerSlashMenu } from "./useComposerSlashMenu";
 
 export function useComposerController() {
   const gateway = useGatewayCatalogStore();
+  const bootstrap = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
@@ -46,7 +48,7 @@ export function useComposerController() {
       : "idle",
   );
 
-  const { turnText, attachedFiles, clearDraft } = useComposerDraft();
+  const { turnText, attachedFiles, fileReferences, clearDraft } = useComposerDraft();
   const goalControls = useComposerGoalControls(turnText);
   const settings = useThreadSettingsControls();
   const attachmentUpload = useAttachmentUpload(selectedHostId, attachedFiles);
@@ -76,6 +78,7 @@ export function useComposerController() {
   const submit = useComposerTurnSubmit({
     turnText,
     attachedFiles,
+    fileReferences,
     clearDraft,
     selectedTurnOptions,
     collaborationModel: settings.collaborationModel,
@@ -158,9 +161,18 @@ export function useComposerController() {
     void submitComposer();
   }
 
+  function handleFileReferenceLimit(message: string) {
+    bootstrap.setError(message, {
+      hostId: selectedHostId.value,
+      projectId: selectedProjectId.value,
+      threadId: selectedThreadId.value,
+    });
+  }
+
   return {
     activePlanSummary,
     attachedFiles,
+    fileReferences,
     goalInputActive,
     goalActionPending: goalControls.pendingAction,
     saveSelectedThreadGoal: goalControls.saveObjective,
@@ -182,6 +194,7 @@ export function useComposerController() {
     interruptingTurn: submit.interruptingTurn,
     composerInputEnabled,
     selectedThreadId,
+    selectedProjectId,
     selectedThreadStatus,
     selectedThreadTokenUsage,
     isThreadRunning,
@@ -195,6 +208,7 @@ export function useComposerController() {
     runSlashCommand: slashActions.runSlashCommand,
     handleComposerKeydown,
     handlePrimaryAction,
+    handleFileReferenceLimit,
     models,
     loadingModels,
     ...settings,

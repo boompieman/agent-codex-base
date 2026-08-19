@@ -5,6 +5,7 @@ import type { UploadedFileRecord } from "~~/shared/types";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { selectedThreadKey } from "@/stores/gateway/thread-utils/identity";
+import type { ComposerFileReference } from "@/stores/gateway/types";
 
 export type ComposerAttachment = UploadedFileRecord & { id: string; dataUrl?: string };
 
@@ -14,6 +15,7 @@ export function useComposerDraft() {
   const { selectedHostId, selectedThreadId } = storeToRefs(navigation);
   const turnText = ref("");
   const attachedFiles = ref<ComposerAttachment[]>([]);
+  const fileReferences = ref<ComposerFileReference[]>([]);
   let activeHostId: number | null = null;
   let activeThreadId: string | null = null;
   let syncingDraft = false;
@@ -28,6 +30,7 @@ export function useComposerDraft() {
       const draft = key === null ? undefined : composer.composerDraftsByKey[key];
       turnText.value = draft?.text ?? "";
       attachedFiles.value = [...(draft?.attachedFiles ?? [])];
+      fileReferences.value = [...(draft?.fileReferences ?? [])];
       syncingDraft = false;
     },
     // Scope changes and local v-model writes are one transaction. A deferred watcher can observe
@@ -37,7 +40,7 @@ export function useComposerDraft() {
   );
 
   watch(
-    [turnText, attachedFiles],
+    [turnText, attachedFiles, fileReferences],
     () => {
       if (syncingDraft || activeHostId === null || activeThreadId === null) {
         return;
@@ -45,6 +48,7 @@ export function useComposerDraft() {
       composer.saveComposerDraft(activeHostId, activeThreadId, {
         text: turnText.value,
         attachedFiles: attachedFiles.value,
+        fileReferences: fileReferences.value,
       });
     },
     { deep: true, flush: "sync" },
@@ -53,6 +57,7 @@ export function useComposerDraft() {
   function clearDraft() {
     turnText.value = "";
     attachedFiles.value = [];
+    fileReferences.value = [];
     if (activeHostId !== null && activeThreadId !== null) {
       composer.clearComposerDraft(activeHostId, activeThreadId);
     }
@@ -61,6 +66,7 @@ export function useComposerDraft() {
   return {
     turnText,
     attachedFiles,
+    fileReferences,
     clearDraft,
   };
 }

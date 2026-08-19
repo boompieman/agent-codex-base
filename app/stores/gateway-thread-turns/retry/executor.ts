@@ -157,10 +157,14 @@ async function retryStoredTurnRequest(t: Translate, hostId: number, threadId: st
 }
 
 async function executeStoredTurnRequest(t: Translate, request: SubmittedTurnRequestState) {
+  if (request.projectId === null) {
+    throw new Error(t("app.projectRequiredForFileReferences"));
+  }
   if (request.kind === "start") {
     await requestTurnStart({
       hostId: request.hostId,
       threadId: request.threadId,
+      projectId: request.projectId,
       text: request.text,
       clientUserMessageId: createClientUserMessageId("turn"),
       cwd: request.cwd,
@@ -178,6 +182,7 @@ async function executeStoredTurnRequest(t: Translate, request: SubmittedTurnRequ
   await requestTurnSteer({
     hostId: request.hostId,
     threadId: request.threadId,
+    projectId: request.projectId,
     expectedTurnId: activeTurnId,
     text: request.text,
     clientUserMessageId: createClientUserMessageId("steer"),

@@ -50,6 +50,7 @@ export class ThreadTurnCommandService {
               expectedTurnId: input.expectedTurnId,
               clientUserMessageId,
               input: buildUserInput(input),
+              additionalContext: input.additionalContext ?? {},
             },
             120_000,
             parseTurnSteerResponse,

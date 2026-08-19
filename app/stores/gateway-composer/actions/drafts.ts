@@ -10,7 +10,11 @@ export function createComposerActions() {
       if (key === null) return;
       composer.composerDraftsByKey = {
         ...composer.composerDraftsByKey,
-        [key]: { text: draft.text, attachedFiles: [...draft.attachedFiles] },
+        [key]: {
+          text: draft.text,
+          attachedFiles: [...draft.attachedFiles],
+          fileReferences: [...draft.fileReferences],
+        },
       };
     },
 
