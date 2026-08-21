@@ -133,7 +133,7 @@ export interface AppServerTurn {
   status: "completed" | "interrupted" | "failed" | "inProgress";
   error: {
     message: string;
-    codexErrorInfo: unknown;
+    codexErrorInfo: CodexErrorInfo | null;
     additionalDetails: string | null;
   } | null;
   startedAt: number | null;
@@ -141,12 +141,35 @@ export interface AppServerTurn {
   durationMs: number | null;
 }
 
+export type CodexErrorInfo =
+  | "contextWindowExceeded"
+  | "sessionBudgetExceeded"
+  | "usageLimitExceeded"
+  | "serverOverloaded"
+  | "cyberPolicy"
+  | "misalignmentPolicyViolation"
+  | "internalServerError"
+  | "unauthorized"
+  | "badRequest"
+  | "threadRollbackFailed"
+  | "sandboxError"
+  | "other"
+  | { httpConnectionFailed: { httpStatusCode: number | null } }
+  | { responseStreamConnectionFailed: { httpStatusCode: number | null } }
+  | { responseStreamDisconnected: { httpStatusCode: number | null } }
+  | { responseTooManyFailedAttempts: { httpStatusCode: number | null } }
+  | { activeTurnNotSteerable: { turnKind: "review" | "compact" } };
+
 export interface AppServerThreadSection {
   id: string;
   name: string;
+  appearance: {
+    icon: string | null;
+    color: string | null;
+  } | null;
 }
 
-/** Exact Codex 0.147 Thread DTO for the experimental API negotiated by Gateway. */
+/** Exact Codex 0.149 Thread DTO for the experimental API negotiated by Gateway. */
 export interface AppServerThread {
   id: string;
   extra: Record<never, never> | null;
@@ -157,6 +180,7 @@ export interface AppServerThread {
   ephemeral: boolean;
   section: AppServerThreadSection | null;
   sectionEnteredAt: number | null;
+  projectId: string | null;
   historyMode: "legacy" | "paginated";
   modelProvider: string;
   createdAt: number;
@@ -181,12 +205,14 @@ export interface AppServerThread {
 }
 
 /** Browser/server projection with user-scoped Gateway navigation metadata. */
-export interface GatewayThread extends AppServerThread {
+export type GatewayThread = Omit<AppServerThread, "projectId"> & {
+  /** App-server's global experimental project identity; never use it as a Gateway SQLite id. */
+  appServerProjectId: string | null;
   hostId: number;
   projectId: number | null;
   pinned: boolean;
   title: string | null;
-}
+};
 
 export interface ThreadTokenUsageState {
   total: TokenUsageBreakdown;

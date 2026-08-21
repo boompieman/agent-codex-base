@@ -173,7 +173,19 @@ function summaryFromAppServerThread(
 
 function summaryFromThread(
   hostId: number,
-  thread: AppServerThread,
+  thread: Pick<
+    AppServerThread,
+    | "id"
+    | "parentThreadId"
+    | "agentNickname"
+    | "agentRole"
+    | "name"
+    | "preview"
+    | "cwd"
+    | "source"
+    | "recencyAt"
+    | "updatedAt"
+  >,
   project: ProjectRecord | undefined,
   projectId: number | null,
   gatewayTitle: string | null,

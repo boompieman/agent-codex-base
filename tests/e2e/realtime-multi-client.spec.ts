@@ -136,6 +136,10 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   await openApp(secondPage, { resetConfig: false });
   try {
     await expect.poll(() => activeRealtimeSocketCount(secondPage), { timeout: 10_000 }).toBe(1);
+    // This scenario verifies cross-browser runtime fanout, not last-open restoration. Select the
+    // background thread through the same project-tree action a user performs so the assertion does
+    // not depend on which tab last wrote browser-local navigation while the new page was starting.
+    await openThreadFromProjectOrRestoredState(secondPage, project.id, backgroundThreadId);
     await expect
       .poll(async () => currentSelectedThreadId(secondPage), { timeout: 30_000 })
       .toBe(backgroundThreadId);

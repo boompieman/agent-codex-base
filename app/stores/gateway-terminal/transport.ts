@@ -31,7 +31,7 @@ export async function openTerminalSession(
         rows: input.rows ?? 24,
       }),
       expectTerminalOpened,
-      30_000,
+      { timeoutMs: 30_000 },
     );
     if (!sessionIsCurrent()) return response.session;
     terminalStore.upsertTerminalSession(response.session);

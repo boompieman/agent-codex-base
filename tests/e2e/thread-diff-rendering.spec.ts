@@ -203,7 +203,7 @@ test("streaming diff keeps user-selected horizontal scroll position", async ({ p
     "open",
   );
   await expect(page.getByText("wide_line_001")).toBeVisible();
-  const chosenScrollLeft = await setDiffScrollLeft(page, "wide_line_001", 96);
+  const chosenScrollLeft = await setDiffScrollLeft(page, "src/wide.py", 96);
   expect(chosenScrollLeft).toBeGreaterThan(0);
 
   await appendFileDiffLines(page, {
@@ -214,8 +214,8 @@ test("streaming diff keeps user-selected horizontal scroll position", async ({ p
   });
 
   await page.waitForTimeout(300);
-  await expect.poll(() => diffScrollLeft(page, "wide_line_001")).toBeGreaterThanOrEqual(94);
-  await expect.poll(() => diffScrollLeft(page, "wide_line_001")).toBeLessThanOrEqual(98);
+  await expect.poll(() => diffScrollLeft(page, "src/wide.py")).toBeGreaterThanOrEqual(94);
+  await expect.poll(() => diffScrollLeft(page, "src/wide.py")).toBeLessThanOrEqual(98);
 });
 
 test("switching threads keeps asynchronously rendered diff content in normal flow", async ({

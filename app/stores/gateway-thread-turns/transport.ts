@@ -83,14 +83,17 @@ export function respondToServerRequest(
   serverRequestId: string | number,
   result: unknown,
 ) {
-  return useGatewayRealtimeStore().request((requestId) => ({
-    type: "serverRequest.respond",
-    requestId,
-    hostId,
-    threadId,
-    serverRequestId,
-    result,
-  }));
+  return useGatewayRealtimeStore().request(
+    (requestId) => ({
+      type: "serverRequest.respond",
+      requestId,
+      hostId,
+      threadId,
+      serverRequestId,
+      result,
+    }),
+    { errorMode: "notify" },
+  );
 }
 
 export function requestThreadTurnsPage(input: {

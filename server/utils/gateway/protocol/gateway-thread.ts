@@ -14,8 +14,13 @@ export function gatewayThreadFromAppServer(
   const pinned = gatewayMemoryState.pinnedThreads.find(
     (candidate) => candidate.hostId === hostId && candidate.threadId === thread.id,
   );
+  // App-server 0.149 introduced its own global project catalog with opaque string IDs. Gateway
+  // projects remain user-scoped SQLite rows with numeric IDs, so rename the upstream field at
+  // this sole projection boundary instead of letting two unrelated identities share `projectId`.
+  const { projectId: appServerProjectId, ...appServerThread } = thread;
   return {
-    ...thread,
+    ...appServerThread,
+    appServerProjectId,
     hostId,
     projectId,
     pinned: pinned !== undefined,

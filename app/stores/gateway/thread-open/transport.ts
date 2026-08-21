@@ -60,6 +60,6 @@ export function requestStartThread(options: ComposerTurnOptions) {
       approvalPolicy: options.approvalPolicy ?? undefined,
     }),
     expectThreadStarted,
-    30_000,
+    { timeoutMs: 30_000 },
   );
 }
