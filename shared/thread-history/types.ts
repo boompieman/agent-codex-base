@@ -61,6 +61,8 @@ export interface ThreadHistoryItem extends Record<string, unknown> {
   type?: string | null;
   status?: ThreadHistoryStatus;
   text?: string | null;
+  /** `async` is a user-visible message delivered without completing the active turn. */
+  delivery?: "async" | null;
   explanation?: string | null;
   content?: unknown[];
   summary?: unknown[];

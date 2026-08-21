@@ -33,7 +33,10 @@ const delegatedProps = reactiveOmit(props, "class", "toastOptions");
     }"
     :toast-options="{
       classes: {
-        toast: 'rounded-md',
+        toast: 'max-h-48 overflow-hidden rounded-md',
+        content: 'min-w-0',
+        title: 'max-h-32 overflow-auto whitespace-pre-wrap break-words',
+        description: 'max-h-24 overflow-auto whitespace-pre-wrap break-words',
       },
     }"
     v-bind="delegatedProps"

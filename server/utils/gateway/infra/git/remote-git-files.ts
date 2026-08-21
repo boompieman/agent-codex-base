@@ -18,6 +18,7 @@ const GIT_COMMAND_TIMEOUT_MS = 30_000;
 const MAX_GIT_METADATA_OUTPUT_BYTES = 256 * 1024;
 const MAX_GIT_WORKSPACE_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_GIT_WORKSPACE_FILES = 20_000;
+const MAX_GIT_ERROR_LOG_BYTES = 8 * 1024;
 
 interface GitMetadata {
   repositoryRoot: string;
@@ -131,7 +132,8 @@ export class RemoteGitFileService {
       maxOutputBytes: MAX_GIT_METADATA_OUTPUT_BYTES,
     });
     if (result.code !== 0) {
-      throw new Error(result.stderr.trim() || "Failed to inspect remote Git file state");
+      reportGitCommandFailure(host, "file comparison", result.code, result.stderr);
+      throw new Error("Failed to inspect remote Git file state");
     }
     const parsed = parseMetadata(result.stdout);
     if (parsed.availability !== "available") return parsed;
@@ -155,7 +157,8 @@ export class RemoteGitFileService {
       maxOutputBytes: MAX_GIT_WORKSPACE_OUTPUT_BYTES,
     });
     if (result.code !== 0) {
-      throw new Error(result.stderr.trim() || "Failed to inspect remote Git workspace");
+      reportGitCommandFailure(host, "workspace inspection", result.code, result.stderr);
+      throw new Error("Failed to inspect remote Git workspace");
     }
     return parseWorkspaceSnapshot(result.stdout);
   }
@@ -185,10 +188,33 @@ export class RemoteGitFileService {
     if (result.code === 45) return { kind: "empty", revision: metadata.headOid };
     if (result.code === 46) return { kind: "unavailable", reason: "tooLarge" };
     if (result.code !== 0) {
-      throw new Error(result.stderr.trim() || "Failed to read remote Git baseline");
+      reportGitCommandFailure(host, "baseline read", result.code, result.stderr);
+      throw new Error("Failed to read remote Git baseline");
     }
     return { kind: "head", revision: metadata.headOid, text: result.stdout };
   }
+}
+
+function reportGitCommandFailure(
+  host: HostWithSecret,
+  operation: string,
+  exitCode: number | null,
+  stderr: string,
+) {
+  const detail = stderr.trim();
+  console.error("[gateway] remote Git command failed", {
+    hostId: host.id,
+    hostName: host.name,
+    operation,
+    exitCode,
+    // Git can emit one line per unreadable generated file. Keep enough tail context to diagnose
+    // the remote filesystem without copying megabytes into Docker logs or a realtime response.
+    stderrTail:
+      detail.length <= MAX_GIT_ERROR_LOG_BYTES
+        ? detail
+        : detail.slice(detail.length - MAX_GIT_ERROR_LOG_BYTES),
+    stderrTruncated: detail.length > MAX_GIT_ERROR_LOG_BYTES,
+  });
 }
 
 function remainingTimeout(deadline: number) {

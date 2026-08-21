@@ -113,6 +113,36 @@ const threadItemSchema = z
   })
   .loose();
 
+const codexErrorInfoSchema = z.union([
+  z.enum([
+    "contextWindowExceeded",
+    "sessionBudgetExceeded",
+    "usageLimitExceeded",
+    "serverOverloaded",
+    "cyberPolicy",
+    "misalignmentPolicyViolation",
+    "internalServerError",
+    "unauthorized",
+    "badRequest",
+    "threadRollbackFailed",
+    "sandboxError",
+    "other",
+  ]),
+  z.object({ httpConnectionFailed: z.object({ httpStatusCode: z.number().nullable() }).strict() }),
+  z.object({
+    responseStreamConnectionFailed: z.object({ httpStatusCode: z.number().nullable() }).strict(),
+  }),
+  z.object({
+    responseStreamDisconnected: z.object({ httpStatusCode: z.number().nullable() }).strict(),
+  }),
+  z.object({
+    responseTooManyFailedAttempts: z.object({ httpStatusCode: z.number().nullable() }).strict(),
+  }),
+  z.object({
+    activeTurnNotSteerable: z.object({ turnKind: z.enum(["review", "compact"]) }).strict(),
+  }),
+]);
+
 export const threadTurnSchema = z
   .object({
     id: z.string().min(1),
@@ -122,7 +152,7 @@ export const threadTurnSchema = z
     error: z
       .object({
         message: z.string(),
-        codexErrorInfo: z.unknown().nullable(),
+        codexErrorInfo: codexErrorInfoSchema.nullable(),
         additionalDetails: z.string().nullable(),
       })
       .loose()
@@ -175,10 +205,18 @@ export const appServerThreadSchema = z
       .object({
         id: z.string().min(1),
         name: z.string().min(1),
+        appearance: z
+          .object({
+            icon: z.string().nullable(),
+            color: z.string().nullable(),
+          })
+          .strict()
+          .nullable(),
       })
       .strict()
       .nullable(),
     sectionEnteredAt: z.number().nullable(),
+    projectId: z.string().nullable(),
     historyMode: z.enum(["legacy", "paginated"]),
     modelProvider: z.string(),
     createdAt: z.number(),
@@ -230,7 +268,8 @@ export const appServerThreadSchema = z
   })
   .strict();
 
-export const gatewayThreadSchema = appServerThreadSchema.extend({
+export const gatewayThreadSchema = appServerThreadSchema.omit({ projectId: true }).extend({
+  appServerProjectId: z.string().nullable(),
   hostId: z.number().int().positive(),
   projectId: z.number().int().positive().nullable(),
   pinned: z.boolean(),
@@ -246,7 +285,9 @@ export function appServerThreadFromUnknown(value: unknown): AppServerThread | nu
   return result.success ? result.data : null;
 }
 
-export function isAppServerSubAgentThread(thread: AppServerThread) {
+export function isAppServerSubAgentThread(
+  thread: Pick<AppServerThread, "parentThreadId" | "source">,
+) {
   const parentThreadId = thread.parentThreadId?.trim();
   return (
     (parentThreadId !== undefined && parentThreadId !== "") ||

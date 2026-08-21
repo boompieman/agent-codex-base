@@ -36,7 +36,7 @@ const threadHistorySchema = z
         id: nonEmptyString,
         // This is Gateway's reducer projection, not the official Thread.turns DTO. Items retain
         // event-specific fields and partially materialized turns are valid while streaming. The
-        // The strict 0.147 schema belongs at the app-server RPC boundary; reusing it here would reject
+        // strict 0.149 schema belongs at the app-server RPC boundary; reusing it here would reject
         // Gateway state such as active context compaction and paginated history.
         turns: z.array(projectedHistoryTurnSchema),
       })

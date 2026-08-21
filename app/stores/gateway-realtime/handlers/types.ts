@@ -1,5 +1,6 @@
 import type { GatewayEvent, RealtimeServerMessage } from "~~/shared/types";
 import type { RealtimeRequestError } from "../request-errors";
+import type { RealtimeRequestRejection } from "../request-broker";
 
 export type RealtimeServerMessageMap = {
   [K in RealtimeServerMessage["type"]]: Extract<RealtimeServerMessage, { type: K }>;
@@ -16,7 +17,10 @@ export interface RealtimeServerMessageHandlerContext {
   markReady: () => void;
   resubscribe: () => void;
   resolveRequest: (message: RealtimeResponseMessage) => void;
-  rejectRequest: (requestId: string, error: RealtimeRequestError | Error) => void;
+  rejectRequest: (
+    requestId: string,
+    error: RealtimeRequestError | Error,
+  ) => RealtimeRequestRejection;
   acknowledgePong: (nonce?: string) => void;
   restoreTerminalSessions: () => Promise<void>;
   advanceThreadSubscriptionCursor: (event: GatewayEvent) => void;

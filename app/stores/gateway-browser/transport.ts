@@ -12,7 +12,7 @@ export async function openBrowserPreview(input: BrowserPreviewTarget) {
   const response = await useGatewayRealtimeStore().request(
     (requestId) => ({ type: "browser.open", requestId, ...target }),
     expectBrowserOpened,
-    30_000,
+    { timeoutMs: 30_000 },
   );
   // browser.opened is projected into Pinia by the realtime domain subscriber before the request
   // broker resolves this promise. Writing the same session here as well recreates a declarative

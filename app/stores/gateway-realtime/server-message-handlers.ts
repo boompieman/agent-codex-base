@@ -105,7 +105,11 @@ function handleRealtimeError(
     message.details ?? {},
   );
   if (message.requestId !== null && message.requestId !== undefined && message.requestId !== "") {
-    ctx.rejectRequest(message.requestId, requestError);
+    const rejection = ctx.rejectRequest(message.requestId, requestError);
+    // Pending promises do not imply that their feature renders errors. Each request explicitly
+    // chooses whether failures are returned to an inline owner or published through Sonner.
+    // Orphaned errors still notify globally because no caller remains to make them visible.
+    if (rejection.delivered && !rejection.notify) return;
   }
   if (
     message.code !== null &&

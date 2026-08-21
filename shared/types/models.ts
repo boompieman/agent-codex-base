@@ -12,6 +12,14 @@ export interface ModelRecord {
     description?: string | null;
   }>;
   inputModalities?: string[];
+  multiAgentVersion?: "disabled" | "v1" | "v2" | null;
+  upgradeInfo?: {
+    model: string;
+    upgradeCopy: string | null;
+    modelLink: string | null;
+    migrationMarkdown: string | null;
+    retirementAt: number | null;
+  } | null;
 }
 
 export interface ModelListResult {

@@ -366,28 +366,31 @@ export async function commandOutputScrollTop(page: Page) {
     });
 }
 
-export async function setDiffScrollLeft(page: Page, text: string, scrollLeft: number) {
-  return await page
-    .getByText(text)
-    .first()
-    .evaluate((element: HTMLElement, scrollLeft) => {
-      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-      if (!viewport) throw new Error("Missing diff viewport");
-      viewport.scrollLeft = scrollLeft;
-      viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
-      return viewport.scrollLeft;
-    }, scrollLeft);
+export async function setDiffScrollLeft(page: Page, path: string, scrollLeft: number) {
+  const viewport = await diffViewport(page, path);
+  return await viewport.evaluate((element: HTMLElement, nextScrollLeft) => {
+    element.scrollLeft = nextScrollLeft;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return element.scrollLeft;
+  }, scrollLeft);
 }
 
-export async function diffScrollLeft(page: Page, text: string) {
-  return await page
-    .getByText(text)
-    .first()
-    .evaluate((element: HTMLElement) => {
-      const viewport = element.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-      if (!viewport) throw new Error("Missing diff viewport");
-      return viewport.scrollLeft;
-    });
+export async function diffScrollLeft(page: Page, path: string) {
+  return await (
+    await diffViewport(page, path)
+  ).evaluate((element: HTMLElement) => element.scrollLeft);
+}
+
+async function diffViewport(page: Page, path: string) {
+  const trigger = page.getByRole("button", { name: new RegExp(escapeRegExp(path)) }).first();
+  // The rendered code is replaced as streaming Markdown is enhanced, so text nodes are not stable
+  // anchors. The file's Collapsible root persists across that replacement, so locate the bounded
+  // viewport from the user-visible file trigger instead of from transient highlighted code.
+  return trigger.locator("..").locator('[data-slot="scroll-area-viewport"]');
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function chatViewportMaxScrollTop(page: Page) {

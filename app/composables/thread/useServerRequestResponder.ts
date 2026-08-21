@@ -2,7 +2,6 @@ import { computed, ref, unref, type MaybeRef } from "vue";
 
 import { useGatewayBootstrapStore } from "@/stores/gateway-bootstrap";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
-import { errorMessageLabels, messageFromError } from "@/stores/gateway/thread-utils/identity";
 import { captureSessionEpoch } from "@/utils/session-epoch";
 
 type RequestId = string | number;
@@ -62,12 +61,10 @@ export function useServerRequestResponder(source: ServerRequestResponderSource) 
       await threadTurns.respondToServerRequest(hostId, threadId, requestId, result);
       if (!sessionIsCurrent()) return false;
       return true;
-    } catch (error: unknown) {
-      if (!sessionIsCurrent()) return false;
-      store.setError(
-        messageFromError(error, t("app.submitResponseFailed"), errorMessageLabels(t)),
-        context.value,
-      );
+    } catch {
+      // serverRequest.respond declares global notification ownership in the realtime transport.
+      // Keep this composable responsible only for form state so one failure cannot create both a
+      // request-level Sonner toast and a second component-level toast.
       return false;
     } finally {
       if (sessionIsCurrent()) responding.value = false;
