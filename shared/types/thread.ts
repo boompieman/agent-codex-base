@@ -68,6 +68,13 @@ export interface ThreadTurnsPageResult {
   };
 }
 
+export interface ThreadItemsPageResult {
+  turnId: string;
+  items: ThreadHistoryItem[];
+  nextCursor: string | null;
+  backwardsCursor: string | null;
+}
+
 export type ApprovalPolicy = "untrusted" | "on-request" | "never";
 export type ReasoningEffort = string;
 
@@ -135,16 +142,24 @@ export interface AppServerTurn {
     message: string;
     codexErrorInfo: CodexErrorInfo | null;
     additionalDetails: string | null;
+    misalignment: MisalignmentErrorDetails | null;
   } | null;
   startedAt: number | null;
   completedAt: number | null;
   durationMs: number | null;
 }
 
+export interface MisalignmentErrorDetails {
+  errorType: string | null;
+  detailedExplanation: string | null;
+  steer: { message: string } | null;
+}
+
 export type CodexErrorInfo =
   | "contextWindowExceeded"
   | "sessionBudgetExceeded"
   | "usageLimitExceeded"
+  | "rateLimitExceeded"
   | "serverOverloaded"
   | "cyberPolicy"
   | "misalignmentPolicyViolation"
@@ -169,7 +184,7 @@ export interface AppServerThreadSection {
   } | null;
 }
 
-/** Exact Codex 0.149 Thread DTO for the experimental API negotiated by Gateway. */
+/** Exact Codex 0.151 Thread DTO for the experimental API negotiated by Gateway. */
 export interface AppServerThread {
   id: string;
   extra: Record<never, never> | null;

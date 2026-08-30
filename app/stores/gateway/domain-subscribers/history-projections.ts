@@ -9,6 +9,7 @@ import {
 import { updateTurnDiff } from "~~/shared/thread-history/diff";
 import { mergeItemIntoLatestTurn } from "~~/shared/thread-history/items";
 import { resolveServerRequestInHistory } from "~~/shared/thread-history/requests";
+import { upsertTurnResponseUsage } from "~~/shared/thread-history/response-usage";
 import { mergeThreadTurns, syncCompletedTurn } from "~~/shared/thread-history/turns";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
@@ -89,6 +90,18 @@ export function registerHistoryProjectionSubscribers() {
   gatewayDomainEvents.on("history-turn-synced", (event) => {
     updateThreadHistory(event.hostId, event.threadId, (history, currentThread) =>
       syncCompletedTurn(history, currentThread, event.threadId, event.turn),
+    );
+  });
+  gatewayDomainEvents.on("history-response-usage-upsert", (event) => {
+    updateThreadHistory(event.hostId, event.threadId, (history, currentThread) =>
+      upsertTurnResponseUsage(
+        history,
+        currentThread,
+        event.threadId,
+        event.turnId,
+        event.responseId,
+        event.amount,
+      ),
     );
   });
 }

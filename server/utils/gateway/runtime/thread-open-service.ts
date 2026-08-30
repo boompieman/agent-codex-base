@@ -290,7 +290,7 @@ export class ThreadOpenService {
           cursor: null,
           limit,
           sortDirection: "desc",
-          itemsView: "full",
+          itemsView: "summary",
         },
         120_000,
         parseTurnsPage,

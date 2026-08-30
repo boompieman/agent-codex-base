@@ -4,6 +4,10 @@ import { toValue, watch } from "vue";
 import { useAuthStore } from "@/stores/auth";
 import { useGatewayFileWorkspaceStore } from "@/stores/file-workspace";
 import { useFileGitWorkspaceStore } from "@/stores/file-workspace/git/workspace";
+import { isPathWithinRoot } from "@/stores/file-workspace/paths";
+import { useFileWorkspaceWatch } from "./useFileWorkspaceWatch";
+
+const MAX_FILE_WATCH_PATHS = 256;
 
 export function useFileWorkspaceLifecycle(input: {
   hostId: MaybeRefOrGetter<number>;
@@ -16,6 +20,12 @@ export function useFileWorkspaceLifecycle(input: {
   const gitWorkspace = useFileGitWorkspaceStore();
   const auth = useAuthStore();
   auth.hydrate();
+  const refreshGitWorkspace = () => {
+    const projectId = toValue(input.projectId);
+    const rootPath = toValue(input.rootPath);
+    if (projectId === null || rootPath === "") return Promise.resolve(null);
+    return gitWorkspace.load({ hostId: toValue(input.hostId), projectId, rootPath });
+  };
 
   const revalidate = () => {
     if (!auth.isAuthenticated) return Promise.resolve([]);
@@ -26,12 +36,15 @@ export function useFileWorkspaceLifecycle(input: {
     ]);
   };
 
-  const refreshGitWorkspace = () => {
-    const projectId = toValue(input.projectId);
-    const rootPath = toValue(input.rootPath);
-    if (projectId === null || rootPath === "") return Promise.resolve(null);
-    return gitWorkspace.load({ hostId: toValue(input.hostId), projectId, rootPath });
-  };
+  useFileWorkspaceWatch({
+    hostId: input.hostId,
+    projectId: input.projectId,
+    threadId: input.threadId,
+    active: input.active,
+    authenticated: () => auth.isAuthenticated,
+    paths: () => watchedWorkspacePaths(workspace, input),
+    onReady: revalidate,
+  });
 
   watch(
     () =>
@@ -65,4 +78,23 @@ export function useFileWorkspaceLifecycle(input: {
   useEventListener(document, "visibilitychange", () => {
     if (document.visibilityState === "visible" && toValue(input.active) === true) void revalidate();
   });
+}
+
+function watchedWorkspacePaths(
+  workspace: ReturnType<typeof useGatewayFileWorkspaceStore>,
+  input: {
+    hostId: MaybeRefOrGetter<number>;
+    threadId: MaybeRefOrGetter<string>;
+    rootPath: MaybeRefOrGetter<string>;
+  },
+) {
+  const rootPath = toValue(input.rootPath);
+  const scope = workspace.scopeFor(toValue(input.hostId), toValue(input.threadId));
+  if (rootPath === "" || scope === null) return rootPath === "" ? [] : [rootPath];
+  // Keep open documents ahead of expanded folders when the protocol cap is reached: editor
+  // freshness is more important than observing an offscreen branch, and the root remains first so
+  // top-level additions are always visible.
+  return [...new Set([rootPath, ...scope.openPaths, ...scope.expandedPaths])]
+    .filter((path) => path === rootPath || isPathWithinRoot(rootPath, path))
+    .slice(0, MAX_FILE_WATCH_PATHS);
 }

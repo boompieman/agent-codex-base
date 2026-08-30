@@ -1,4 +1,5 @@
 import type { ErrorMessageLabels } from "./thread-utils/identity";
+import type { MisalignmentErrorDetails } from "~~/shared/types";
 import { gatewayErrorMessage, gatewayErrorPayload } from "@/utils/gateway-error";
 import { recordFromUnknown } from "~~/shared/utils/records";
 
@@ -81,6 +82,21 @@ export function appServerTurnErrorFromNotification(
     code,
     additionalDetails,
   );
+}
+
+export function misalignmentDetailsFromNotification(
+  params: Record<string, unknown>,
+): MisalignmentErrorDetails | null {
+  const error = recordFromUnknown(params.error);
+  const details = recordFromUnknown(error?.misalignment);
+  if (details === null) return null;
+  const steerRecord = recordFromUnknown(details.steer);
+  const steerMessage = stringValue(steerRecord?.message);
+  return {
+    errorType: stringValue(details.errorType),
+    detailedExplanation: stringValue(details.detailedExplanation),
+    steer: steerMessage === null ? null : { message: steerMessage },
+  };
 }
 
 export function unknownGatewayErrorFromError(

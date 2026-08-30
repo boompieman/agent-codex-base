@@ -1,6 +1,6 @@
 import type { RealtimeClientMessage } from "~~/shared/types";
 import { requireRecord } from "../../http/validation/common";
-import { threadTurnsListSchema } from "../../http/validation/threads";
+import { threadItemsListSchema, threadTurnsListSchema } from "../../http/validation/threads";
 import { threadBroker } from "../../runtime/broker";
 import { hostStore } from "../../state/hosts";
 import { sendRealtimePeerMessage, type RealtimePeer } from "../peer-state";
@@ -18,6 +18,22 @@ export async function loadThreadTurns(
   });
   sendRealtimePeerMessage(peer, {
     type: "thread.turns.page",
+    requestId: request.requestId,
+    hostId: input.hostId,
+    threadId: input.threadId,
+    ...result,
+  });
+}
+
+export async function loadThreadItems(
+  peer: RealtimePeer,
+  request: Extract<RealtimeClientMessage, { type: "thread.items.load" }>,
+) {
+  const input = threadItemsListSchema.parse(request);
+  const host = requireRecord(hostStore.getWithSecret(input.hostId), "Host not found");
+  const result = await threadBroker.listThreadItems(host, input.threadId, input);
+  sendRealtimePeerMessage(peer, {
+    type: "thread.items.page",
     requestId: request.requestId,
     hostId: input.hostId,
     threadId: input.threadId,

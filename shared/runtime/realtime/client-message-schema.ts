@@ -91,6 +91,17 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
       .strict(),
     z
       .object({
+        type: z.literal("thread.items.load"),
+        ...requestIdField,
+        ...threadScopeFields,
+        turnId: nonEmptyString,
+        cursor: nullableString,
+        limit: positiveId.optional(),
+        sortDirection: z.enum(["asc", "desc"]).optional(),
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal("thread.start"),
         ...requestIdField,
         hostId: positiveId,
@@ -160,6 +171,43 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         ...requestIdField,
         ...threadScopeFields,
         turnId: nonEmptyString,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("turn.settings.update"),
+        ...requestIdField,
+        ...threadScopeFields,
+        turnId: nonEmptyString,
+        model: nullableString,
+        effort: nullableString,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("mcp.status.list"),
+        ...requestIdField,
+        ...threadScopeFields,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("mcp.event.stream.start"),
+        ...requestIdField,
+        ...threadScopeFields,
+        server: nonEmptyString,
+        subscriptionId: nonEmptyString,
+        name: nonEmptyString,
+        arguments: z.unknown(),
+        meta: z.unknown().optional(),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("mcp.event.stream.stop"),
+        ...requestIdField,
+        ...threadScopeFields,
+        subscriptionId: nonEmptyString,
       })
       .strict(),
     z
@@ -244,6 +292,32 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         ...requestIdField,
         sessionId: nonEmptyString,
         allowInsecureTls: z.boolean(),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.search"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        query: z.string().max(500),
+        cancellationToken: nonEmptyString,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.watch.subscribe"),
+        ...requestIdField,
+        ...threadScopeFields,
+        projectId: positiveId,
+        paths: z.array(nonEmptyString).min(1).max(256),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.watch.unsubscribe"),
+        ...threadScopeFields,
+        projectId: positiveId,
       })
       .strict(),
     z

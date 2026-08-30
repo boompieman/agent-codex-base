@@ -30,9 +30,17 @@ export type {
   ThreadSettingsState,
   ThreadTokenUsageState,
   ThreadTurnsPageResult,
+  ThreadItemsPageResult,
+  MisalignmentErrorDetails,
   TokenUsageBreakdown,
   ReasoningEffort,
 } from "./types/thread";
+export type {
+  GatewayMcpServerStatus,
+  McpAuthStatus,
+  McpServerConnectionStatus,
+  McpServerEvent,
+} from "./types/mcp";
 export type { ModelListResult, ModelRecord } from "./types/models";
 export type { TerminalOpenTarget, TerminalScope, TerminalSessionSnapshot } from "./types/terminal";
 export type {
@@ -76,6 +84,7 @@ export type {
 } from "./types/config";
 export type {
   FilePreviewDocument,
+  ProjectFileSearchResult,
   RemoteFileConflict,
   RemoteFileWriteResult,
   RemoteGitFileBaseline,
@@ -95,6 +104,7 @@ export type {
   ThreadHistoryState,
   ThreadHistoryStatus,
   ThreadHistoryTurn,
+  ThreadResponseUsage,
 } from "./thread-history/types";
 export type {
   ThreadTimelineHistoryState,

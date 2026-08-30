@@ -1,4 +1,5 @@
 import { itemLifecycleReducers } from "./item-lifecycle";
+import { rawResponseReducers } from "./raw-response";
 import { pendingServerRequestReducers, serverRequestReducers } from "./server-requests";
 import { streamDeltaReducers } from "./stream-deltas";
 import { turnLifecycleReducers } from "./turn-lifecycle";
@@ -11,6 +12,7 @@ const appServerHistoryReducers: AppServerHistoryReducerRegistry = {
   ...streamDeltaReducers,
   ...serverRequestReducers,
   ...pendingServerRequestReducers,
+  ...rawResponseReducers,
 };
 
 export const appServerHistoryDispatcher = new AppServerHistoryDispatcher(appServerHistoryReducers);

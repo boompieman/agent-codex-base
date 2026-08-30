@@ -53,6 +53,7 @@ function directoryPath(path: string) {
             class="min-h-0 w-full justify-start gap-2 overflow-hidden rounded-xl px-3 py-2 text-left"
             :class="index === selectedIndex ? 'bg-canvas-soft text-ink' : 'text-ink-secondary'"
             :aria-selected="index === selectedIndex"
+            :data-file-path="file.path"
             :data-testid="`file-mention-option-${index}`"
             @mouseenter="emit('hover', index)"
             @mousedown.prevent

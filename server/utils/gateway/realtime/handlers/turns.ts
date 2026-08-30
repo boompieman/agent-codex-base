@@ -4,6 +4,9 @@ import { interruptTurnFromRealtime } from "../turn-interrupt";
 import { startTurnFromRealtime } from "../turn-start";
 import { steerTurnFromRealtime } from "../turn-steer";
 import { sendRealtimePeerMessage, type RealtimePeer } from "../peer-state";
+import { requireRecord } from "../../http/validation/common";
+import { threadBroker } from "../../runtime/broker";
+import { hostStore } from "../../state/hosts";
 
 export async function startTurn(
   peer: RealtimePeer,
@@ -43,6 +46,25 @@ export async function interruptTurn(
     requestId: request.requestId,
     hostId: request.hostId,
     threadId: request.threadId,
+  });
+}
+
+export async function updateTurnSettings(
+  peer: RealtimePeer,
+  request: Extract<RealtimeClientMessage, { type: "turn.settings.update" }>,
+) {
+  const host = requireRecord(hostStore.getWithSecret(request.hostId), "Host not found");
+  const result = await threadBroker.updateTurnSettings(host, request.threadId, request.turnId, {
+    model: request.model,
+    effort: request.effort,
+  });
+  sendRealtimePeerMessage(peer, {
+    type: "turn.settings.updated",
+    requestId: request.requestId,
+    hostId: request.hostId,
+    threadId: request.threadId,
+    turnId: request.turnId,
+    status: result.status,
   });
 }
 

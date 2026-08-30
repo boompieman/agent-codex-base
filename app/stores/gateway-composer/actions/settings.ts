@@ -16,6 +16,8 @@ import {
 } from "@/stores/gateway/thread-utils/settings";
 import { statusValue } from "@/utils/thread-items";
 import { captureSessionEpoch } from "@/utils/session-epoch";
+import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
+import { requestRunningTurnSettingsUpdate } from "../turn-settings-transport";
 
 export function createThreadSettingsActions() {
   return {
@@ -88,6 +90,19 @@ export function createThreadSettingsActions() {
           method: "POST",
           body: { hostId, threadId, ...settings },
         });
+        const runtime = useGatewayThreadRuntimeStore();
+        const turnId = runtime.activeTurnIdsByThreadKey[pinnedKey(hostId, threadId)];
+        if (turnId !== undefined && ("model" in settings || "effort" in settings)) {
+          await requestRunningTurnSettingsUpdate({
+            hostId,
+            threadId,
+            turnId,
+            settings,
+          });
+          // targetUnavailable means the exact live task already advanced or cannot be switched;
+          // the thread default above remains authoritative for the next Turn. The response is
+          // therefore acknowledged without reverting the user's composer selection.
+        }
         if (!sessionIsCurrent()) return false;
         this.setThreadSettings(hostId, threadId, settings);
         return true;

@@ -34,6 +34,7 @@ const props = defineProps<{
   composerInputEnabled: boolean;
   uploadingAttachments: boolean;
   selectedThreadId: string | null;
+  selectedHostId: number | null;
   selectedProjectId: number | null;
   selectedApprovalMode: ApprovalPolicy | "custom";
   selectedThreadTokenUsage: ThreadTokenUsageState | null;
@@ -136,6 +137,7 @@ function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: st
           :model-value="modelValue"
           :references="fileReferences"
           :scope-key="composerScopeKey()"
+          :host-id="selectedHostId"
           :project-id="selectedProjectId"
           :disabled="!composerInputEnabled"
           :placeholder="$t('app.askFollowUp')"

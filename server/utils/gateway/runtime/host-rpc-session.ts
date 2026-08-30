@@ -10,6 +10,8 @@ import { codexRuntime } from "../infra/host-services";
 import { runtimeLog } from "./runtime-log";
 import { createThreadNotificationResolvers } from "./notification-rpc-resolvers";
 import { pendingServerRequests } from "./pending-server-requests";
+import { mcpEventSubscriptions } from "./mcp-event-subscriptions";
+import { recordFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
 
 export class HostRpcSession {
   readonly client: CodexRpcClient;
@@ -91,7 +93,7 @@ export class HostRpcSession {
           });
         });
     }
-    const threadId = threadIdFromNotification(message);
+    const threadId = threadIdFromNotification(message) ?? this.mcpEventStreamThreadId(message);
     if (threadId === null) {
       return;
     }
@@ -144,10 +146,19 @@ export class HostRpcSession {
     }
   }
 
+  private mcpEventStreamThreadId(message: RpcEnvelope) {
+    if (message.method !== "mcpServer/event/stream/notification") return null;
+    const subscriptionId = stringFromUnknown(recordFromUnknown(message.params)?.subscriptionId);
+    return subscriptionId === null
+      ? null
+      : mcpEventSubscriptions.threadId(this.host.id, subscriptionId);
+  }
+
   close() {
     this.generation += 1;
     this.connected = false;
     this.connectPromise = null;
     this.client.close();
+    mcpEventSubscriptions.clearHost(this.host.id);
   }
 }

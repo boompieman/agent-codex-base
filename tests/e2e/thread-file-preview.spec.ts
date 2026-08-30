@@ -614,8 +614,8 @@ done
     remote,
     `sleep 1; printf '%s\n' 'def nested_preview_marker():' '    return "remote-file-refreshed"' > ${shellQuote(nestedPythonPath)}`,
   );
-  await agentWorkspaceTab(page).click();
-  await filesWorkspaceTab(page).click();
+  // The foreground Files panel receives App Server fs/watch changes directly; no tab switch or
+  // browser polling request should be necessary to refresh the open document.
   await expect(panel.getByText("remote-file-refreshed")).toBeVisible();
   await expect(panel.getByText("已修改", { exact: true })).toBeVisible();
   await expect(panel.locator(".cm-gitChangeMarker-modified")).toBeVisible();

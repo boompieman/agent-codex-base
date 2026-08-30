@@ -2,6 +2,7 @@
 import IntermediateStepsToggle from "@/components/thread/IntermediateStepsToggle.vue";
 import ThreadItemView from "@/components/thread/ThreadItemView.vue";
 import TurnDurationLabel from "@/components/thread/TurnDurationLabel.vue";
+import TurnUsageAmountLabel from "@/components/thread/TurnUsageAmountLabel.vue";
 import type { ThreadTimelineRow } from "@/components/thread/timeline-rows";
 
 const props = defineProps<{
@@ -24,6 +25,7 @@ const emit = defineEmits<{
     v-if="props.row.type === 'intermediateHeader'"
     :open="props.row.open"
     :count="props.row.count"
+    :loading="props.row.loading"
     @toggle="emit('intermediateToggle', props.row.turnId, $event)"
   />
   <ThreadItemView
@@ -33,7 +35,11 @@ const emit = defineEmits<{
     :thread-id="threadId"
     :user-message-variant="props.row.userMessageVariant"
     :turn-timing="props.row.turnTiming"
+    :response-usage="props.row.responseUsage"
     :agent-actions-available="props.row.agentActionsAvailable"
   />
-  <TurnDurationLabel v-else :timing="props.row" />
+  <div v-else class="flex items-center gap-3">
+    <TurnDurationLabel :timing="props.row" />
+    <TurnUsageAmountLabel :usage="props.row.responseUsage" />
+  </div>
 </template>

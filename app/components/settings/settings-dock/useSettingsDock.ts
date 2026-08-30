@@ -1,12 +1,26 @@
-import type { DockviewReadyEvent, IDockviewPanel } from "dockview-vue";
+import type { DockviewApi, DockviewReadyEvent, IDockviewPanel } from "dockview-vue";
 import { settingsPanelKinds, settingsPanelRegistry } from "./panel-registry";
 
 const DEFAULT_SETTINGS_PANEL = "config";
 
 export function useSettingsDock() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const dockApi = shallowRef<DockviewApi | null>(null);
+
+  function syncPanelTitles() {
+    const api = dockApi.value;
+    if (api === null) return;
+
+    for (const kind of settingsPanelKinds) {
+      const panel = api.getPanel(kind);
+      if (panel !== undefined) panel.api.setTitle(t(settingsPanelRegistry[kind].titleKey));
+    }
+  }
+
+  watch(locale, syncPanelTitles);
 
   function ready({ api }: DockviewReadyEvent) {
+    dockApi.value = api;
     let groupAnchor: IDockviewPanel | null = null;
     let defaultPanel: IDockviewPanel | null = null;
 
@@ -30,6 +44,10 @@ export function useSettingsDock() {
     }
 
     defaultPanel?.api.setActive();
+    // The custom tab renders translated text reactively, while Dockview owns the tab's ARIA
+    // label through its panel title. Keep both sources synchronized so a locale switch does not
+    // leave assistive technology reading the previous language.
+    syncPanelTitles();
   }
 
   return { ready };

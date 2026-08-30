@@ -144,6 +144,11 @@ export type ThreadTimelineTurn = Omit<ThreadHistoryTurn, "id" | "items"> & {
   items: ThreadTimelineItem[];
 };
 
+export interface ThreadResponseUsage {
+  responseId: string;
+  amount: string;
+}
+
 export interface ThreadHistoryTurn {
   id?: string | number | null;
   status?: ThreadHistoryStatus;
@@ -157,6 +162,8 @@ export interface ThreadHistoryTurn {
   startedAt?: number | string | null;
   completedAt?: number | string | null;
   durationMs?: number | null;
+  /** Gateway projection of transient `rawResponse/completed` events, keyed by response id. */
+  responseUsage?: ThreadResponseUsage[];
   diff?: string | null;
 }
 

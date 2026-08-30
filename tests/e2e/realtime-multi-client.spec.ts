@@ -132,6 +132,12 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   });
   await openThreadFromProjectOrRestoredState(page, project.id, threadId);
   const secondPage = await secondContext.newPage();
+  let remoteImageRequestCount = 0;
+  secondPage.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/remote/images") {
+      remoteImageRequestCount += 1;
+    }
+  });
   await installRealtimeSocketProbe(secondPage);
   await openApp(secondPage, { resetConfig: false });
   try {
@@ -234,6 +240,18 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     // turn.steer and tests a different operation. Wait on runtime identity rather than adding a
     // sleep or weakening the protocol assertion below.
     await expect.poll(async () => activeRemoteTurnId(page), { timeout: 120_000 }).toBe("");
+    const imageAttachment = secondPage.getByTestId("thread-image-attachment").last();
+    await revealVirtualizedChatLocator(secondPage, imageAttachment);
+    await expect(imageAttachment.locator("img")).toHaveAttribute("src", /^blob:/);
+    await expect.poll(() => remoteImageRequestCount).toBe(1);
+
+    await openThreadFromProjectOrRestoredState(secondPage, project.id, backgroundThreadId);
+    await openThreadFromProjectOrRestoredState(secondPage, project.id, threadId);
+    await revealVirtualizedChatLocator(secondPage, imageAttachment);
+    await expect(imageAttachment.locator("img")).toHaveAttribute("src", /^blob:/);
+    // Timeline virtualization intentionally destroys off-thread image DOM. The page-level Blob
+    // cache must restore that DOM without reopening the remote file over SSH.
+    await expect.poll(() => remoteImageRequestCount).toBe(1);
     await revealVirtualizedChatLocator(
       page,
       page.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),

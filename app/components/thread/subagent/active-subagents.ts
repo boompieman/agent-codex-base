@@ -2,7 +2,7 @@ import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
 import { recordFromUnknown } from "~~/shared/utils/records";
 import { firstNonEmptyString, trimmedOrNull } from "~~/shared/utils/strings";
 
-const ACTIVE_AGENT_STATUSES = new Set(["pendingInit", "running"]);
+const ACTIVE_AGENT_STATUSES = new Set(["inProgress"]);
 
 export interface ActiveSubAgent {
   threadId: string;
@@ -27,7 +27,9 @@ export function activeSubAgentsFromTurns(turns: ThreadTimelineTurn[]): ActiveSub
 function applyActivity(agents: Map<string, ActiveSubAgent>, item: ThreadTimelineItem) {
   const threadId = text(item.agentThreadId);
   if (threadId === "") return;
-  if (item.kind === "interrupted") {
+  if (item.kind === "interrupted" || item.kind === "completed") {
+    // App Server V2 emits a terminal activity independently of the latest collab tool snapshot.
+    // Remove it here so a completed child cannot remain in the user-level active-agent bar.
     agents.delete(threadId);
     return;
   }
@@ -35,7 +37,7 @@ function applyActivity(agents: Map<string, ActiveSubAgent>, item: ThreadTimeline
   agents.set(threadId, {
     threadId,
     agentPath: firstNonEmptyString([text(item.agentPath), existing?.agentPath]),
-    status: existing?.status ?? "running",
+    status: existing?.status ?? "inProgress",
   });
 }
 
@@ -56,7 +58,7 @@ function applyCollabState(agents: Map<string, ActiveSubAgent>, item: ThreadTimel
     agents.set(threadId, {
       threadId,
       agentPath: existing?.agentPath ?? null,
-      status: status === "" ? "pendingInit" : status,
+      status: status === "" ? "inProgress" : status,
     });
   }
 }

@@ -4,9 +4,11 @@ import { idFromUnknown, stringFromUnknown } from "~~/shared/utils/records";
 import { gatewayDomainEvents } from "../domain-events";
 import { runtimeStatusFromCompletedTurn } from "../thread-utils/status";
 import type { GatewayEventHandlerRegistry } from "./types";
+import { useGatewayTurnRecoveryStore } from "@/stores/gateway-turn-recovery";
 
 export const turnEventHandlers: GatewayEventHandlerRegistry = {
   "turn/started": (event, params, threadId) => {
+    useGatewayTurnRecoveryStore().clearRequest(event.hostId, threadId);
     const turn = threadHistoryTurnFromUnknown(params.turn);
     gatewayDomainEvents.emit("thread-status-detected", {
       hostId: event.hostId,

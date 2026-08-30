@@ -26,6 +26,20 @@ export function expectFileGitWorkspaceSnapshot(message: RealtimeResponseMessage)
   return message;
 }
 
+export function expectProjectFileSearchResults(message: RealtimeResponseMessage) {
+  if (message.type !== "file.search.results") {
+    unexpectedResponse("file.search.results", message.type);
+  }
+  return message;
+}
+
+export function expectFileWatchReady(message: RealtimeResponseMessage) {
+  if (message.type !== "file.watch.ready") {
+    unexpectedResponse("file.watch.ready", message.type);
+  }
+  return message;
+}
+
 export function expectThreadGoalUpdated(message: RealtimeResponseMessage) {
   if (message.type !== "thread.goal.updated") {
     unexpectedResponse("thread.goal.updated", message.type);
@@ -79,7 +93,33 @@ export function expectTurnInterruptAccepted(message: RealtimeResponseMessage) {
   return message;
 }
 
+export function expectTurnSettingsUpdated(message: RealtimeResponseMessage) {
+  if (message.type !== "turn.settings.updated") {
+    unexpectedResponse("turn.settings.updated", message.type);
+  }
+  return message;
+}
+
+export function expectMcpStatusSnapshot(message: RealtimeResponseMessage) {
+  if (message.type !== "mcp.status.snapshot") {
+    unexpectedResponse("mcp.status.snapshot", message.type);
+  }
+  return message;
+}
+
+export function expectMcpEventStreamAccepted(message: RealtimeResponseMessage) {
+  if (message.type !== "mcp.event.stream.accepted") {
+    unexpectedResponse("mcp.event.stream.accepted", message.type);
+  }
+  return message;
+}
+
 export function expectThreadTurnsPage(message: RealtimeResponseMessage) {
   if (message.type !== "thread.turns.page") unexpectedResponse("thread.turns.page", message.type);
+  return message;
+}
+
+export function expectThreadItemsPage(message: RealtimeResponseMessage) {
+  if (message.type !== "thread.items.page") unexpectedResponse("thread.items.page", message.type);
   return message;
 }

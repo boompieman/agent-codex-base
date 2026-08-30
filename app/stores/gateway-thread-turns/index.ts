@@ -23,11 +23,13 @@ export type SubmittedTurnRequestInput = Omit<
 >;
 
 export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", () => {
-  const state = reactive<{ submittedTurnRequestsByKey: Record<string, SubmittedTurnRequestState> }>(
-    {
-      submittedTurnRequestsByKey: {},
-    },
-  );
+  const state = reactive<{
+    submittedTurnRequestsByKey: Record<string, SubmittedTurnRequestState>;
+    loadingTurnItemsByKey: Record<string, boolean>;
+  }>({
+    submittedTurnRequestsByKey: {},
+    loadingTurnItemsByKey: {},
+  });
 
   function requestKey(hostId: number, threadId: string) {
     return pinnedKey(hostId, threadId);
@@ -101,6 +103,21 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
       }
     }
     state.submittedTurnRequestsByKey = {};
+    state.loadingTurnItemsByKey = {};
+  }
+
+  function turnItemsKey(hostId: number, threadId: string, turnId: string) {
+    return `${pinnedKey(hostId, threadId)}:${turnId}`;
+  }
+
+  function setTurnItemsLoading(hostId: number, threadId: string, turnId: string, loading: boolean) {
+    const key = turnItemsKey(hostId, threadId, turnId);
+    if (loading) {
+      state.loadingTurnItemsByKey = { ...state.loadingTurnItemsByKey, [key]: true };
+      return;
+    }
+    const { [key]: _removed, ...remaining } = state.loadingTurnItemsByKey;
+    state.loadingTurnItemsByKey = remaining;
   }
 
   const actions = createGatewayThreadTurnActions();
@@ -114,6 +131,8 @@ export const useGatewayThreadTurnsStore = defineStore("gateway-thread-turns", ()
     patchRequest,
     setRequest,
     requestByKey,
+    turnItemsKey,
+    setTurnItemsLoading,
     resetState,
     ...actions,
   };

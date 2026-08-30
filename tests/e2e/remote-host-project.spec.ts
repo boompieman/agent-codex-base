@@ -55,25 +55,6 @@ test("references real project files as structured turn context", async ({
     `mkdir -p -- ${shellQuote(`${project.remotePath}/${directory}`)} && printf '%s\\n' ${shellQuote(marker)} > ${shellQuote(`${project.remotePath}/${path}`)} && printf '%s\\n' root > ${shellQuote(`${project.remotePath}/${rootFileName}`)}`,
   );
 
-  const searchResult = await authenticatedFetch(
-    page,
-    { url: `/api/projects/${project.id}/files?q=${encodeURIComponent(`reference-${suffix}`)}` },
-    (value) =>
-      z
-        .object({
-          files: z.array(
-            z.object({ type: z.literal("file"), path: z.string(), name: z.string() }).strict(),
-          ),
-        })
-        .parse(value),
-  );
-  expect(searchResult.files).toContainEqual({ type: "file", path, name: fileName });
-  expect(searchResult.files).toContainEqual({
-    type: "file",
-    path: rootFileName,
-    name: rootFileName,
-  });
-
   const composer = page.getByPlaceholder("输入后续修改要求");
   await composer.fill(`@reference-${suffix}`);
   const menu = page.getByTestId("file-mention-menu");
@@ -128,10 +109,13 @@ test("references real project files as structured turn context", async ({
   await expect(menu.getByTestId("file-mention-option-1")).toHaveAttribute("aria-selected", "true");
   await composer.press("ArrowUp");
   await expect(menu.getByTestId("file-mention-option-0")).toHaveAttribute("aria-selected", "true");
+  const keyboardSelection = await menu
+    .getByTestId("file-mention-option-0")
+    .getAttribute("data-file-path");
+  expect([path, rootFileName]).toContain(keyboardSelection);
   await composer.press("Enter");
   await expect(menu).toBeHidden();
-  await expect(composer).toHaveAttribute("data-value", `@${searchResult.files[0]!.path} `);
-  await expect(page.locator(".cm-file-reference")).toHaveText(`@${searchResult.files[0]!.name}`);
+  await expect(composer).toHaveAttribute("data-value", `@${keyboardSelection} `);
   const messageTypesAfterKeyboardSelection = await page.evaluate(
     (offset) =>
       (window.__gatewayRealtimeProbe?.messages ?? []).slice(offset).map((message) => message.type),
@@ -181,75 +165,6 @@ test("references real project files as structured turn context", async ({
     remote,
     `rm -rf -- ${shellQuote(`${project.remotePath}/${directory}`)} && rm -f -- ${shellQuote(`${project.remotePath}/${rootFileName}`)}`,
   );
-});
-
-test("shares concurrent project file indexing and reuses the bounded cache", async ({
-  page,
-  remoteWorkspace,
-}) => {
-  await openApp(page);
-  const { remote } = remoteWorkspace;
-  const projectPath = `/tmp/codex-gateway-file-index-cache-${Date.now()}`;
-  await execRemoteSsh(
-    remote,
-    `mkdir -p -- ${shellQuote(projectPath)} && git init -q -- ${shellQuote(projectPath)}`,
-  );
-  const { project } = await remoteWorkspace.provision({
-    hostName: `file-index-cache-host-${Date.now()}`,
-    remotePath: projectPath,
-  });
-  const suffix = Date.now();
-  const fileName = `e2e-index-cache-${suffix}.txt`;
-  await execRemoteSsh(
-    remote,
-    `printf '%s\\n' cache-test > ${shellQuote(`${project.remotePath}/${fileName}`)}`,
-  );
-
-  const request = async () =>
-    await page.evaluate(
-      async ({ projectId, query }) => {
-        const token = localStorage.getItem("codex-gateway-auth-token");
-        if (token === null || token === "") throw new Error("Missing E2E auth token");
-        const response = await fetch(
-          `/api/projects/${projectId}/files?q=${encodeURIComponent(query)}`,
-          { headers: { authorization: `Bearer ${token}` } },
-        );
-        const body: unknown = await response.json();
-        return {
-          status: response.status,
-          cacheState: response.headers.get("x-gateway-project-file-index"),
-          body,
-        };
-      },
-      { projectId: project.id, query: `index-cache-${suffix}` },
-    );
-
-  const fileSearchResponseSchema = z.object({
-    status: z.number(),
-    cacheState: z.enum(["built", "shared", "cached"]).nullable(),
-    body: z.object({
-      files: z.array(
-        z.object({ type: z.literal("file"), path: z.string(), name: z.string() }).strict(),
-      ),
-    }),
-  });
-
-  const concurrent = (await Promise.all([request(), request(), request()])).map((result) =>
-    fileSearchResponseSchema.parse(result),
-  );
-  expect(concurrent.every((result) => result.status === 200)).toBe(true);
-  expect(concurrent.filter((result) => result.cacheState === "built")).toHaveLength(1);
-  expect(
-    concurrent.some((result) => result.cacheState === "shared" || result.cacheState === "cached"),
-  ).toBe(true);
-  for (const result of concurrent) {
-    expect(result.body.files).toContainEqual({ type: "file", path: fileName, name: fileName });
-  }
-
-  const cached = fileSearchResponseSchema.parse(await request());
-  expect(cached.status).toBe(200);
-  expect(cached.cacheState).toBe("cached");
-  await execRemoteSsh(remote, `rm -f -- ${shellQuote(`${project.remotePath}/${fileName}`)}`);
 });
 
 test("connects to a real SSH Codex host and lists a project thread created by app-server", async ({

@@ -1,4 +1,4 @@
-import type { ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
+import type { ThreadResponseUsage, ThreadTimelineItem, ThreadTimelineTurn } from "~~/shared/types";
 import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 import { itemKey, userMessageVariant, type ThreadTurnSections } from "./thread-turn-sections";
 
@@ -21,6 +21,7 @@ export type ThreadTimelineRow =
       turnId: string;
       count: number;
       open: boolean;
+      loading: boolean;
     }
   | {
       key: string;
@@ -30,6 +31,7 @@ export type ThreadTimelineRow =
       item: ThreadTimelineItem;
       userMessageVariant: "normal" | "steer";
       turnTiming: DisplayedTurnTiming | null;
+      responseUsage: ThreadResponseUsage[] | undefined;
       agentActionsAvailable: boolean;
     }
   | {
@@ -40,12 +42,14 @@ export type ThreadTimelineRow =
       completedAt: number | null;
       durationMs: number | null;
       active: boolean;
+      responseUsage: ThreadResponseUsage[] | undefined;
     };
 
 export interface ThreadTimelineTurnState {
   turn: ThreadTimelineTurn;
   sections: ThreadTurnSections;
   intermediateOpen: boolean;
+  intermediateLoading: boolean;
 }
 
 // Every visible entry is a direct row of the Agent timeline. Do not wrap intermediate items in a
@@ -56,19 +60,20 @@ export function buildThreadTimelineRows(input: {
   turns: ThreadTimelineTurnState[];
   agentActionsAvailable: boolean;
 }) {
-  return input.turns.flatMap(({ turn, sections, intermediateOpen }) => {
+  return input.turns.flatMap(({ turn, sections, intermediateOpen, intermediateLoading }) => {
     const rows: ThreadTimelineRow[] = [];
     const timing = displayedTurnTiming(turn);
     const timingTarget = sections.finalItems.findLast((item) => item.type === "agentMessage");
     appendItemRows(rows, input.threadId, turn.id, "user", sections.userItems, sections);
 
-    if (sections.intermediateItems.length) {
+    if (sections.intermediateItems.length || turn.itemsView !== "full") {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:intermediate-header`,
         type: "intermediateHeader",
         turnId: turn.id,
         count: sections.intermediateItems.length,
         open: intermediateOpen,
+        loading: intermediateLoading,
       });
       if (intermediateOpen) {
         appendItemRows(
@@ -92,15 +97,21 @@ export function buildThreadTimelineRows(input: {
       timingTarget,
       timing,
       input.agentActionsAvailable,
+      turn.responseUsage,
     );
     // Completed turns normally render timing beside the final answer's copy action. Keep a
     // standalone row only for interrupted/error turns that never produced an Agent answer.
-    if (input.agentActionsAvailable && hasTimingValue(timing) && timingTarget === undefined) {
+    if (
+      input.agentActionsAvailable &&
+      (hasTimingValue(timing) || (turn.responseUsage?.length ?? 0) > 0) &&
+      timingTarget === undefined
+    ) {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:duration`,
         type: "turnDuration",
         turnId: turn.id,
         ...timing,
+        responseUsage: turn.responseUsage,
       });
     }
     return rows;
@@ -136,6 +147,7 @@ function appendItemRows(
   timingTarget?: ThreadTimelineItem,
   timing: DisplayedTurnTiming | null = null,
   agentActionsAvailable = false,
+  responseUsage?: ThreadResponseUsage[],
 ) {
   items.forEach((item, index) => {
     rows.push({
@@ -146,6 +158,7 @@ function appendItemRows(
       item,
       userMessageVariant: userMessageVariant(item, sections),
       turnTiming: item === timingTarget ? timing : null,
+      responseUsage: item === timingTarget ? responseUsage : undefined,
       agentActionsAvailable: item === timingTarget && agentActionsAvailable,
     });
   });
@@ -167,7 +180,12 @@ function hasTimingValue(timing: DisplayedTurnTiming) {
 function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
   if (left.type !== right.type) return false;
   if (left.type === "intermediateHeader" && right.type === "intermediateHeader") {
-    return left.count === right.count && left.open === right.open && left.turnId === right.turnId;
+    return (
+      left.count === right.count &&
+      left.open === right.open &&
+      left.loading === right.loading &&
+      left.turnId === right.turnId
+    );
   }
   if (left.type === "item" && right.type === "item") {
     // App-server deltas mutate this reactive item proxy in place. Reuse the lightweight row wrapper
@@ -180,6 +198,7 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.section === right.section &&
       left.userMessageVariant === right.userMessageVariant &&
       left.agentActionsAvailable === right.agentActionsAvailable &&
+      sameResponseUsage(left.responseUsage, right.responseUsage) &&
       sameTurnTiming(left.turnTiming, right.turnTiming)
     );
   }
@@ -189,10 +208,23 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.startedAt === right.startedAt &&
       left.completedAt === right.completedAt &&
       left.durationMs === right.durationMs &&
-      left.active === right.active
+      left.active === right.active &&
+      sameResponseUsage(left.responseUsage, right.responseUsage)
     );
   }
   return false;
+}
+
+function sameResponseUsage(
+  left: ThreadResponseUsage[] | undefined,
+  right: ThreadResponseUsage[] | undefined,
+) {
+  if (left === right) return true;
+  if (left === undefined || right === undefined || left.length !== right.length) return false;
+  return left.every(
+    (usage, index) =>
+      usage.responseId === right[index]?.responseId && usage.amount === right[index]?.amount,
+  );
 }
 
 function sameTurnTiming(left: DisplayedTurnTiming | null, right: DisplayedTurnTiming | null) {

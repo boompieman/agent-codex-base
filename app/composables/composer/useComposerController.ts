@@ -193,6 +193,7 @@ export function useComposerController() {
     hasComposerInput: submit.hasComposerInput,
     interruptingTurn: submit.interruptingTurn,
     composerInputEnabled,
+    selectedHostId,
     selectedThreadId,
     selectedProjectId,
     selectedThreadStatus,
