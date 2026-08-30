@@ -11,6 +11,7 @@ type BundledLanguage =
   | "awk"
   | "bat"
   | "batch"
+  | "cmd"
   | "c"
   | "clojure"
   | "clj"
@@ -93,6 +94,7 @@ type BundledLanguage =
   | "powershell"
   | "ps"
   | "ps1"
+  | "pwsh"
   | "proto"
   | "protobuf"
   | "python"
@@ -128,7 +130,6 @@ type BundledLanguage =
   | "cts"
   | "mts"
   | "vb"
-  | "cmd"
   | "verilog"
   | "viml"
   | "vim"
@@ -145,6 +146,7 @@ const bundledLanguages = {
   awk: () => import("@shikijs/langs/awk"),
   bat: () => import("@shikijs/langs/bat"),
   batch: () => import("@shikijs/langs/bat"),
+  cmd: () => import("@shikijs/langs/bat"),
   c: () => import("@shikijs/langs/c"),
   clojure: () => import("@shikijs/langs/clojure"),
   clj: () => import("@shikijs/langs/clojure"),
@@ -227,6 +229,7 @@ const bundledLanguages = {
   powershell: () => import("@shikijs/langs/powershell"),
   ps: () => import("@shikijs/langs/powershell"),
   ps1: () => import("@shikijs/langs/powershell"),
+  pwsh: () => import("@shikijs/langs/powershell"),
   proto: () => import("@shikijs/langs/proto"),
   protobuf: () => import("@shikijs/langs/proto"),
   python: () => import("@shikijs/langs/python"),
@@ -262,7 +265,6 @@ const bundledLanguages = {
   cts: () => import("@shikijs/langs/typescript"),
   mts: () => import("@shikijs/langs/typescript"),
   vb: () => import("@shikijs/langs/vb"),
-  cmd: () => import("@shikijs/langs/vb"),
   verilog: () => import("@shikijs/langs/verilog"),
   viml: () => import("@shikijs/langs/viml"),
   vim: () => import("@shikijs/langs/viml"),

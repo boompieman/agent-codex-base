@@ -8,6 +8,8 @@ import { ThreadGoalService } from "./thread-goals";
 import { ThreadSettingsService } from "./thread-settings";
 import { ThreadCatalogService } from "./thread-catalog";
 import { ThreadHistoryReader } from "./thread-history-reader";
+import { McpRuntimeService } from "./mcp-runtime";
+import { AppServerFileService } from "./app-server-files";
 
 class ThreadBroker {
   private readonly registry = new ControllerRegistry();
@@ -17,6 +19,8 @@ class ThreadBroker {
   private readonly settings = new ThreadSettingsService(this.registry);
   private readonly catalog = new ThreadCatalogService(this.registry);
   private readonly historyReader = new ThreadHistoryReader(this.registry);
+  private readonly mcp = new McpRuntimeService(this.registry);
+  private readonly files = new AppServerFileService(this.registry);
 
   async openThread(
     host: HostRecord,
@@ -33,7 +37,13 @@ class ThreadBroker {
     // Paginated history is the current App Server storage model that can hydrate indexed Turn
     // pages without replaying an entire rollout JSONL. Keep this policy at the protocol boundary so
     // every Gateway-created thread uses it and browser DTOs do not need to expose storage details.
-    const result = await client.request("thread/start", { ...params, historyMode: "paginated" });
+    const result = await client.request("thread/start", {
+      ...params,
+      historyMode: "paginated",
+      // This official opt-in is fixed at thread creation and cannot be enabled by thread/resume.
+      // It exposes exact per-response usage metadata without changing persisted rollout history.
+      experimentalRawEvents: true,
+    });
     const started = this.openService.startedThreadResult(host, projectId, result);
     await this.registry.retainStartedThreadSubscription(host, started.threadId);
     return started.result;
@@ -61,6 +71,15 @@ class ThreadBroker {
 
   async updateThreadSettings(host: HostRecord, threadId: string, input: ThreadSettingsState) {
     return this.settings.updateThreadSettings(host, threadId, input);
+  }
+
+  async updateTurnSettings(
+    host: HostRecord,
+    threadId: string,
+    turnId: string,
+    input: Pick<ThreadSettingsState, "model" | "effort">,
+  ) {
+    return this.settings.updateTurnSettings(host, threadId, turnId, input);
   }
 
   async resolveThreadSettings(host: HostRecord, threadId: string) {
@@ -111,8 +130,53 @@ class ThreadBroker {
     return this.historyReader.listThreadTurns(host, threadId, params);
   }
 
+  async listThreadItems(
+    host: HostRecord,
+    threadId: string,
+    params: {
+      turnId: string;
+      cursor?: string | null;
+      limit?: number;
+      sortDirection?: "asc" | "desc";
+    },
+  ) {
+    return this.historyReader.listThreadItems(host, threadId, params);
+  }
+
   async getHostClient(host: HostRecord) {
     return this.registry.getHostClient(host);
+  }
+
+  async searchProjectFiles(
+    host: HostRecord,
+    rootPath: string,
+    query: string,
+    cancellationToken: string,
+  ) {
+    return this.files.search(host, rootPath, query, cancellationToken);
+  }
+
+  async watchProjectFiles(
+    host: HostRecord,
+    path: string,
+    listener: Parameters<AppServerFileService["watch"]>[2],
+  ) {
+    return this.files.watch(host, path, listener);
+  }
+
+  async listMcpStatuses(host: HostRecord, threadId: string) {
+    return this.mcp.listStatuses(host, threadId);
+  }
+
+  async startMcpEventStream(
+    host: HostRecord,
+    input: Parameters<McpRuntimeService["startEventStream"]>[1],
+  ) {
+    return this.mcp.startEventStream(host, input);
+  }
+
+  async stopMcpEventStream(host: HostRecord, subscriptionId: string) {
+    return this.mcp.stopEventStream(host, subscriptionId);
   }
 
   controllersForHost(hostId: number) {

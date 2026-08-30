@@ -3,6 +3,7 @@ import type {
   ComposerTurnOptions,
   ThreadGoal,
   ThreadGoalStatus,
+  ThreadItemsPageResult,
   ThreadOpenResult,
   ThreadRuntimeStatusUpdate,
   ThreadTurnsPageResult,
@@ -22,6 +23,8 @@ import type {
 } from "./host-metrics";
 import type { TmuxSessionsSnapshot } from "./tmux";
 import type { RemoteGitFileComparison, RemoteGitWorkspaceSnapshot } from "./files";
+import type { ProjectFileSearchResult } from "./files";
+import type { GatewayMcpServerStatus } from "./mcp";
 
 export type RealtimeClientMessage =
   | {
@@ -87,6 +90,16 @@ export type RealtimeClientMessage =
       sortDirection?: "asc" | "desc";
     }
   | {
+      type: "thread.items.load";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      turnId: string;
+      cursor?: string | null;
+      limit?: number;
+      sortDirection?: "asc" | "desc";
+    }
+  | {
       type: "thread.start";
       requestId: string;
       hostId: number;
@@ -131,6 +144,39 @@ export type RealtimeClientMessage =
       hostId: number;
       threadId: string;
       turnId: string;
+    }
+  | {
+      type: "turn.settings.update";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      turnId: string;
+      model?: string | null;
+      effort?: ReasoningEffort | null;
+    }
+  | {
+      type: "mcp.status.list";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+    }
+  | {
+      type: "mcp.event.stream.start";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      server: string;
+      subscriptionId: string;
+      name: string;
+      arguments: unknown;
+      meta?: unknown;
+    }
+  | {
+      type: "mcp.event.stream.stop";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      subscriptionId: string;
     }
   | {
       type: "thread.goal.set";
@@ -197,6 +243,28 @@ export type RealtimeClientMessage =
       requestId: string;
       sessionId: string;
       allowInsecureTls: boolean;
+    }
+  | {
+      type: "file.search";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      query: string;
+      cancellationToken: string;
+    }
+  | {
+      type: "file.watch.subscribe";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      threadId: string;
+      paths: string[];
+    }
+  | {
+      type: "file.watch.unsubscribe";
+      hostId: number;
+      projectId: number;
+      threadId: string;
     }
   | {
       type: "file.git.compare";
@@ -309,6 +377,12 @@ export type RealtimeServerMessage =
       hostId: number;
       threadId: string;
     } & ThreadTurnsPageResult)
+  | ({
+      type: "thread.items.page";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+    } & ThreadItemsPageResult)
   | {
       type: "turn.start.accepted";
       requestId: string;
@@ -328,6 +402,29 @@ export type RealtimeServerMessage =
       requestId: string;
       hostId: number;
       threadId: string;
+    }
+  | {
+      type: "turn.settings.updated";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      turnId: string;
+      status: "applied" | "targetUnavailable";
+    }
+  | {
+      type: "mcp.status.snapshot";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      servers: GatewayMcpServerStatus[];
+    }
+  | {
+      type: "mcp.event.stream.accepted";
+      requestId: string;
+      hostId: number;
+      threadId: string;
+      subscriptionId: string;
+      action: "started" | "stopped";
     }
   | {
       type: "thread.goal.updated";
@@ -397,6 +494,36 @@ export type RealtimeServerMessage =
       requestId?: string;
     }
   | { type: "browser.opened"; requestId: string; session: BrowserPreviewSessionSnapshot }
+  | {
+      type: "file.search.results";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      result: ProjectFileSearchResult;
+    }
+  | {
+      type: "file.watch.ready";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      threadId: string;
+      rootPath: string;
+      paths: string[];
+    }
+  | {
+      type: "file.watch.changed";
+      hostId: number;
+      projectId: number;
+      threadId: string;
+      rootPath: string;
+      paths: string[];
+    }
+  | {
+      type: "file.watch.closed";
+      hostId: number;
+      projectId: number;
+      threadId: string;
+    }
   | {
       type: "file.git.comparison";
       requestId: string;

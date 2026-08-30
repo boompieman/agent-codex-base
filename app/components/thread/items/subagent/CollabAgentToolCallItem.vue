@@ -11,6 +11,10 @@ import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 import { subAgentDisplayName } from "@/components/thread/subagent/display-name";
 import type { ThreadHistoryItem } from "~~/shared/types";
 import { recordFromUnknown } from "~~/shared/utils/records";
+import {
+  collabToolHasMessage,
+  collabToolLabelKey,
+} from "@/components/thread/subagent/presentation";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -21,7 +25,7 @@ const threadView = useGatewayThreadViewStore();
 const threadActivity = useGatewayThreadActivityStore();
 const { openSubAgentPanel } = useOpenSubAgentPanel();
 
-const title = computed(() => props.item.tool || t("app.collabAgentToolCall"));
+const title = computed(() => t(collabToolLabelKey(props.item.tool)));
 const agentRows = computed(() => {
   const rows = new Map<
     string,
@@ -84,7 +88,7 @@ function agentName(threadId: string) {
       <Badge v-if="isItemInProgress(item)" variant="outline">{{ t("app.running") }}</Badge>
     </div>
     <div
-      v-if="item.tool === 'sendInput' && item.prompt"
+      v-if="collabToolHasMessage(item.tool) && item.prompt"
       class="mt-2 whitespace-pre-wrap rounded-lg border border-hairline bg-canvas-soft px-3 py-2 text-sm leading-6 text-ink"
     >
       <div class="mb-1 text-xs font-medium text-ink-muted">{{ t("app.subAgentInput") }}</div>

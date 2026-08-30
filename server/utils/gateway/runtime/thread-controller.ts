@@ -123,7 +123,7 @@ export class ThreadController {
         initialTurnsPage: {
           limit,
           sortDirection: "desc",
-          itemsView: "full",
+          itemsView: "summary",
         },
       }),
     );

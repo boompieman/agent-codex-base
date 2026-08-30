@@ -6,6 +6,8 @@ import ChatPanelScrollArea from "@/components/chat/ChatPanelScrollArea.vue";
 import ProjectThreadList from "@/components/chat/ProjectThreadList.vue";
 import ThreadVirtualTimeline from "@/components/thread/ThreadVirtualTimeline.vue";
 import ActiveSubAgentsBar from "@/components/thread/subagent/ActiveSubAgentsBar.vue";
+import MisalignmentRecoveryCard from "@/components/thread/MisalignmentRecoveryCard.vue";
+import McpRuntimeStatusBar from "@/components/thread/McpRuntimeStatusBar.vue";
 import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import { useChatWorkspaceState } from "./chat-workspace-state";
 
@@ -44,6 +46,11 @@ const showThreadLoading = computed(
         :turns="historyTurns"
         :host-id="selectedHostId"
         :parent-thread-id="selectedThreadId"
+      />
+      <McpRuntimeStatusBar
+        v-if="selectedThreadId"
+        :host-id="selectedHostId"
+        :thread-id="selectedThreadId"
       />
       <ChatPanelScrollArea
         v-if="showThreadLoading"
@@ -86,6 +93,7 @@ const showThreadLoading = computed(
         </div>
       </ChatPanelScrollArea>
 
+      <MisalignmentRecoveryCard v-if="selectedThreadId" />
       <ChatComposer v-if="selectedThreadId || selectedProjectId" />
     </div>
   </div>

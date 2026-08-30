@@ -61,13 +61,33 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     ],
   });
   const completedEvent = {
-    id: 2,
+    id: 4,
     hostId: 1,
     threadId,
     method: "turn/completed",
     payload: { method: "turn/completed", params: { threadId, turn: completedTurn } },
     createdAt: "2026-07-02T10:00:01.000Z",
   };
+  const usageEvents = [
+    { responseId: "response-1", amount: "0.0012" },
+    { responseId: "response-2", amount: "0.0034" },
+  ].map(({ responseId, amount }, index) => ({
+    id: index + 2,
+    hostId: 1,
+    threadId,
+    method: "rawResponse/completed",
+    payload: {
+      method: "rawResponse/completed",
+      params: {
+        threadId,
+        turnId: "turn-1",
+        responseId,
+        usage: null,
+        usageMetadata: { amount },
+      },
+    },
+    createdAt: `2026-07-02T10:00:0${index + 1}.000Z`,
+  }));
   const activeTurn = appServerTurnFixture({
     ...completedTurn,
     status: "inProgress",
@@ -92,6 +112,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   await expect(page.getByTestId("agent-message-actions")).toHaveCount(0);
   await expect(page.getByText(/本轮用时/)).toHaveCount(0);
 
+  for (const usageEvent of usageEvents) await applyGatewayLiveEvent(page, usageEvent);
   await applyGatewayLiveEvent(page, completedEvent);
 
   await expect(page.getByRole("button", { name: /中间过程/ })).toHaveAttribute(
@@ -105,6 +126,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     .poll(() => agentActions.evaluate((element) => getComputedStyle(element).opacity))
     .toBe("1");
   await expect(agentActions.getByText("本轮用时 2.50s")).toBeVisible();
+  await expect(agentActions.getByText("用量 0.0046")).toBeVisible();
   await expect(agentActions.getByRole("button", { name: "复制输出" })).toBeAttached();
   await expect(page.getByText("思考中")).toBeHidden();
 

@@ -20,7 +20,9 @@ import {
 } from "@codemirror/view";
 import type { FileReference } from "~~/shared/types";
 import type { ComposerFileReference } from "@/stores/gateway/types";
-import { gatewayApi } from "@/utils/gateway-api";
+import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
+import { expectProjectFileSearchResults } from "@/stores/gateway-realtime/response-parsers";
+import { createUuid } from "@/lib/uuid";
 import ComposerFileMentionMenu from "./ComposerFileMentionMenu.vue";
 
 const MAX_REFERENCES = 10;
@@ -29,6 +31,7 @@ const props = defineProps<{
   modelValue: string;
   references: ComposerFileReference[];
   scopeKey: string;
+  hostId: number | null;
   projectId: number | null;
   disabled: boolean;
   placeholder: string;
@@ -52,8 +55,10 @@ const files = ref<FileReference[]>([]);
 const selectedIndex = ref(0);
 const loading = ref(false);
 const searchError = ref<string | null>(null);
+const realtime = useGatewayRealtimeStore();
+const cancellationToken = `composer-files-${createUuid()}`;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
-let searchController: AbortController | null = null;
+let searchGeneration = 0;
 let syncing = false;
 
 class FileReferenceWidget extends WidgetType {
@@ -84,7 +89,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchController?.abort();
+  searchGeneration += 1;
   view.value?.destroy();
   view.value = null;
 });
@@ -219,35 +224,39 @@ function updateMentionQuery(editor: EditorView) {
 
 function scheduleSearch() {
   if (searchTimer) clearTimeout(searchTimer);
-  searchController?.abort();
+  searchGeneration += 1;
   searchTimer = setTimeout(() => void search(), 100);
 }
 
 async function search() {
-  if (!menuOpen.value || props.projectId === null) return;
-  const controller = new AbortController();
-  searchController = controller;
+  if (!menuOpen.value || props.hostId === null || props.projectId === null) return;
+  const hostId = props.hostId;
+  const projectId = props.projectId;
+  const generation = searchGeneration;
   loading.value = true;
   searchError.value = null;
   try {
-    const result = await gatewayApi<{ files: FileReference[] }>(
-      `/api/projects/${props.projectId}/files`,
-      {
-        query: { q: query.value },
-        signal: controller.signal,
-      },
+    const response = await realtime.request(
+      (requestId) => ({
+        type: "file.search",
+        requestId,
+        hostId,
+        projectId,
+        query: query.value,
+        cancellationToken,
+      }),
+      expectProjectFileSearchResults,
     );
-    if (controller.signal.aborted) return;
-    files.value = result.files;
+    if (generation !== searchGeneration || !menuOpen.value) return;
+    files.value = response.result.files;
     selectedIndex.value = 0;
   } catch (error) {
-    if (controller.signal.aborted) return;
+    if (generation !== searchGeneration) return;
     files.value = [];
     searchError.value = error instanceof Error ? error.message : String(error);
   } finally {
-    if (searchController === controller) {
+    if (generation === searchGeneration) {
       loading.value = false;
-      searchController = null;
     }
   }
 }
@@ -309,7 +318,8 @@ function dismissMenu() {
   menuOpen.value = false;
   files.value = [];
   searchError.value = null;
-  searchController?.abort();
+  searchGeneration += 1;
+  loading.value = false;
   return true;
 }
 </script>

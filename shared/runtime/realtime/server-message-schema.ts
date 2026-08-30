@@ -27,6 +27,16 @@ const projectedHistoryTurnSchema = z
     startedAt: z.union([z.number(), z.string()]).nullish(),
     completedAt: z.union([z.number(), z.string()]).nullish(),
     durationMs: z.number().nullish(),
+    responseUsage: z
+      .array(
+        z
+          .object({
+            responseId: nonEmptyString,
+            amount: z.string(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .loose();
 const threadHistorySchema = z
@@ -36,7 +46,7 @@ const threadHistorySchema = z
         id: nonEmptyString,
         // This is Gateway's reducer projection, not the official Thread.turns DTO. Items retain
         // event-specific fields and partially materialized turns are valid while streaming. The
-        // strict 0.149 schema belongs at the app-server RPC boundary; reusing it here would reject
+        // strict 0.151 schema belongs at the app-server RPC boundary; reusing it here would reject
         // Gateway state such as active context compaction and paginated history.
         turns: z.array(projectedHistoryTurnSchema),
       })
@@ -377,6 +387,13 @@ const remoteGitWorkspaceSnapshotSchema = z.discriminatedUnion("availability", [
     })
     .strict(),
 ]);
+const projectFileSearchResultSchema = z
+  .object({
+    files: z.array(
+      z.object({ type: z.literal("file"), path: nonEmptyString, name: nonEmptyString }).strict(),
+    ),
+  })
+  .strict();
 
 // Top-level Gateway messages are closed protocol objects. Nested app-server thread/envelope
 // records intentionally remain extensible because upstream adds fields between releases; their
@@ -450,6 +467,41 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
       .strict(),
     z
       .object({
+        type: z.literal("file.search.results"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        result: projectFileSearchResultSchema,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.watch.ready"),
+        ...requestIdField,
+        ...threadScopeFields,
+        projectId: positiveId,
+        rootPath: nonEmptyString,
+        paths: z.array(nonEmptyString).min(1),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.watch.changed"),
+        ...threadScopeFields,
+        projectId: positiveId,
+        rootPath: nonEmptyString,
+        paths: z.array(nonEmptyString),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("file.watch.closed"),
+        ...threadScopeFields,
+        projectId: positiveId,
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal("file.git.comparison"),
         ...requestIdField,
         hostId: positiveId,
@@ -513,6 +565,17 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
       .strict(),
     z
       .object({
+        type: z.literal("thread.items.page"),
+        ...requestIdField,
+        ...threadScopeFields,
+        turnId: nonEmptyString,
+        items: z.array(projectedHistoryItemSchema),
+        nextCursor: z.string().nullable(),
+        backwardsCursor: z.string().nullable(),
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal("turn.start.accepted"),
         ...requestIdField,
         ...threadScopeFields,
@@ -532,6 +595,52 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         type: z.literal("turn.interrupt.accepted"),
         ...requestIdField,
         ...threadScopeFields,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("turn.settings.updated"),
+        ...requestIdField,
+        ...threadScopeFields,
+        turnId: nonEmptyString,
+        status: z.enum(["applied", "targetUnavailable"]),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("mcp.status.snapshot"),
+        ...requestIdField,
+        ...threadScopeFields,
+        servers: z.array(
+          z
+            .object({
+              name: nonEmptyString,
+              runtimeStatus: z
+                .enum([
+                  "notStarted",
+                  "starting",
+                  "connected",
+                  "authenticationRequired",
+                  "failed",
+                  "cancelled",
+                  "disabled",
+                ])
+                .nullable(),
+              pluginId: z.string().nullable(),
+              authStatus: z.enum(["unknown", "unsupported", "notLoggedIn", "bearerToken", "oAuth"]),
+              toolCount: nonNegativeId,
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("mcp.event.stream.accepted"),
+        ...requestIdField,
+        ...threadScopeFields,
+        subscriptionId: nonEmptyString,
+        action: z.enum(["started", "stopped"]),
       })
       .strict(),
     z

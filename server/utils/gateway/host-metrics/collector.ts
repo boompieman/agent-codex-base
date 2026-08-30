@@ -60,12 +60,10 @@ export class HostMetricsCollector {
 
   private async collect() {
     if (!this.running || this.channel !== null) return;
-    const result = await this.collectOnce().catch(
-      (error: unknown): CollectionResult => ({
-        kind: "error",
-        message: error instanceof Error ? error.message : "Host metrics channel failed",
-      }),
-    );
+    const result = await this.collectOnce().catch((error: unknown): CollectionResult => ({
+      kind: "error",
+      message: error instanceof Error ? error.message : "Host metrics channel failed",
+    }));
     if (!this.running) return;
 
     switch (result.kind) {

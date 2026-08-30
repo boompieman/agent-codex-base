@@ -2,6 +2,7 @@ import type { ComposerTurnOptions } from "~~/shared/types";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import {
   expectThreadTurnsPage,
+  expectThreadItemsPage,
   expectTurnInterruptAccepted,
   expectTurnStartAccepted,
   expectTurnSteerAccepted,
@@ -35,6 +36,28 @@ export function requestTurnStart(input: {
       references: input.options.references ?? [],
     }),
     expectTurnStartAccepted,
+  );
+}
+
+export function requestThreadItemsPage(input: {
+  hostId: number;
+  threadId: string;
+  turnId: string;
+  cursor: string | null;
+  limit: number;
+}) {
+  return useGatewayRealtimeStore().request(
+    (requestId) => ({
+      type: "thread.items.load",
+      requestId,
+      hostId: input.hostId,
+      threadId: input.threadId,
+      turnId: input.turnId,
+      cursor: input.cursor,
+      limit: input.limit,
+      sortDirection: "asc" as const,
+    }),
+    expectThreadItemsPage,
   );
 }
 

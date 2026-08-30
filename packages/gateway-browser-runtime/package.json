@@ -25,26 +25,25 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdit/plugin-katex": "1.0.1",
-    "@open-file-viewer/core": "0.1.32",
-    "katex": "0.18.1",
-    "markdown-it": "^14.3.0",
-    "pdfjs-dist": "6.1.200"
+    "@mdit/plugin-katex": "1.1.0",
+    "@open-file-viewer/core": "0.1.43",
+    "katex": "0.18.4",
+    "markdown-it": "^15.0.1",
+    "pdfjs-dist": "6.2.108"
   },
   "devDependencies": {
-    "@shikijs/core": "4.3.1",
-    "@shikijs/engine-javascript": "4.3.1",
-    "@shikijs/langs": "4.3.1",
-    "@shikijs/themes": "4.3.1",
-    "@shikijs/types": "4.3.1",
-    "@types/markdown-it": "^14.1.2",
-    "@types/node": "^26.1.1",
-    "oxfmt": "0.61.0",
+    "@shikijs/core": "4.4.3",
+    "@shikijs/engine-javascript": "4.4.3",
+    "@shikijs/langs": "4.4.3",
+    "@shikijs/themes": "4.4.3",
+    "@shikijs/types": "4.4.3",
+    "@types/node": "^26.4.0",
+    "oxfmt": "0.65.0",
     "rimraf": "^6.1.3",
-    "rolldown": "1.2.0",
-    "shiki": "4.3.1",
-    "shiki-codegen": "4.3.1",
+    "rolldown": "1.2.6",
+    "shiki": "4.4.3",
+    "shiki-codegen": "4.4.3",
     "typescript": "^6.0.3",
-    "vite": "8.1.5"
+    "vite": "8.2.2"
   }
 }

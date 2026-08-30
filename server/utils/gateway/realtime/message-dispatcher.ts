@@ -61,6 +61,15 @@ export class RealtimeMessageDispatcher {
       .with({ type: "file.git.workspace.inspect" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
+      .with({ type: "file.search" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "file.watch.subscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "file.watch.unsubscribe" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "host.lifecycle.unsubscribe" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
@@ -80,6 +89,15 @@ export class RealtimeMessageDispatcher {
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
       .with({ type: "ping" }, (value) => this.dispatchEntry(peer, value, this.handlers[value.type]))
+      .with({ type: "mcp.status.list" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "mcp.event.stream.start" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "mcp.event.stream.stop" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "serverRequest.respond" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
@@ -119,10 +137,16 @@ export class RealtimeMessageDispatcher {
       .with({ type: "thread.turns.load" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
+      .with({ type: "thread.items.load" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
       .with({ type: "thread.unsubscribe" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
       .with({ type: "turn.interrupt" }, (value) =>
+        this.dispatchEntry(peer, value, this.handlers[value.type]),
+      )
+      .with({ type: "turn.settings.update" }, (value) =>
         this.dispatchEntry(peer, value, this.handlers[value.type]),
       )
       .with({ type: "turn.start" }, (value) =>

@@ -106,6 +106,11 @@ export type GatewayDomainEventMap = {
     threadId: string;
     paths: string[];
   };
+  "file-watch-closed": {
+    hostId: number;
+    projectId: number;
+    threadId: string;
+  };
   "thread-settings-detected": {
     hostId: number;
     threadId: string;
@@ -146,6 +151,13 @@ export type GatewayDomainEventMap = {
   };
   "history-turn-appended": { hostId: number; threadId: string; turn: ThreadHistoryTurn };
   "history-turn-synced": { hostId: number; threadId: string; turn: ThreadHistoryTurn };
+  "history-response-usage-upsert": {
+    hostId: number;
+    threadId: string;
+    turnId: string;
+    responseId: string;
+    amount: string;
+  };
 };
 
 export const gatewayDomainEvents = new EventEmitter<GatewayDomainEventMap>();

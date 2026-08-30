@@ -8,6 +8,7 @@ import { useOpenSubAgentPanel } from "@/composables/thread/useOpenSubAgentPanel"
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { pinnedKey } from "@/stores/gateway/thread-utils/identity";
 import { subAgentDisplayName } from "@/components/thread/subagent/display-name";
+import { subAgentActivityLabelKey } from "@/components/thread/subagent/presentation";
 
 const props = defineProps<{
   item: ThreadHistoryItem;
@@ -55,7 +56,9 @@ function openSubAgent() {
       <div class="flex min-w-0 items-center gap-2 text-[0.9375rem]">
         <GitBranchIcon class="size-4 text-ink-muted" />
         <span class="min-w-0 truncate">{{ title }}</span>
-        <Badge v-if="item.kind" variant="secondary">{{ item.kind }}</Badge>
+        <Badge v-if="item.kind" variant="secondary">{{
+          t(subAgentActivityLabelKey(item.kind))
+        }}</Badge>
         <Badge variant="outline" class="ml-auto">{{ t("app.openSubAgent") }}</Badge>
       </div>
       <div class="mt-1 truncate font-mono text-xs text-ink-faint">
@@ -68,7 +71,9 @@ function openSubAgent() {
     <div class="flex items-center gap-2 text-[0.9375rem]">
       <GitBranchIcon class="size-4 text-ink-muted" />
       <span class="min-w-0 truncate">{{ title }}</span>
-      <Badge v-if="item.kind" variant="secondary">{{ item.kind }}</Badge>
+      <Badge v-if="item.kind" variant="secondary">{{
+        t(subAgentActivityLabelKey(item.kind))
+      }}</Badge>
     </div>
   </div>
 </template>

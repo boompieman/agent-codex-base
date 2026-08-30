@@ -1156,7 +1156,9 @@ function trackThreadTurnsHttpRequests(page: Page) {
 
 async function startTimelineRowCountTracking(page: Page) {
   await page.getByTestId("chat-scroll-area").evaluate((root) => {
-    const count = () => root.querySelectorAll('[data-row-key*=":turn-"]').length;
+    // One Turn can now contain a separate lazy intermediate header. Count final message rows here:
+    // this assertion protects cached history depth, not the timeline's presentation row count.
+    const count = () => root.querySelectorAll('[data-row-section="final"]').length;
     const samples = [count()];
     const observer = new MutationObserver(() => samples.push(count()));
     observer.observe(root, { childList: true, subtree: true });

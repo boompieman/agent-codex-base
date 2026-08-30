@@ -118,6 +118,7 @@ const codexErrorInfoSchema = z.union([
     "contextWindowExceeded",
     "sessionBudgetExceeded",
     "usageLimitExceeded",
+    "rateLimitExceeded",
     "serverOverloaded",
     "cyberPolicy",
     "misalignmentPolicyViolation",
@@ -154,6 +155,14 @@ export const threadTurnSchema = z
         message: z.string(),
         codexErrorInfo: codexErrorInfoSchema.nullable(),
         additionalDetails: z.string().nullable(),
+        misalignment: z
+          .object({
+            errorType: z.string().nullable(),
+            detailedExplanation: z.string().nullable(),
+            steer: z.object({ message: z.string() }).strict().nullable(),
+          })
+          .strict()
+          .nullable(),
       })
       .loose()
       .nullable(),
@@ -166,13 +175,32 @@ export const threadTurnSchema = z
 export const turnsPageSchema = z
   .object({
     data: z.array(threadTurnSchema),
-    nextCursor: z.string().nullable().optional(),
-    backwardsCursor: z.string().nullable().optional(),
+    nextCursor: z.string().nullable(),
+    backwardsCursor: z.string().nullable(),
   })
   .loose();
 
 export function parseTurnsPage(value: unknown) {
   return turnsPageSchema.parse(value);
+}
+
+export const threadItemsPageSchema = z
+  .object({
+    data: z.array(
+      z
+        .object({
+          turnId: z.string().min(1),
+          item: threadItemSchema,
+        })
+        .strict(),
+    ),
+    nextCursor: z.string().nullable(),
+    backwardsCursor: z.string().nullable(),
+  })
+  .loose();
+
+export function parseThreadItemsPage(value: unknown) {
+  return threadItemsPageSchema.parse(value);
 }
 
 export const appServerThreadStatusSchema = z.discriminatedUnion("type", [
@@ -353,6 +381,47 @@ export function parseTurnStartResponse(value: unknown) {
 
 export function parseTurnSteerResponse(value: unknown) {
   return z.object({ turnId: z.string().optional() }).loose().parse(value);
+}
+
+export function parseTurnSettingsUpdateResponse(value: unknown) {
+  return z
+    .object({ status: z.enum(["applied", "targetUnavailable"]) })
+    .strict()
+    .parse(value);
+}
+
+const mcpRuntimeStatusSchema = z.enum([
+  "notStarted",
+  "starting",
+  "connected",
+  "authenticationRequired",
+  "failed",
+  "cancelled",
+  "disabled",
+]);
+
+export function parseMcpServerStatusPage(value: unknown) {
+  return z
+    .object({
+      data: z.array(
+        z
+          .object({
+            name: z.string().min(1),
+            runtimeStatus: mcpRuntimeStatusSchema.nullable(),
+            pluginId: z.string().nullable(),
+            tools: z.record(z.string(), z.unknown()),
+            authStatus: z.enum(["unknown", "unsupported", "notLoggedIn", "bearerToken", "oAuth"]),
+          })
+          .loose(),
+      ),
+      nextCursor: z.string().nullable(),
+    })
+    .loose()
+    .parse(value);
+}
+
+export function parseEmptyAppServerResponse(value: unknown) {
+  return z.object({}).loose().parse(value);
 }
 
 export function parseInitializeResponse(value: unknown) {

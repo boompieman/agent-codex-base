@@ -1,6 +1,9 @@
 import { useAuthStore } from "@/stores/auth";
+import { loadAuthorizedImage } from "@/utils/browser-runtime/authorized-image-cache";
 
 export function useAuthorizedObjectUrl(source: Ref<string> | ComputedRef<string>) {
+  const auth = useAuthStore();
+  auth.hydrate();
   const objectUrl = ref("");
   const loading = ref(false);
   const error = ref<Error | null>(null);
@@ -15,8 +18,8 @@ export function useAuthorizedObjectUrl(source: Ref<string> | ComputedRef<string>
   }
 
   watch(
-    source,
-    async (nextSource) => {
+    [source, () => auth.sessionEpoch] as const,
+    async ([nextSource, sessionEpoch]) => {
       const currentRequest = ++requestId;
       revokeActiveUrl();
       objectUrl.value = "";
@@ -32,20 +35,13 @@ export function useAuthorizedObjectUrl(source: Ref<string> | ComputedRef<string>
 
       loading.value = true;
       try {
-        const auth = useAuthStore();
-        auth.hydrate();
-        const response = await fetch(nextSource, {
-          headers: auth.token ? { authorization: `Bearer ${auth.token}` } : {},
+        const blob = await loadAuthorizedImage({
+          source: nextSource,
+          token: auth.token,
+          sessionEpoch,
         });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const blob = await response.blob();
-        if (!blob.type.startsWith("image/")) {
-          throw new Error("Response is not an image");
-        }
         const url = URL.createObjectURL(blob);
-        if (currentRequest !== requestId) {
+        if (currentRequest !== requestId || !auth.isCurrentSession(sessionEpoch)) {
           URL.revokeObjectURL(url);
           return;
         }

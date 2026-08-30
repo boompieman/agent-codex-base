@@ -38,6 +38,7 @@ const {
   selectedThreadGoal,
   selectedThreadGoalObservedAt,
   selectedThreadId,
+  selectedHostId,
   selectedProjectId,
   selectedThreadStatus,
   selectedThreadTokenUsage,
@@ -73,6 +74,7 @@ const {
     :composer-input-enabled="composerInputEnabled"
     :uploading-attachments="uploadingAttachments"
     :selected-thread-id="selectedThreadId"
+    :selected-host-id="selectedHostId"
     :selected-project-id="selectedProjectId"
     :selected-approval-mode="selectedApprovalMode"
     :selected-thread-token-usage="selectedThreadTokenUsage"

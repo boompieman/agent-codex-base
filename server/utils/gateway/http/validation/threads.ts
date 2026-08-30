@@ -35,6 +35,15 @@ export const threadTurnsListSchema = z.object({
   sortDirection: z.enum(["asc", "desc"]).default("desc"),
 });
 
+export const threadItemsListSchema = z.object({
+  hostId: z.coerce.number().int().positive(),
+  threadId: z.string().trim().min(1),
+  turnId: z.string().trim().min(1),
+  cursor: z.string().trim().nullable().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  sortDirection: z.enum(["asc", "desc"]).default("asc"),
+});
+
 export const threadRenameSchema = z.object({
   hostId: z.coerce.number().int().positive(),
   threadId: z.string().trim().min(1),

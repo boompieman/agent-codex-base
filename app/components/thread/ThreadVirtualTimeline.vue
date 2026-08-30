@@ -14,6 +14,7 @@ import { buildThreadTurnSections } from "@/components/thread/thread-turn-section
 import { useIntermediateStepsDisclosure } from "@/components/thread/useIntermediateStepsDisclosure";
 import { provideFilePreviewContext } from "@/composables/files/useFilePreviewContext";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
+import { useGatewayThreadTurnsStore } from "@/stores/gateway-thread-turns";
 import { collaborationModeFromThreadSettings } from "@/utils/thread-collaboration-mode";
 
 const props = defineProps<{
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const composer = useGatewayComposerStore();
+const threadTurns = useGatewayThreadTurnsStore();
 const userDetachedFromLatest = ref(false);
 const projectId = computed(() => props.projectId ?? null);
 const planModeActive = computed(() => selectedThreadMode() === "plan");
@@ -67,11 +69,17 @@ const { isIntermediateOpen, setIntermediateOpen } = useIntermediateStepsDisclosu
   threadIsRunning,
   autoCollapseIntermediate,
 });
+function isTurnItemsLoading(turnId: string) {
+  if (props.hostId === null || props.threadId === null) return false;
+  const key = threadTurns.turnItemsKey(props.hostId, props.threadId, turnId);
+  return threadTurns.loadingTurnItemsByKey[key] === true;
+}
 const rows = computed<ThreadTimelineRow[]>((previous) => {
   const timelineTurns = turnStates.value.map(({ turn, sections }) => ({
     turn,
     sections,
     intermediateOpen: isIntermediateOpen(turn.id),
+    intermediateLoading: isTurnItemsLoading(turn.id),
   }));
   // The disclosure controller already owns the Agent-loop lifecycle: active work stays open and
   // the whole intermediate process collapses only after the thread settles. Footer actions must
@@ -106,6 +114,16 @@ function handleUserDetachedChange(detached: boolean) {
   userDetachedFromLatest.value = detached;
 }
 
+async function handleIntermediateToggle(turnId: string, open: boolean) {
+  if (!open) {
+    setIntermediateOpen(turnId, false);
+    return;
+  }
+  const turn = props.turns.find((candidate) => candidate.id === turnId);
+  if (turn?.itemsView !== "full" && !(await threadTurns.loadTurnItems(turnId))) return;
+  setIntermediateOpen(turnId, true);
+}
+
 function estimateRowSize(row: unknown) {
   return estimateThreadTimelineRow(row as ThreadTimelineRow | undefined);
 }
@@ -122,6 +140,20 @@ watch(
     // viewport below owns its one official TanStack initial-layout transaction.
     userDetachedFromLatest.value = false;
   },
+);
+
+watch(
+  () =>
+    props.turns
+      .filter((turn) => turn.status === "inProgress" && turn.itemsView !== "full")
+      .map((turn) => turn.id),
+  (turnIds) => {
+    // A resumed running Turn must show its existing tool activity before new deltas arrive. Summary
+    // history intentionally omits those items, so hydrate only active Turns without waiting for a
+    // disclosure click; completed Turns remain lazy and load when the user expands them.
+    for (const turnId of turnIds) void threadTurns.loadTurnItems(turnId);
+  },
+  { immediate: true },
 );
 </script>
 
@@ -158,7 +190,7 @@ watch(
         :row="timelineRow(row)"
         :host-id="hostId"
         :thread-id="threadId"
-        @intermediate-toggle="setIntermediateOpen"
+        @intermediate-toggle="handleIntermediateToggle"
       />
     </template>
   </VirtualTimelineViewport>

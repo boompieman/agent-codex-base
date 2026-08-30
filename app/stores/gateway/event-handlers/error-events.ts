@@ -7,6 +7,8 @@ import { appServerTurnErrorFromNotification } from "../errors";
 import { pinnedKey, titleForThread } from "../thread-utils/identity";
 import type { GatewayEventHandlerRegistry } from "./types";
 import { idFromUnknown } from "~~/shared/utils/records";
+import { useGatewayTurnRecoveryStore } from "@/stores/gateway-turn-recovery";
+import { misalignmentDetailsFromNotification } from "../errors";
 
 export const errorEventHandlers: GatewayEventHandlerRegistry = {
   error: (event, params, threadId) => {
@@ -14,6 +16,16 @@ export const errorEventHandlers: GatewayEventHandlerRegistry = {
     const error = appServerTurnErrorFromNotification(params, gateway.t);
     const turnIdValue = idFromUnknown(params.turnId);
     const turnId = turnIdValue === null ? "" : String(turnIdValue);
+    const misalignment = misalignmentDetailsFromNotification(params);
+    if (misalignment?.steer !== null && misalignment !== null) {
+      useGatewayTurnRecoveryStore().setRequest({
+        hostId: event.hostId,
+        threadId,
+        turnId: turnId === "" ? null : turnId,
+        ...misalignment,
+      });
+      return;
+    }
     if (
       turnId !== "" &&
       useGatewayThreadTurnsStore().maybeQueueServerOverloadedRetry(

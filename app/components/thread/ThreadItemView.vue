@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { ThreadTimelineItem } from "~~/shared/types";
+import type { ThreadResponseUsage, ThreadTimelineItem } from "~~/shared/types";
 import { componentForThreadItem } from "@/utils/thread-item-registry";
 import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 
@@ -10,6 +10,7 @@ const props = defineProps<{
   threadId: string | null;
   userMessageVariant?: "normal" | "steer";
   turnTiming?: DisplayedTurnTiming | null;
+  responseUsage?: ThreadResponseUsage[];
   agentActionsAvailable?: boolean;
 }>();
 
@@ -24,6 +25,7 @@ const itemComponent = computed(() => componentForThreadItem(props.item.type));
     :thread-id="threadId"
     :variant="userMessageVariant"
     :turn-timing="item.type === 'agentMessage' ? turnTiming : undefined"
+    :response-usage="item.type === 'agentMessage' ? responseUsage : undefined"
     :agent-actions-available="item.type === 'agentMessage' && agentActionsAvailable"
   />
 </template>

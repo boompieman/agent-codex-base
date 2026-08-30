@@ -4,6 +4,7 @@ import type { AppServerTurnDisplayError } from "@/stores/gateway/errors";
 import { useGatewayTranslator } from "@/composables/i18n/useGatewayTranslator";
 import { interruptActiveTurn, interruptThreadTurn } from "./interrupt";
 import { loadOlderTurns } from "./older-turns";
+import { loadTurnItems } from "./turn-items";
 import { maybeQueueServerOverloadedRetry, maybeRetryAfterTurnFailure } from "./retry";
 import { sendTurn } from "./submission";
 import { respondToServerRequest } from "./transport";
@@ -13,6 +14,7 @@ export function createGatewayThreadTurnActions() {
   return {
     sendTurn: (text: string, options?: ComposerTurnOptions) => sendTurn(t, text, options),
     loadOlderTurns: (options?: { limit?: number }) => loadOlderTurns(t, options),
+    loadTurnItems: (turnId: string) => loadTurnItems(t, turnId),
     interruptActiveTurn: () => interruptActiveTurn(t),
     interruptThreadTurn: (input: { hostId: number; threadId: string; projectId?: number | null }) =>
       interruptThreadTurn(t, input),

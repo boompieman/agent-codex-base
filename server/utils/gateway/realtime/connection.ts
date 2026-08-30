@@ -75,6 +75,7 @@ export function cleanupRealtimePeer(peer: RealtimePeer) {
   clearSubscriptions(state.threadUnsubscribers);
   clearSubscriptions(state.hostMetricsUnsubscribers);
   clearSubscriptions(state.tmuxSessionUnsubscribers);
+  clearSubscriptions(state.fileWatchUnsubscribers);
 }
 
 function rejectUnauthenticatedPeer(peer: RealtimePeer, request: RealtimeClientMessage | undefined) {

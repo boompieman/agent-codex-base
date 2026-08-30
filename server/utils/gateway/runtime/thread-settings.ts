@@ -1,6 +1,7 @@
 import type { HostRecord, ThreadSettingsState } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
 import { buildAppServerCollaborationMode } from "../protocol/thread-payload";
+import { parseTurnSettingsUpdateResponse } from "~~/shared/runtime/app-server";
 
 export class ThreadSettingsService {
   constructor(private readonly registry: ControllerRegistry) {}
@@ -22,6 +23,27 @@ export class ThreadSettingsService {
     }
     return this.registry.withScopedSubscription(host, threadId, (controller) =>
       controller.enqueue(() => controller.client.request("thread/settings/update", params)),
+    );
+  }
+
+  async updateTurnSettings(
+    host: HostRecord,
+    threadId: string,
+    turnId: string,
+    input: Pick<ThreadSettingsState, "model" | "effort">,
+  ) {
+    const params: Record<string, unknown> = { threadId, turnId };
+    if ("model" in input) params.model = input.model;
+    if ("effort" in input) params.effort = input.effort;
+    return this.registry.withScopedSubscription(host, threadId, (controller) =>
+      controller.enqueue(() =>
+        controller.client.request(
+          "turn/settings/update",
+          params,
+          120_000,
+          parseTurnSettingsUpdateResponse,
+        ),
+      ),
     );
   }
 

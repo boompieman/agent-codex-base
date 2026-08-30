@@ -175,7 +175,7 @@ test("sub-agent activity opens workspace tabs with sub-agent timelines", async (
                 model: null,
                 reasoningEffort: null,
                 agentsStates: {
-                  [subThreadId]: { status: "running", message: null },
+                  [subThreadId]: { status: "inProgress", message: null },
                 },
               },
             ],

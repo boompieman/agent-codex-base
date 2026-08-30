@@ -346,7 +346,7 @@ test("explicit history prepend keeps the mobile timeline visually stable", async
     },
   });
 
-  const latestRow = page.locator('[data-row-key*=":turn-turn-005:"]');
+  const latestRow = page.locator('[data-row-key*=":turn-turn-005:"][data-row-section="final"]');
   await expect(latestRow).toBeVisible();
   await page.waitForTimeout(250);
   expect(await threadTurnsLoadRequests(page)).toHaveLength(0);

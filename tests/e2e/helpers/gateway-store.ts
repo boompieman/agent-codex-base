@@ -76,6 +76,10 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
       : null;
   const runtimeInput: SeedGatewayThreadRuntimeInput = {
     ...input,
+    history:
+      input.history === null || input.history === undefined
+        ? input.history
+        : materializeHistoryFixture(input.history),
     currentThread:
       input.currentThread === null
         ? null
@@ -90,15 +94,23 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
     defaultProject: defaultGatewayProject(hostId, input.projectId ?? 1),
     defaultHistory,
     threadViews: Object.fromEntries(
-      Object.entries(input.threadViews ?? {}).map(([key, view]) => [
-        key,
-        {
-          ...view,
-          timelineTurns:
-            view.timelineTurns ??
-            (view.history === null ? [] : projectThreadTimelineHistory(view.history).thread.turns),
-        },
-      ]),
+      Object.entries(input.threadViews ?? {}).map(([key, view]) => {
+        const history = view.history === null ? null : materializeHistoryFixture(view.history);
+        const timelineTurns =
+          view.timelineTurns ??
+          (history === null ? [] : projectThreadTimelineHistory(history).thread.turns);
+        return [
+          key,
+          {
+            ...view,
+            history,
+            timelineTurns: timelineTurns.map((turn) => ({
+              ...turn,
+              itemsView: turn.itemsView ?? ("full" as const),
+            })),
+          },
+        ];
+      }),
     ),
   };
   await page.evaluate((input: SeedGatewayThreadRuntimeInput) => {
@@ -145,6 +157,21 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
       runtime.setThreadTokenUsage(hostId, threadId, input.tokenUsage);
     }
   }, runtimeInput);
+}
+
+function materializeHistoryFixture(history: ThreadHistoryState): ThreadHistoryState {
+  return {
+    thread: {
+      ...history.thread,
+      // `seedGatewayThread` injects already materialized histories directly into Pinia. Mark those
+      // fixtures as full so tests exercise their declared user content; summary/notLoaded fixtures
+      // belong in realtime route tests that explicitly model `thread/items/list` pagination.
+      turns: history.thread.turns.map((turn) => ({
+        ...turn,
+        itemsView: turn.itemsView ?? ("full" as const),
+      })),
+    },
+  };
 }
 
 export async function installRealtimeThreadSnapshotMock(

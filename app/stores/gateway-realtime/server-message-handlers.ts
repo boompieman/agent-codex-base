@@ -52,6 +52,18 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "browser.resourceFailed" }, browser["browser.resourceFailed"])
       .with({ type: "file.git.comparison" }, (response) => ctx.resolveRequest(response))
       .with({ type: "file.git.workspace.snapshot" }, (response) => ctx.resolveRequest(response))
+      .with({ type: "file.search.results" }, (response) => ctx.resolveRequest(response))
+      .with({ type: "file.watch.ready" }, (response) => ctx.resolveRequest(response))
+      .with({ type: "file.watch.changed" }, (event) =>
+        gatewayDomainEvents.emit("remote-files-changed", {
+          hostId: event.hostId,
+          threadId: event.threadId,
+          paths: event.paths,
+        }),
+      )
+      .with({ type: "file.watch.closed" }, (event) =>
+        gatewayDomainEvents.emit("file-watch-closed", event),
+      )
       .with({ type: "notification.published" }, notifications["notification.published"])
       .with({ type: "host.lifecycle" }, notifications["host.lifecycle"])
       .with({ type: "host.metrics.snapshot" }, hostMetrics["host.metrics.snapshot"])
@@ -71,9 +83,13 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
             "thread.snapshot",
             "thread.started",
             "thread.turns.page",
+            "thread.items.page",
             "turn.start.accepted",
             "turn.steer.accepted",
             "turn.interrupt.accepted",
+            "turn.settings.updated",
+            "mcp.status.snapshot",
+            "mcp.event.stream.accepted",
             "serverRequest.respond.accepted",
           ),
         },

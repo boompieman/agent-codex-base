@@ -23,6 +23,14 @@ export interface UploadResult {
   files: UploadedFileRecord[];
 }
 
+export interface ProjectFileSearchResult {
+  files: Array<{
+    type: "file";
+    path: string;
+    name: string;
+  }>;
+}
+
 export interface FilePreviewDocument {
   key: string;
   hostId: number;
