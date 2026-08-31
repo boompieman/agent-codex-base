@@ -4,6 +4,7 @@ import type {
   ThreadGoal,
   ThreadGoalStatus,
   ThreadItemsPageResult,
+  LegacyTurnPageLocator,
   ThreadOpenResult,
   ThreadRuntimeStatusUpdate,
   ThreadTurnsPageResult,
@@ -95,6 +96,7 @@ export type RealtimeClientMessage =
       hostId: number;
       threadId: string;
       turnId: string;
+      legacyPageLocator?: LegacyTurnPageLocator;
       cursor?: string | null;
       limit?: number;
       sortDirection?: "asc" | "desc";

@@ -19,6 +19,7 @@ export function applyOpenedThreadResult(threadId: string, result: ThreadOpenResu
   views.currentThread = result.thread;
   views.history = result.history;
   views.timelineTurns = result.history.thread.turns;
+  views.legacyTurnPageLocators = result.legacyTurnPageLocators;
   if (result.projectId !== null && result.projectId !== undefined) {
     navigation.selectedProjectId = result.projectId;
   }
@@ -47,6 +48,7 @@ export function applyThreadSnapshotResult(threadId: string, result: ThreadSnapsh
   views.currentThread = result.thread;
   views.history = result.history;
   views.timelineTurns = result.history.thread.turns;
+  views.legacyTurnPageLocators = result.legacyTurnPageLocators;
   if (result.projectId !== null && result.projectId !== undefined) {
     navigation.selectedProjectId = result.projectId;
   }
@@ -68,6 +70,7 @@ export function applyStartedThreadResult(result: ThreadOpenResult) {
   views.currentThread = result.thread;
   views.history = result.history;
   views.timelineTurns = result.history.thread.turns;
+  views.legacyTurnPageLocators = result.legacyTurnPageLocators;
   navigation.selectedThreadId = threadId;
   applyCommonThreadResult(threadId, result, result.lastEventId);
   return threadId;

@@ -9,6 +9,7 @@ import type {
   ThreadTimelineHistoryState,
   ThreadHistoryTurn,
   RpcEnvelope,
+  LegacyTurnPageLocator,
 } from "~~/shared/types";
 import { OLDER_TURN_PAGE_LIMIT } from "~~/shared/config";
 
@@ -18,12 +19,6 @@ export interface TurnsPage {
   data?: ThreadHistoryTurn[];
   nextCursor?: string | null;
   backwardsCursor?: string | null;
-}
-
-export interface LegacyTurnPageLocator {
-  cursor: string | null;
-  limit: number;
-  sortDirection: "asc" | "desc";
 }
 
 export interface ThreadOpenSnapshot {

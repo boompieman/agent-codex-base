@@ -24,10 +24,27 @@ export function mergeItemIntoLatestTurn(
     if (!existingItem) {
       return nextHistory;
     }
-    existing.turn.items = existingItems;
-    existing.turn.items[existing.itemIndex] = mergeThreadItem(existingItem, item);
-    nextHistory.thread.turns = [...turns];
-    return nextHistory;
+    const existingTurnId = turnId(existing.turn);
+    if (!itemTurnId || existingTurnId === itemTurnId) {
+      existing.turn.items = existingItems;
+      existing.turn.items[existing.itemIndex] = mergeThreadItem(existingItem, item);
+      nextHistory.thread.turns = [...turns];
+      return nextHistory;
+    }
+
+    // Optimistic sends live in a client-* Turn until app-server assigns the authoritative turnId.
+    // Matching clientId proves both rows represent one user action, so move that item instead of
+    // retaining a synthetic Turn beside the official Turn. This reconciliation belongs at the
+    // item identity boundary: doing it in the composer would fix only the sending browser, while
+    // accepted responses, realtime fan-out, and replay all converge through this reducer.
+    item = mergeThreadItem(existingItem, item);
+    existingItems.splice(existing.itemIndex, 1);
+    const sourceIndex = turns.indexOf(existing.turn);
+    if (existingItems.length === 0 && existingTurnId.startsWith("client-")) {
+      turns.splice(sourceIndex, 1);
+    } else {
+      existing.turn.items = existingItems;
+    }
   }
 
   const targetTurnId = itemTurnId || syntheticTurnId;

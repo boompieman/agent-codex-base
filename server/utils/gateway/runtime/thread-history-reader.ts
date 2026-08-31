@@ -1,4 +1,4 @@
-import type { HostRecord } from "~~/shared/types";
+import type { HostRecord, LegacyTurnPageLocator } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
 import { DEFAULT_TURN_PAGE_LIMIT, type TurnsPage } from "./types";
@@ -40,7 +40,7 @@ export class ThreadHistoryReader {
     if (snapshot === null) {
       throw new Error("Thread snapshot is unavailable while paging history");
     }
-    this.recordTurnsPage(
+    const legacyTurnPageLocators = this.recordTurnsPage(
       host.id,
       threadId,
       snapshot.thread.historyMode,
@@ -55,6 +55,7 @@ export class ThreadHistoryReader {
     return {
       history: projectThreadTimelineHistory(pageToFullHistory({ id: threadId }, page)),
       turnsPage: pageCursorState(page),
+      legacyTurnPageLocators,
     };
   }
 
@@ -66,14 +67,12 @@ export class ThreadHistoryReader {
       cursor?: string | null;
       limit?: number;
       sortDirection?: "asc" | "desc";
+      legacyPageLocator?: LegacyTurnPageLocator;
     },
   ) {
     const client = await this.registry.getHostClient(host);
     const snapshot = threadSnapshotStore.get(host.id, threadId);
-    if (snapshot === null) {
-      throw new Error("Thread snapshot is unavailable while loading Turn items");
-    }
-    if (snapshot.thread.historyMode === "legacy") {
+    if (input.legacyPageLocator !== undefined || snapshot?.thread.historyMode === "legacy") {
       return {
         turnId: input.turnId,
         items: await this.legacyItems.read(
@@ -81,11 +80,14 @@ export class ThreadHistoryReader {
           host,
           threadId,
           input.turnId,
-          snapshot.legacyTurnPageLocators[input.turnId],
+          input.legacyPageLocator ?? snapshot?.legacyTurnPageLocators[input.turnId],
         ),
         nextCursor: null,
         backwardsCursor: null,
       };
+    }
+    if (snapshot === null) {
+      throw new Error("Thread snapshot is unavailable while loading Turn items");
     }
     const page = await client.request(
       "thread/items/list",
@@ -118,7 +120,7 @@ export class ThreadHistoryReader {
     page: TurnsPage,
   ) {
     const locators = this.legacyItems.locatorsForPage(historyMode, locator, page);
-    if (Object.keys(locators).length === 0) return;
+    if (Object.keys(locators).length === 0) return locators;
     threadSnapshotStore.update(hostId, threadId, (snapshot) =>
       snapshot === null
         ? null
@@ -130,6 +132,7 @@ export class ThreadHistoryReader {
             },
           },
     );
+    return locators;
   }
 
   locatorsForPage(

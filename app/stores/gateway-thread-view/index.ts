@@ -6,6 +6,7 @@ import type {
   GatewayThread,
   ThreadHistoryState,
   ThreadTimelineTurn,
+  LegacyTurnPageLocator,
 } from "~~/shared/types";
 import type { SubAgentPanelState, ThreadViewState } from "@/stores/gateway/types";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
@@ -25,6 +26,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
   const loadingOlderTurns = ref(false);
   const olderTurnsCursor = ref<string | null>(null);
   const newerTurnsCursor = ref<string | null>(null);
+  const legacyTurnPageLocators = ref<Record<string, LegacyTurnPageLocator>>({});
   const lastEventId = ref(0);
   const eventEpoch = ref("");
   const scrollToLatestToken = ref(0);
@@ -69,6 +71,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     loadingOlderTurns.value = false;
     olderTurnsCursor.value = null;
     newerTurnsCursor.value = null;
+    legacyTurnPageLocators.value = {};
     lastEventId.value = 0;
     eventEpoch.value = "";
   }
@@ -94,6 +97,7 @@ export const useGatewayThreadViewStore = defineStore("gateway-thread-view", () =
     loadingOlderTurns,
     olderTurnsCursor,
     newerTurnsCursor,
+    legacyTurnPageLocators,
     lastEventId,
     eventEpoch,
     scrollToLatestToken,

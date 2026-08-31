@@ -51,6 +51,10 @@ export async function loadOlderTurns(t: Translate, options: { limit?: number } =
     );
     views.olderTurnsCursor = result.turnsPage.nextCursor;
     views.newerTurnsCursor = result.turnsPage.backwardsCursor ?? views.newerTurnsCursor;
+    views.legacyTurnPageLocators = {
+      ...views.legacyTurnPageLocators,
+      ...result.legacyTurnPageLocators,
+    };
     cacheSelectedThreadView();
   } catch (error: unknown) {
     if (!sessionIsCurrent()) return;

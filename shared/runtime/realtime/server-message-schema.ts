@@ -154,6 +154,14 @@ const projectSchema = z
     updatedAt: nonEmptyString,
   })
   .strict();
+const legacyTurnPageLocatorSchema = z
+  .object({
+    cursor: z.string().nullable(),
+    limit: positiveId,
+    sortDirection: z.enum(["asc", "desc"]),
+  })
+  .strict();
+const legacyTurnPageLocatorsSchema = z.record(z.string(), legacyTurnPageLocatorSchema);
 const threadOpenResultFields = {
   hostId: positiveId,
   thread: gatewayThreadSchema,
@@ -169,6 +177,7 @@ const threadOpenResultFields = {
   projectId: positiveId.nullable().optional(),
   project: projectSchema.nullable().optional(),
   turnsPage: turnsPageStateSchema,
+  legacyTurnPageLocators: legacyTurnPageLocatorsSchema,
   recentEvents: z.array(gatewayEventSchema),
 };
 const terminalSessionSchema = z
@@ -561,6 +570,7 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         ...threadScopeFields,
         history: threadHistorySchema,
         turnsPage: turnsPageStateSchema,
+        legacyTurnPageLocators: legacyTurnPageLocatorsSchema,
       })
       .strict(),
     z

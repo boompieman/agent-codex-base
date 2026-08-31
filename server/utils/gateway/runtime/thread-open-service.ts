@@ -114,6 +114,7 @@ export class ThreadOpenService {
         projectId,
         project: projectId === null ? null : projectStore.get(projectId),
         turnsPage,
+        legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
         recentEvents: snapshotRecentEvents(),
       },
     };
@@ -222,6 +223,7 @@ export class ThreadOpenService {
       projectId: resolvedProjectId,
       project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
+      legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
       recentEvents: snapshotRecentEvents(),
@@ -248,6 +250,7 @@ export class ThreadOpenService {
       projectId: resolvedProjectId,
       project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
+      legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
       recentEvents: snapshotRecentEvents(),
