@@ -13,12 +13,12 @@ import { AppServerFileService } from "./app-server-files";
 
 class ThreadBroker {
   private readonly registry = new ControllerRegistry();
-  private readonly openService = new ThreadOpenService(this.registry);
+  private readonly historyReader = new ThreadHistoryReader(this.registry);
+  private readonly openService = new ThreadOpenService(this.registry, this.historyReader);
   private readonly turnCommands = new ThreadTurnCommandService(this.registry, this.openService);
   private readonly goals = new ThreadGoalService(this.registry);
   private readonly settings = new ThreadSettingsService(this.registry);
   private readonly catalog = new ThreadCatalogService(this.registry);
-  private readonly historyReader = new ThreadHistoryReader(this.registry);
   private readonly mcp = new McpRuntimeService(this.registry);
   private readonly files = new AppServerFileService(this.registry);
 

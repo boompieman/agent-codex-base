@@ -70,7 +70,7 @@ export async function loadTurnItems(t: Translate, turnId: string) {
   } catch (error: unknown) {
     if (sessionIsCurrent()) {
       useGatewayBootstrapStore().setError(
-        messageFromError(error, t("app.loadOlderTurnsFailed"), errorMessageLabels(t)),
+        messageFromError(error, t("app.loadTurnItemsFailed"), errorMessageLabels(t)),
         { hostId, threadId, turnId },
       );
     }
