@@ -1,10 +1,12 @@
 import type { HostRecord } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
-import { DEFAULT_TURN_PAGE_LIMIT } from "./types";
+import { DEFAULT_TURN_PAGE_LIMIT, type TurnsPage } from "./types";
 import { parseThreadItemsPage, parseTurnsPage } from "~~/shared/runtime/app-server";
 import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
 import { asThreadTimelineItem } from "~~/shared/thread-history/timeline";
+import { threadSnapshotStore } from "../state/thread-snapshots";
+import { LegacyTurnItemsReader } from "./legacy-turn-items-reader";
 
 export interface ThreadTurnsListInput {
   cursor?: string | null;
@@ -13,7 +15,10 @@ export interface ThreadTurnsListInput {
 }
 
 export class ThreadHistoryReader {
-  constructor(private readonly registry: ControllerRegistry) {}
+  constructor(
+    private readonly registry: ControllerRegistry,
+    private readonly legacyItems = new LegacyTurnItemsReader(),
+  ) {}
 
   async listThreadTurns(host: HostRecord, threadId: string, input: ThreadTurnsListInput) {
     const client = await this.registry.getHostClient(host);
@@ -30,6 +35,21 @@ export class ThreadHistoryReader {
       },
       120_000,
       parseTurnsPage,
+    );
+    const snapshot = threadSnapshotStore.get(host.id, threadId);
+    if (snapshot === null) {
+      throw new Error("Thread snapshot is unavailable while paging history");
+    }
+    this.recordTurnsPage(
+      host.id,
+      threadId,
+      snapshot.thread.historyMode,
+      {
+        cursor: input.cursor ?? null,
+        limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
+        sortDirection: input.sortDirection ?? "desc",
+      },
+      page,
     );
 
     return {
@@ -49,6 +69,18 @@ export class ThreadHistoryReader {
     },
   ) {
     const client = await this.registry.getHostClient(host);
+    const snapshot = threadSnapshotStore.get(host.id, threadId);
+    if (snapshot === null) {
+      throw new Error("Thread snapshot is unavailable while loading Turn items");
+    }
+    if (snapshot.thread.historyMode === "legacy") {
+      return {
+        turnId: input.turnId,
+        items: await this.legacyItems.read(client, host, threadId, input.turnId),
+        nextCursor: null,
+        backwardsCursor: null,
+      };
+    }
     const page = await client.request(
       "thread/items/list",
       {
@@ -70,5 +102,15 @@ export class ThreadHistoryReader {
       nextCursor: page.nextCursor,
       backwardsCursor: page.backwardsCursor,
     };
+  }
+
+  recordTurnsPage(
+    hostId: number,
+    threadId: string,
+    historyMode: "legacy" | "paginated",
+    locator: { cursor: string | null; limit: number; sortDirection: "asc" | "desc" },
+    page: TurnsPage,
+  ) {
+    this.legacyItems.recordPage(hostId, threadId, historyMode, locator, page);
   }
 }

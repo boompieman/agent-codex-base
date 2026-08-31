@@ -31,9 +31,9 @@ export async function handleRealtimePeerMessage(peer: RealtimePeer, rawMessage: 
     request = parseClientMessage(rawMessage);
     await realtimeMessageDispatcher.dispatch(peer, request);
   } catch (error: unknown) {
+    const details = realtimeErrorDetails(peer, request, error);
     console.error("[gateway] realtime message failed", {
-      requestType: request?.type ?? null,
-      requestId: request && "requestId" in request ? request.requestId : null,
+      ...details,
       message: error instanceof Error ? error.message : String(error),
     });
     if (error instanceof RealtimeAuthenticationRequiredError) {
@@ -46,7 +46,7 @@ export async function handleRealtimePeerMessage(peer: RealtimePeer, rawMessage: 
       requestId: request && "requestId" in request ? request.requestId : undefined,
       request,
       code: realtimeErrorCode(error),
-      details: realtimeErrorDetails(peer, request, error),
+      details,
     });
   }
 }
@@ -112,6 +112,8 @@ function realtimeErrorDetails(
     errorName: typeof errorRecord?.name === "string" ? errorRecord.name : null,
     statusCode: errorRecord?.statusCode ?? cause?.statusCode ?? null,
     statusMessage: errorRecord?.statusMessage ?? cause?.statusMessage ?? null,
+    rpcMethod: errorRecord?.rpcMethod ?? null,
+    rpcCode: errorRecord?.rpcCode ?? null,
   };
 }
 

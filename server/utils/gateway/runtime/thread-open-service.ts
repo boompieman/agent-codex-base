@@ -28,6 +28,7 @@ import {
   parseTurnsPage,
 } from "~~/shared/runtime/app-server";
 import { gatewayThreadFromAppServer } from "../protocol/gateway-thread";
+import type { ThreadHistoryReader } from "./thread-history-reader";
 
 export class ThreadOpenService {
   private readonly pendingRefreshes = new Map<
@@ -35,7 +36,10 @@ export class ThreadOpenService {
     { limit: number; promise: Promise<ReturnTypeResult> }
   >();
 
-  constructor(private readonly registry: ControllerRegistry) {}
+  constructor(
+    private readonly registry: ControllerRegistry,
+    private readonly historyReader: ThreadHistoryReader,
+  ) {}
 
   async openThread(
     host: HostRecord,
@@ -314,6 +318,17 @@ export class ThreadOpenService {
     activationController?: ThreadController,
   ) {
     const threadId = thread.id;
+    this.historyReader.recordTurnsPage(
+      host.id,
+      threadId,
+      thread.historyMode,
+      {
+        cursor: null,
+        limit: Math.max(initialTurnsPage.data.length, 1),
+        sortDirection: "desc",
+      },
+      initialTurnsPage,
+    );
     const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
