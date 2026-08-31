@@ -60,7 +60,17 @@ export function useIntermediateStepsDisclosure(input: {
   }
 
   function setIntermediateOpen(turnId: string, open: boolean) {
-    touchedByUser.add(turnId);
+    const turn = input.turns.value.find((candidate) => candidate.id === turnId);
+    // Opening live work is temporary inspection, not a request to keep historical work expanded.
+    // Previously a click after the final stream delta but before turn/completed raced the watcher:
+    // no later running-state update remained to clear touchedByUser, so completion stayed open.
+    // Completed-turn clicks are the only durable disclosure choice; they remain open until the user
+    // closes them, while every active turn still follows the normal completion auto-collapse policy.
+    if (input.threadIsRunning.value && turn?.turnIsActive === true) {
+      touchedByUser.delete(turnId);
+    } else {
+      touchedByUser.add(turnId);
+    }
     openByTurnId.set(turnId, open);
   }
 

@@ -318,6 +318,7 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         type: z.literal("file.watch.unsubscribe"),
         ...threadScopeFields,
         projectId: positiveId,
+        subscriptionId: nonEmptyString,
       })
       .strict(),
     z

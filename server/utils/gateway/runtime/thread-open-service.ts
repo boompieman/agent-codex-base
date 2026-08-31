@@ -95,6 +95,7 @@ export class ThreadOpenService {
       history,
       projectId,
       turnsPage,
+      legacyTurnPageLocators: {},
       threadSettings: extractThreadSettings(parsed.raw),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
@@ -318,17 +319,11 @@ export class ThreadOpenService {
     activationController?: ThreadController,
   ) {
     const threadId = thread.id;
-    this.historyReader.recordTurnsPage(
-      host.id,
-      threadId,
-      thread.historyMode,
-      {
-        cursor: null,
-        limit: Math.max(initialTurnsPage.data.length, 1),
-        sortDirection: "desc",
-      },
-      initialTurnsPage,
-    );
+    const initialPageLocator = {
+      cursor: null,
+      limit: Math.max(initialTurnsPage.data.length, 1),
+      sortDirection: "desc" as const,
+    };
     const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
@@ -342,6 +337,11 @@ export class ThreadOpenService {
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
+      legacyTurnPageLocators: this.historyReader.locatorsForPage(
+        thread.historyMode,
+        initialPageLocator,
+        initialTurnsPage,
+      ),
       threadSettings: effectiveThreadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };

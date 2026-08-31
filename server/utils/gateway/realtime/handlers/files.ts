@@ -4,7 +4,7 @@ import { requireRecord } from "../../http/validation/common";
 import { hostStore } from "../../state/hosts";
 import { projectStore } from "../../state/projects";
 import { sendRealtimePeerMessage, stateFor, type RealtimePeer } from "../peer-state";
-import { removeSubscription } from "../subscription-map";
+import { removeOwnedSubscription, replaceOwnedSubscription } from "../subscription-map";
 
 export async function searchProjectFiles(
   peer: RealtimePeer,
@@ -33,7 +33,6 @@ export async function subscribeProjectFiles(
   const { host, project } = requiredProjectScope(request.hostId, request.projectId);
   const key = fileWatchScopeKey(request.hostId, request.projectId, request.threadId);
   const subscriptions = stateFor(peer).fileWatchUnsubscribers;
-  removeSubscription(subscriptions, key);
   const paths = watchedProjectPaths(project.remotePath, request.paths);
 
   let active = true;
@@ -46,7 +45,7 @@ export async function subscribeProjectFiles(
   // Install cancellation before awaiting fs/watch. A fast panel switch can unsubscribe while the
   // App Server is canonicalizing a slow remote path; without this pending owner, that late response
   // would leave an invisible watcher attached to the shared Host RPC connection.
-  subscriptions.set(key, cancel);
+  const subscription = replaceOwnedSubscription(subscriptions, key, request.requestId, cancel);
 
   try {
     // App Server fs/watch is deliberately non-recursive. One watch per expanded directory keeps
@@ -66,7 +65,7 @@ export async function subscribeProjectFiles(
         return;
       }
       active = false;
-      if (subscriptions.get(key) === cancel) subscriptions.delete(key);
+      if (subscriptions.get(key) === subscription) subscriptions.delete(key);
       releaseLeases();
       sendRealtimePeerMessage(peer, {
         type: "file.watch.closed",
@@ -76,7 +75,7 @@ export async function subscribeProjectFiles(
       });
     });
     releaseLeases = () => leases.forEach((lease) => lease.release());
-    if (!active || subscriptions.get(key) !== cancel) {
+    if (!active || subscriptions.get(key) !== subscription) {
       releaseLeases();
       return;
     }
@@ -90,7 +89,7 @@ export async function subscribeProjectFiles(
       paths,
     });
   } catch (error) {
-    if (subscriptions.get(key) === cancel) subscriptions.delete(key);
+    if (subscriptions.get(key) === subscription) subscriptions.delete(key);
     throw error;
   }
 }
@@ -126,9 +125,13 @@ export function unsubscribeProjectFiles(
   peer: RealtimePeer,
   request: Extract<RealtimeClientMessage, { type: "file.watch.unsubscribe" }>,
 ) {
-  removeSubscription(
+  // A restored workspace can issue a newer watch while an older fs/watch request is still in
+  // flight. Only the owner that created a lease may release it; a late cleanup from the older
+  // request must not cancel the current editor subscription for the same thread scope.
+  removeOwnedSubscription(
     stateFor(peer).fileWatchUnsubscribers,
     fileWatchScopeKey(request.hostId, request.projectId, request.threadId),
+    request.subscriptionId,
   );
 }
 
