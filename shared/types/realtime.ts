@@ -265,6 +265,7 @@ export type RealtimeClientMessage =
       hostId: number;
       projectId: number;
       threadId: string;
+      subscriptionId: string;
     }
   | {
       type: "file.git.compare";

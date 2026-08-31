@@ -1,46 +1,40 @@
 import type { HostRecord, ThreadHistoryItem } from "~~/shared/types";
 import { parseTurnsPage } from "~~/shared/runtime/app-server";
 import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
-import { LRUCache } from "lru-cache";
 import type { CodexRpcClient } from "../infra/rpc/rpc";
 import { currentGatewayUserId } from "../state/memory";
-import type { TurnsPage } from "./types";
-
-interface LegacyTurnPageLocator {
-  cursor: string | null;
-  limit: number;
-  sortDirection: "asc" | "desc";
-}
-
-const locatorCache = new LRUCache<string, LegacyTurnPageLocator>({
-  max: 2_000,
-  ttl: 30 * 60_000,
-});
+import type { LegacyTurnPageLocator, TurnsPage } from "./types";
 
 const pendingReads = new Map<string, Promise<ThreadHistoryItem[]>>();
 
 export class LegacyTurnItemsReader {
-  recordPage(
-    hostId: number,
-    threadId: string,
+  locatorsForPage(
     historyMode: "legacy" | "paginated",
     locator: LegacyTurnPageLocator,
     page: TurnsPage,
   ) {
-    if (historyMode !== "legacy") return;
+    if (historyMode !== "legacy") return {};
+    const locators: Record<string, LegacyTurnPageLocator> = {};
     for (const turn of page.data ?? []) {
       if (typeof turn.id === "string") {
-        locatorCache.set(turnKey(hostId, threadId, turn.id), locator);
+        locators[turn.id] = locator;
       }
     }
+    return locators;
   }
 
-  async read(client: CodexRpcClient, host: HostRecord, threadId: string, turnId: string) {
+  async read(
+    client: CodexRpcClient,
+    host: HostRecord,
+    threadId: string,
+    turnId: string,
+    locator: LegacyTurnPageLocator | undefined,
+  ) {
     const key = turnKey(host.id, threadId, turnId);
     const pending = pendingReads.get(key);
     if (pending !== undefined) return pending;
 
-    const promise = this.readLocatedPage(client, host.id, threadId, turnId);
+    const promise = this.readLocatedPage(client, threadId, turnId, locator);
     pendingReads.set(key, promise);
     try {
       return await promise;
@@ -51,11 +45,10 @@ export class LegacyTurnItemsReader {
 
   private async readLocatedPage(
     client: CodexRpcClient,
-    hostId: number,
     threadId: string,
     turnId: string,
+    locator: LegacyTurnPageLocator | undefined,
   ) {
-    const locator = locatorCache.get(turnKey(hostId, threadId, turnId));
     if (locator === undefined) {
       throw new Error(
         "Legacy Turn items require a current thread page; reopen the thread and retry",
@@ -63,9 +56,9 @@ export class LegacyTurnItemsReader {
     }
 
     // Legacy rollouts expose bounded Turn pages but do not implement thread/items/list. Reuse the
-    // exact opaque page cursor that produced the summary row and ask app-server to hydrate that
-    // page once. Do not parse or synthesize the cursor: rollback and compaction can change its
-    // anchor semantics, and app-server remains the only owner of that protocol detail.
+    // exact opaque page cursor stored with the snapshot that produced this summary row. Do not
+    // parse or synthesize the cursor: rollback and compaction can change its anchor semantics, and
+    // app-server remains the only owner of that protocol detail.
     const page = await client.request(
       "thread/turns/list",
       {

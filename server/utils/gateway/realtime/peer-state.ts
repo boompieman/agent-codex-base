@@ -1,5 +1,6 @@
 import type { RealtimeServerMessage } from "~~/shared/types";
 import { runWithGatewayUser } from "../state/memory";
+import type { OwnedSubscription } from "./subscription-map";
 
 export interface RealtimePeer {
   send(message: string): void;
@@ -22,7 +23,7 @@ export interface RealtimePeerState {
   threadUnsubscribers: Map<string, () => void>;
   hostMetricsUnsubscribers: Map<number, () => void>;
   tmuxSessionUnsubscribers: Map<number, () => void>;
-  fileWatchUnsubscribers: Map<string, () => void>;
+  fileWatchUnsubscribers: Map<string, OwnedSubscription>;
 }
 
 const peerStates = new WeakMap<RealtimePeer, RealtimePeerState>();

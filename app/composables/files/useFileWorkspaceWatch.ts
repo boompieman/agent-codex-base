@@ -20,6 +20,7 @@ export function useFileWorkspaceWatch(input: {
   let desiredGeneration = 0;
   let subscribedScope: string | null = null;
   let subscribedPaths = "";
+  let subscribedId: string | null = null;
   let disposed = false;
   const retry = useTimeoutFn(() => void reconcile(), FILE_WATCH_RETRY_MS, { immediate: false });
 
@@ -58,31 +59,34 @@ export function useFileWorkspaceWatch(input: {
       subscribedScope !== null &&
       (subscribedScope !== nextScope || subscribedPaths !== pathSignature)
     ) {
-      unsubscribe(subscribedScope);
+      if (subscribedId !== null) unsubscribe(subscribedScope, subscribedId);
       subscribedScope = null;
       subscribedPaths = "";
+      subscribedId = null;
     }
     if (nextScope === null || nextScope === subscribedScope || disposed) return;
 
     const [hostId, parsedProjectId, threadId] = parseScopeKey(nextScope);
+    let subscriptionId = "";
     try {
-      await realtime.request(
-        (requestId) => ({
+      await realtime.request((requestId) => {
+        subscriptionId = requestId;
+        return {
           type: "file.watch.subscribe",
           requestId,
           hostId,
           projectId: parsedProjectId,
           threadId,
           paths,
-        }),
-        expectFileWatchReady,
-      );
+        };
+      }, expectFileWatchReady);
       if (disposed || generation !== desiredGeneration || !watchDesired()) {
-        unsubscribe(nextScope);
+        unsubscribe(nextScope, subscriptionId);
         return;
       }
       subscribedScope = nextScope;
       subscribedPaths = pathSignature;
+      subscribedId = subscriptionId;
       // Registering fs/watch and hydrating the editor are separate RPC operations. Revalidate once
       // after the watch is ready so a write in that narrow hand-off window is not missed; all
       // subsequent refreshes remain event-driven and no polling timer is introduced here.
@@ -100,9 +104,15 @@ export function useFileWorkspaceWatch(input: {
     );
   }
 
-  function unsubscribe(key: string) {
+  function unsubscribe(key: string, subscriptionId: string) {
     const [hostId, projectId, threadId] = parseScopeKey(key);
-    realtime.send({ type: "file.watch.unsubscribe", hostId, projectId, threadId });
+    realtime.send({
+      type: "file.watch.unsubscribe",
+      hostId,
+      projectId,
+      threadId,
+      subscriptionId,
+    });
   }
 
   tryOnScopeDispose(() => {
@@ -111,9 +121,12 @@ export function useFileWorkspaceWatch(input: {
     retry.stop();
     stopInputs();
     stopClosed();
-    if (subscribedScope !== null) unsubscribe(subscribedScope);
+    if (subscribedScope !== null && subscribedId !== null) {
+      unsubscribe(subscribedScope, subscribedId);
+    }
     subscribedScope = null;
     subscribedPaths = "";
+    subscribedId = null;
   });
 }
 

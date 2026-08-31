@@ -76,7 +76,13 @@ export class ThreadHistoryReader {
     if (snapshot.thread.historyMode === "legacy") {
       return {
         turnId: input.turnId,
-        items: await this.legacyItems.read(client, host, threadId, input.turnId),
+        items: await this.legacyItems.read(
+          client,
+          host,
+          threadId,
+          input.turnId,
+          snapshot.legacyTurnPageLocators[input.turnId],
+        ),
         nextCursor: null,
         backwardsCursor: null,
       };
@@ -111,6 +117,26 @@ export class ThreadHistoryReader {
     locator: { cursor: string | null; limit: number; sortDirection: "asc" | "desc" },
     page: TurnsPage,
   ) {
-    this.legacyItems.recordPage(hostId, threadId, historyMode, locator, page);
+    const locators = this.legacyItems.locatorsForPage(historyMode, locator, page);
+    if (Object.keys(locators).length === 0) return;
+    threadSnapshotStore.update(hostId, threadId, (snapshot) =>
+      snapshot === null
+        ? null
+        : {
+            ...snapshot,
+            legacyTurnPageLocators: {
+              ...snapshot.legacyTurnPageLocators,
+              ...locators,
+            },
+          },
+    );
+  }
+
+  locatorsForPage(
+    historyMode: "legacy" | "paginated",
+    locator: { cursor: string | null; limit: number; sortDirection: "asc" | "desc" },
+    page: TurnsPage,
+  ) {
+    return this.legacyItems.locatorsForPage(historyMode, locator, page);
   }
 }
