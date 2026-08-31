@@ -95,6 +95,14 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         ...requestIdField,
         ...threadScopeFields,
         turnId: nonEmptyString,
+        legacyPageLocator: z
+          .object({
+            cursor: z.string().nullable(),
+            limit: positiveId,
+            sortDirection: z.enum(["asc", "desc"]),
+          })
+          .strict()
+          .optional(),
         cursor: nullableString,
         limit: positiveId.optional(),
         sortDirection: z.enum(["asc", "desc"]).optional(),

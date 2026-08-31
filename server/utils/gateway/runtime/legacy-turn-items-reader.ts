@@ -1,9 +1,9 @@
-import type { HostRecord, ThreadHistoryItem } from "~~/shared/types";
+import type { HostRecord, LegacyTurnPageLocator, ThreadHistoryItem } from "~~/shared/types";
 import { parseTurnsPage } from "~~/shared/runtime/app-server";
 import { asThreadTimelineTurn } from "~~/shared/thread-history/timeline";
 import type { CodexRpcClient } from "../infra/rpc/rpc";
 import { currentGatewayUserId } from "../state/memory";
-import type { LegacyTurnPageLocator, TurnsPage } from "./types";
+import type { TurnsPage } from "./types";
 
 const pendingReads = new Map<string, Promise<ThreadHistoryItem[]>>();
 

@@ -1,9 +1,9 @@
 import type { Locator, Page } from "@playwright/test";
-import type { RealtimeServerMessage, ThreadHistoryState } from "../../../shared/types";
 import {
   installRealtimeThreadTurnsLoadRoute,
   realtimeThreadTurnsLoadRequests,
   releaseRealtimeThreadTurnsLoadRoute,
+  type ThreadTurnsLoadResponseInput,
 } from "./realtime-route";
 
 interface FrameTracker {
@@ -57,9 +57,7 @@ export async function threadTurnCount(page: Page) {
 
 export async function installDeferredThreadTurnsLoadStub(
   page: Page,
-  response: Omit<Extract<RealtimeServerMessage, { type: "thread.turns.page" }>, "history"> & {
-    history: ThreadHistoryState;
-  },
+  response: ThreadTurnsLoadResponseInput,
 ) {
   installRealtimeThreadTurnsLoadRoute(page, response, true);
 }
