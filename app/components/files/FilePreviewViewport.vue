@@ -16,6 +16,7 @@ const { t, locale } = useI18n();
 const fileWorkspace = useGatewayFileWorkspaceStore();
 const { isDark } = useTerminalTheme();
 const file = computed(() => fileWorkspace.fileForDocument(props.document.key));
+const hasCachedContent = computed(() => props.document.objectUrl !== "");
 const viewerTheme = computed(() => (isDark.value ? "dark" : "light"));
 const viewerLocale = computed(() => (locale.value === "en" ? "en-US" : "zh-CN"));
 </script>
@@ -29,8 +30,12 @@ const viewerLocale = computed(() => (locale.value === "en" ? "en-US" : "zh-CN"))
       <Loader2Icon class="mr-2 size-4 animate-spin" />
       {{ t("app.loadingFilePreview") }}
     </div>
+    <!-- A refresh failure must not replace a document that was already loaded. The runtime keeps
+         its object URL and draft specifically so deleted or temporarily unreachable remote files
+         remain inspectable, including their Git deletion diff. Only the initial load error is a
+         blocking preview state. -->
     <div
-      v-else-if="document.error"
+      v-else-if="document.error && !hasCachedContent"
       class="m-3 flex flex-col gap-3 rounded-xl border border-destructive/25 bg-destructive/10 p-4 text-sm text-destructive"
     >
       <div class="flex items-start gap-2">

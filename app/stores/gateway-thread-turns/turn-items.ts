@@ -41,7 +41,6 @@ export async function loadTurnItems(t: Translate, turnId: string) {
         turnId,
         cursor,
         limit: ITEM_PAGE_LIMIT,
-        legacyPageLocator: views.legacyTurnPageLocators[turnId],
       });
       items.push(...page.items);
       cursor = page.nextCursor;

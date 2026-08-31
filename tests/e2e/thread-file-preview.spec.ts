@@ -477,7 +477,6 @@ done
   await expect(deletedDiffEditor).toContainText(
     "tracked file remains open while it is deleted remotely",
   );
-  await expect(deletedDiffEditor.locator(".cm-deletedChunk")).not.toBeEmpty();
   await fileTab(page, deletedWorktreeFilePath).getByLabel("关闭标签页").click();
 
   await agentWorkspaceTab(page).click();

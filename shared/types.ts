@@ -31,7 +31,6 @@ export type {
   ThreadTokenUsageState,
   ThreadTurnsPageResult,
   ThreadItemsPageResult,
-  LegacyTurnPageLocator,
   MisalignmentErrorDetails,
   TokenUsageBreakdown,
   ReasoningEffort,

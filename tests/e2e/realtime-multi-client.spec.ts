@@ -82,6 +82,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     timeout: 120_000,
   });
   await expect(page.getByTestId(`thread-button-${threadId}`).getByLabel("已完成")).toBeVisible();
+  await expect(page.getByText("加载回合内容失败")).toHaveCount(0);
   await revealVirtualizedChatLocator(page, firstIntermediateStepsToggle(page));
   await expect(firstIntermediateStepsToggle(page)).toHaveAttribute("data-state", "closed");
   const reconnectedMarker = `E2E WS重连 ${Date.now()}`;
@@ -224,9 +225,13 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       imagePath: remote.imagePath,
       marker: secondMarker,
     });
-    await expect(
-      secondPage.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),
-    ).toBeVisible({ timeout: 120_000 });
+    // The submitted user text includes the instruction prefix, while the requested one-line Agent
+    // response is the marker itself. Match the exact response so this assertion cannot pass by
+    // finding the user's own message and then fail on another peer that rendered the real reply.
+    const secondReply = secondPage
+      .getByTestId("chat-scroll-area")
+      .getByText(secondMarker, { exact: true });
+    await expect(secondReply).toBeVisible({ timeout: 120_000 });
     // The response text can arrive before app-server emits turn/completed. Waiting on the page
     // that started the turn prevents the other client from satisfying "已完成" with the previous
     // turn's state before its queued turn/started event has been projected.
@@ -257,7 +262,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     await expect.poll(() => remoteImageRequestCount).toBe(1);
     await revealVirtualizedChatLocator(
       page,
-      page.getByTestId("chat-scroll-area").getByText(`回复：${secondMarker}`),
+      page.getByTestId("chat-scroll-area").getByText(secondMarker, { exact: true }),
     );
     expect(await activeRealtimeSocketCount(page)).toBe(1);
     expect(await activeRealtimeSocketCount(secondPage)).toBe(1);

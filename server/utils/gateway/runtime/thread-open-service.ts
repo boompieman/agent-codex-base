@@ -20,13 +20,9 @@ import type { ThreadController } from "./thread-controller";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
 import { runtimeLog } from "./runtime-log";
 import { threadRuntimeEvents } from "./thread-runtime-events";
-import type { ThreadOpenSnapshot } from "./types";
+import type { ThreadOpenSnapshot, TurnsPage } from "./types";
 import { currentGatewayUserId } from "../state/memory";
-import {
-  parseThreadReadResult,
-  parseThreadStartResult,
-  parseTurnsPage,
-} from "~~/shared/runtime/app-server";
+import { parseThreadReadResult, parseThreadStartResult } from "~~/shared/runtime/app-server";
 import { gatewayThreadFromAppServer } from "../protocol/gateway-thread";
 import type { ThreadHistoryReader } from "./thread-history-reader";
 
@@ -95,7 +91,6 @@ export class ThreadOpenService {
       history,
       projectId,
       turnsPage,
-      legacyTurnPageLocators: {},
       threadSettings: extractThreadSettings(parsed.raw),
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };
@@ -114,7 +109,6 @@ export class ThreadOpenService {
         projectId,
         project: projectId === null ? null : projectStore.get(projectId),
         turnsPage,
-        legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
         recentEvents: snapshotRecentEvents(),
       },
     };
@@ -223,7 +217,6 @@ export class ThreadOpenService {
       projectId: resolvedProjectId,
       project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
-      legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
       recentEvents: snapshotRecentEvents(),
@@ -250,7 +243,6 @@ export class ThreadOpenService {
       projectId: resolvedProjectId,
       project: resolvedProjectId === null ? null : projectStore.get(resolvedProjectId),
       turnsPage: snapshot.turnsPage,
-      legacyTurnPageLocators: snapshot.legacyTurnPageLocators,
       threadSettings: snapshot.threadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents) ?? snapshot.tokenUsage,
       recentEvents: snapshotRecentEvents(),
@@ -270,11 +262,17 @@ export class ThreadOpenService {
       if (initialTurnsPage === null || initialTurnsPage === undefined) {
         throw new Error("thread/resume omitted the requested initialTurnsPage");
       }
+      const loadedTurnsPage = await this.historyReader.loadInitialTurnsPage(
+        host,
+        resumed.thread,
+        limit,
+        initialTurnsPage,
+      );
       return this.storeRemoteOpenSnapshot(
         host,
         projectId,
         resumed.thread,
-        initialTurnsPage,
+        loadedTurnsPage,
         extractThreadSettings(resumed),
         activationController,
       );
@@ -284,26 +282,17 @@ export class ThreadOpenService {
     // a controller operation and must not acquire another subscription lease. They retain the
     // metadata + page pair; normal browser cold opens use the combined resume path above.
     const client = await this.registry.getHostClient(host);
-    const [read, initialTurnsPage] = await Promise.all([
-      client.request(
-        "thread/read",
-        { threadId, includeTurns: false },
-        120_000,
-        parseThreadReadResult,
-      ),
-      client.request(
-        "thread/turns/list",
-        {
-          threadId,
-          cursor: null,
-          limit,
-          sortDirection: "desc",
-          itemsView: "summary",
-        },
-        120_000,
-        parseTurnsPage,
-      ),
-    ]);
+    const read = await client.request(
+      "thread/read",
+      { threadId, includeTurns: false },
+      120_000,
+      parseThreadReadResult,
+    );
+    const initialTurnsPage = await this.historyReader.loadInitialTurnsPage(
+      host,
+      read.thread,
+      limit,
+    );
     return this.storeRemoteOpenSnapshot(
       host,
       projectId,
@@ -317,16 +306,11 @@ export class ThreadOpenService {
     host: HostRecord,
     projectId: number | null,
     thread: AppServerThread,
-    initialTurnsPage: ReturnType<typeof parseTurnsPage>,
+    initialTurnsPage: TurnsPage,
     threadSettings: ReturnType<typeof extractThreadSettings> | null,
     activationController?: ThreadController,
   ) {
     const threadId = thread.id;
-    const initialPageLocator = {
-      cursor: null,
-      limit: Math.max(initialTurnsPage.data.length, 1),
-      sortDirection: "desc" as const,
-    };
     const resolvedProjectId = resolveProjectId(host.id, projectId, thread.cwd);
     threadMetadataStore.record(host.id, resolvedProjectId, thread);
 
@@ -340,11 +324,6 @@ export class ThreadOpenService {
       history: projectThreadTimelineHistory(pageToFullHistory(thread, initialTurnsPage)),
       projectId: resolvedProjectId,
       turnsPage: pageCursorState(initialTurnsPage),
-      legacyTurnPageLocators: this.historyReader.locatorsForPage(
-        thread.historyMode,
-        initialPageLocator,
-        initialTurnsPage,
-      ),
       threadSettings: effectiveThreadSettings,
       tokenUsage: latestTokenUsageFromEvents(recentEvents),
     };

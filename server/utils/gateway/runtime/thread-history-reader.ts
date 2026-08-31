@@ -1,12 +1,13 @@
-import type { HostRecord, LegacyTurnPageLocator } from "~~/shared/types";
+import type { AppServerThread, HostRecord } from "~~/shared/types";
+import { parseThreadItemsPage, parseTurnsPage } from "~~/shared/runtime/app-server";
+import {
+  asThreadTimelineItem,
+  projectThreadTimelineHistory,
+} from "~~/shared/thread-history/timeline";
+import { threadSnapshotStore } from "../state/thread-snapshots";
 import type { ControllerRegistry } from "./controller-registry";
 import { pageCursorState, pageToFullHistory } from "./thread-history-pages";
 import { DEFAULT_TURN_PAGE_LIMIT, type TurnsPage } from "./types";
-import { parseThreadItemsPage, parseTurnsPage } from "~~/shared/runtime/app-server";
-import { projectThreadTimelineHistory } from "~~/shared/thread-history/timeline";
-import { asThreadTimelineItem } from "~~/shared/thread-history/timeline";
-import { threadSnapshotStore } from "../state/thread-snapshots";
-import { LegacyTurnItemsReader } from "./legacy-turn-items-reader";
 
 export interface ThreadTurnsListInput {
   cursor?: string | null;
@@ -15,47 +16,35 @@ export interface ThreadTurnsListInput {
 }
 
 export class ThreadHistoryReader {
-  constructor(
-    private readonly registry: ControllerRegistry,
-    private readonly legacyItems = new LegacyTurnItemsReader(),
-  ) {}
+  constructor(private readonly registry: ControllerRegistry) {}
+
+  async loadInitialTurnsPage(
+    host: HostRecord,
+    thread: AppServerThread,
+    limit: number,
+    resumedPage?: TurnsPage,
+  ) {
+    // Keep the two upstream history contracts separate at this boundary. Paginated histories can
+    // reuse thread/resume's bounded summary page and fetch items on demand. Legacy histories have
+    // no stable item-page API, so their Turn pages are requested with full items and are never
+    // exposed to the browser as lazily expandable rows. Mixing both contracts behind page locators
+    // previously let a newly-started live Turn trigger a read before it existed in the rollout.
+    if (resumedPage !== undefined) {
+      return resumedPage;
+    }
+    return this.fetchTurnsPage(host, thread.id, thread.historyMode, {
+      cursor: null,
+      limit,
+      sortDirection: "desc",
+    });
+  }
 
   async listThreadTurns(host: HostRecord, threadId: string, input: ThreadTurnsListInput) {
-    const client = await this.registry.getHostClient(host);
-    const page = await client.request(
-      "thread/turns/list",
-      {
-        threadId,
-        cursor: input.cursor ?? null,
-        limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
-        sortDirection: input.sortDirection ?? "desc",
-        // Summary pages keep cold history reads bounded even when one Turn contains thousands of
-        // tool items. The browser requests that Turn's items only when the reader expands it.
-        itemsView: "summary",
-      },
-      120_000,
-      parseTurnsPage,
-    );
-    const snapshot = threadSnapshotStore.get(host.id, threadId);
-    if (snapshot === null) {
-      throw new Error("Thread snapshot is unavailable while paging history");
-    }
-    const legacyTurnPageLocators = this.recordTurnsPage(
-      host.id,
-      threadId,
-      snapshot.thread.historyMode,
-      {
-        cursor: input.cursor ?? null,
-        limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
-        sortDirection: input.sortDirection ?? "desc",
-      },
-      page,
-    );
-
+    const snapshot = this.requireSnapshot(host.id, threadId);
+    const page = await this.fetchTurnsPage(host, threadId, snapshot.thread.historyMode, input);
     return {
       history: projectThreadTimelineHistory(pageToFullHistory({ id: threadId }, page)),
       turnsPage: pageCursorState(page),
-      legacyTurnPageLocators,
     };
   }
 
@@ -67,28 +56,15 @@ export class ThreadHistoryReader {
       cursor?: string | null;
       limit?: number;
       sortDirection?: "asc" | "desc";
-      legacyPageLocator?: LegacyTurnPageLocator;
     },
   ) {
+    const snapshot = this.requireSnapshot(host.id, threadId);
+    if (snapshot.thread.historyMode === "legacy") {
+      // This is an invariant violation rather than a compatibility path: legacy pages already
+      // contain full items, so a browser item request means projection logic regressed.
+      throw new Error("Legacy Turn items are loaded with their Turn page");
+    }
     const client = await this.registry.getHostClient(host);
-    const snapshot = threadSnapshotStore.get(host.id, threadId);
-    if (input.legacyPageLocator !== undefined || snapshot?.thread.historyMode === "legacy") {
-      return {
-        turnId: input.turnId,
-        items: await this.legacyItems.read(
-          client,
-          host,
-          threadId,
-          input.turnId,
-          input.legacyPageLocator ?? snapshot?.legacyTurnPageLocators[input.turnId],
-        ),
-        nextCursor: null,
-        backwardsCursor: null,
-      };
-    }
-    if (snapshot === null) {
-      throw new Error("Thread snapshot is unavailable while loading Turn items");
-    }
     const page = await client.request(
       "thread/items/list",
       {
@@ -112,34 +88,30 @@ export class ThreadHistoryReader {
     };
   }
 
-  recordTurnsPage(
-    hostId: number,
+  private async fetchTurnsPage(
+    host: HostRecord,
     threadId: string,
-    historyMode: "legacy" | "paginated",
-    locator: { cursor: string | null; limit: number; sortDirection: "asc" | "desc" },
-    page: TurnsPage,
+    historyMode: AppServerThread["historyMode"],
+    input: ThreadTurnsListInput,
   ) {
-    const locators = this.legacyItems.locatorsForPage(historyMode, locator, page);
-    if (Object.keys(locators).length === 0) return locators;
-    threadSnapshotStore.update(hostId, threadId, (snapshot) =>
-      snapshot === null
-        ? null
-        : {
-            ...snapshot,
-            legacyTurnPageLocators: {
-              ...snapshot.legacyTurnPageLocators,
-              ...locators,
-            },
-          },
+    const client = await this.registry.getHostClient(host);
+    return client.request(
+      "thread/turns/list",
+      {
+        threadId,
+        cursor: input.cursor ?? null,
+        limit: input.limit ?? DEFAULT_TURN_PAGE_LIMIT,
+        sortDirection: input.sortDirection ?? "desc",
+        itemsView: historyMode === "paginated" ? "summary" : "full",
+      },
+      120_000,
+      parseTurnsPage,
     );
-    return locators;
   }
 
-  locatorsForPage(
-    historyMode: "legacy" | "paginated",
-    locator: { cursor: string | null; limit: number; sortDirection: "asc" | "desc" },
-    page: TurnsPage,
-  ) {
-    return this.legacyItems.locatorsForPage(historyMode, locator, page);
+  private requireSnapshot(hostId: number, threadId: string) {
+    const snapshot = threadSnapshotStore.get(hostId, threadId);
+    if (snapshot === null) throw new Error("Thread snapshot is unavailable while paging history");
+    return snapshot;
   }
 }

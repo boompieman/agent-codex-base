@@ -320,7 +320,6 @@ function cachedThreadView(threadId: string, history: ThreadHistoryState): Thread
     events: [],
     olderTurnsCursor: null,
     newerTurnsCursor: null,
-    legacyTurnPageLocators: {},
     lastEventId: 0,
     eventEpoch: "e2e-event-epoch",
     loading: false,

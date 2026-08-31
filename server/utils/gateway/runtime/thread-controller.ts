@@ -1,5 +1,9 @@
 import type { HostRecord, RpcEnvelope } from "~~/shared/types";
-import { isAppServerSubAgentThread, parseThreadResumeResult } from "~~/shared/runtime/app-server";
+import {
+  isAppServerSubAgentThread,
+  parseThreadReadResult,
+  parseThreadResumeResult,
+} from "~~/shared/runtime/app-server";
 import {
   runtimeStatusFromAppThreadStatus,
   runtimeStatusFromSnapshotState,
@@ -116,17 +120,27 @@ export class ThreadController {
 
   async resumeWithInitialTurnsPage(limit: number) {
     await this.ensureConnected();
-    return this.enqueue(() =>
-      this.requestResume({
+    return this.enqueue(async () => {
+      // historyMode belongs to the official Thread DTO, while initialTurnsPage must be specified
+      // before thread/resume returns that DTO. Read metadata without Turns first, then issue one
+      // correctly-shaped resume page. This avoids replaying a legacy JSONL once for summary and a
+      // second time for full items, while paginated histories retain bounded summary hydration.
+      const read = await this.client.request(
+        "thread/read",
+        { threadId: this.threadId, includeTurns: false },
+        120_000,
+        parseThreadReadResult,
+      );
+      return this.requestResume({
         threadId: this.threadId,
         excludeTurns: true,
         initialTurnsPage: {
           limit,
           sortDirection: "desc",
-          itemsView: "summary",
+          itemsView: read.thread.historyMode === "paginated" ? "summary" : "full",
         },
-      }),
-    );
+      });
+    });
   }
 
   isSubscribed() {

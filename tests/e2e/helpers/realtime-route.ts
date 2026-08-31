@@ -7,7 +7,6 @@ import type {
   ThreadHistoryState,
   ThreadSettingsState,
   ThreadTokenUsageState,
-  LegacyTurnPageLocator,
 } from "../../../shared/types";
 import { parseRealtimeClientMessage } from "../../../shared/runtime/realtime";
 import { projectThreadTimelineHistory } from "../../../shared/thread-history/timeline";
@@ -26,7 +25,6 @@ export interface MockThreadSnapshotInput {
       threadSettings?: ThreadSettingsState;
       tokenUsage?: ThreadTokenUsageState | null;
       turnsPage?: { nextCursor: string | null; backwardsCursor: string | null };
-      legacyTurnPageLocators?: Record<string, LegacyTurnPageLocator>;
       recentEvents?: GatewayEvent[];
       lastEventId?: number;
       eventEpoch?: string;
@@ -67,10 +65,9 @@ interface ThreadTurnsLoadRouteState {
 
 export type ThreadTurnsLoadResponseInput = Omit<
   Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
-  "history" | "legacyTurnPageLocators"
+  "history"
 > & {
   history: ThreadHistoryState;
-  legacyTurnPageLocators?: Record<string, LegacyTurnPageLocator>;
 };
 
 const routes = new WeakMap<Page, RealtimeRouteState>();
@@ -138,7 +135,6 @@ export function installRealtimeThreadTurnsLoadRoute(
     response: {
       ...response,
       history: projectThreadTimelineHistory(response.history),
-      legacyTurnPageLocators: response.legacyTurnPageLocators ?? {},
     },
   };
 }
@@ -244,7 +240,6 @@ function handleThreadActivate(
       threadSettings: snapshot.threadSettings ?? {},
       tokenUsage: snapshot.tokenUsage ?? null,
       turnsPage: snapshot.turnsPage ?? { nextCursor: null, backwardsCursor: null },
-      legacyTurnPageLocators: snapshot.legacyTurnPageLocators ?? {},
       recentEvents: snapshot.recentEvents ?? [],
       lastEventId: snapshot.lastEventId ?? 0,
       eventEpoch: snapshot.eventEpoch ?? "e2e-event-epoch",
