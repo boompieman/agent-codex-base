@@ -54,24 +54,26 @@ export function insertOptimisticNewTurnMessage(
   cacheSelectedThreadView();
 }
 
-export function mergeStartedTurn(threadId: string, turn: ThreadHistoryTurn) {
+export function acceptStartedTurn(
+  threadId: string,
+  turn: ThreadHistoryTurn,
+  clientUserMessageId: string,
+  content: unknown[],
+) {
   const views = useGatewayThreadViewStore();
-  setSelectedThreadHistory(
-    mergeThreadTurns(views.history, views.currentThread, threadId, [turn], "append"),
-  );
+  let history = mergeThreadTurns(views.history, views.currentThread, threadId, [turn], "append");
+  // turn/start returns the authoritative Turn before item/started is guaranteed to arrive. Move
+  // the optimistic message into that Turn in the same store publication; publishing the appended
+  // official Turn first leaves one Vue render where both it and the client-* Turn are visible.
+  history = mergeItemIntoLatestTurn(history, views.currentThread, threadId, {
+    type: "userMessage",
+    id: clientUserMessageId,
+    clientId: clientUserMessageId,
+    turnId: turn.id,
+    content,
+  });
+  setSelectedThreadHistory(history);
   cacheSelectedThreadView();
-}
-
-export function mergeTurnItems(threadId: string, turn: ThreadHistoryTurn) {
-  const views = useGatewayThreadViewStore();
-  for (const item of turn.items ?? []) {
-    setSelectedThreadHistory(
-      mergeItemIntoLatestTurn(views.history, views.currentThread, threadId, {
-        ...item,
-        turnId: turn.id,
-      }),
-    );
-  }
 }
 
 export function upsertHistoryItem(hostId: number, threadId: string, item: ThreadHistoryItem) {

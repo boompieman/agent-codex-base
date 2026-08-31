@@ -50,9 +50,8 @@ interface SeedGatewayThreadInput {
   eventEpoch?: string;
   threadViews?: Record<
     string,
-    Omit<ThreadViewState, "timelineTurns" | "legacyTurnPageLocators"> & {
+    Omit<ThreadViewState, "timelineTurns"> & {
       timelineTurns?: ThreadTimelineTurn[];
-      legacyTurnPageLocators?: ThreadViewState["legacyTurnPageLocators"];
     }
   >;
 }
@@ -106,7 +105,6 @@ export async function seedGatewayThread(page: Page, input: SeedGatewayThreadInpu
           key,
           {
             ...view,
-            legacyTurnPageLocators: view.legacyTurnPageLocators ?? {},
             history,
             timelineTurns: timelineTurns.map((turn) => ({
               ...turn,
@@ -452,7 +450,6 @@ export async function setThreadViewHistoryAndStatus(
         events: previous?.events ?? [],
         olderTurnsCursor: previous?.olderTurnsCursor ?? null,
         newerTurnsCursor: previous?.newerTurnsCursor ?? null,
-        legacyTurnPageLocators: previous?.legacyTurnPageLocators ?? {},
         lastEventId: previous?.lastEventId ?? 0,
         eventEpoch: previous?.eventEpoch ?? "e2e-event-epoch",
         loading: previous?.loading ?? false,

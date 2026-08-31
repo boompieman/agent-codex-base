@@ -38,7 +38,6 @@ const { t } = useI18n();
 const composer = useGatewayComposerStore();
 const threadTurns = useGatewayThreadTurnsStore();
 const userDetachedFromLatest = ref(false);
-const activeTurnHydrationAttempts = new Set<string>();
 const projectId = computed(() => props.projectId ?? null);
 const planModeActive = computed(() => selectedThreadMode() === "plan");
 const threadIsRunning = computed(() => props.threadStatus === "running");
@@ -140,30 +139,7 @@ watch(
     // thread's disclosure policy. Scroll initialization is deliberately absent here: the keyed
     // viewport below owns its one official TanStack initial-layout transaction.
     userDetachedFromLatest.value = false;
-    activeTurnHydrationAttempts.clear();
   },
-);
-
-watch(
-  () =>
-    props.turns
-      .filter((turn) => turn.status === "inProgress" && turn.itemsView !== "full")
-      .map((turn) => turn.id),
-  (turnIds) => {
-    // A resumed running Turn must show its existing tool activity before new deltas arrive. Summary
-    // history intentionally omits those items, so hydrate only active Turns without waiting for a
-    // disclosure click; completed Turns remain lazy and load when the user expands them.
-    for (const turnId of turnIds) {
-      // Live deltas replace the Turn object while its summary/full state is unchanged. Retrying
-      // from this watcher on every delta turns one transport failure into an unbounded notification
-      // loop. One timeline mount owns one automatic hydration attempt; an explicit disclosure click
-      // remains the user-controlled retry path, and a thread switch creates a fresh ownership set.
-      if (activeTurnHydrationAttempts.has(turnId)) continue;
-      activeTurnHydrationAttempts.add(turnId);
-      void threadTurns.loadTurnItems(turnId);
-    }
-  },
-  { immediate: true },
 );
 </script>
 

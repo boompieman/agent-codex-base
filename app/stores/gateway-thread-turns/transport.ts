@@ -1,4 +1,4 @@
-import type { ComposerTurnOptions, LegacyTurnPageLocator } from "~~/shared/types";
+import type { ComposerTurnOptions } from "~~/shared/types";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
 import {
   expectThreadTurnsPage,
@@ -45,7 +45,6 @@ export function requestThreadItemsPage(input: {
   turnId: string;
   cursor: string | null;
   limit: number;
-  legacyPageLocator?: LegacyTurnPageLocator;
 }) {
   return useGatewayRealtimeStore().request(
     (requestId) => ({
@@ -54,7 +53,6 @@ export function requestThreadItemsPage(input: {
       hostId: input.hostId,
       threadId: input.threadId,
       turnId: input.turnId,
-      legacyPageLocator: input.legacyPageLocator,
       cursor: input.cursor,
       limit: input.limit,
       sortDirection: "asc" as const,

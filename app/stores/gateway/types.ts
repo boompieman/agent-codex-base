@@ -8,7 +8,6 @@ import type {
   ThreadRuntimeStatus,
   UploadedFileRecord,
   FileReference,
-  LegacyTurnPageLocator,
 } from "~~/shared/types";
 
 export type { ThreadRuntimeStatus };
@@ -39,7 +38,6 @@ export interface ThreadViewState {
   events: GatewayEvent[];
   olderTurnsCursor: string | null;
   newerTurnsCursor: string | null;
-  legacyTurnPageLocators: Record<string, LegacyTurnPageLocator>;
   lastEventId: number;
   eventEpoch: string;
   loading: boolean;

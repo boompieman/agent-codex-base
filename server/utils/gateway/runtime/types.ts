@@ -9,7 +9,6 @@ import type {
   ThreadTimelineHistoryState,
   ThreadHistoryTurn,
   RpcEnvelope,
-  LegacyTurnPageLocator,
 } from "~~/shared/types";
 import { OLDER_TURN_PAGE_LIMIT } from "~~/shared/config";
 
@@ -30,12 +29,6 @@ export interface ThreadOpenSnapshot {
     nextCursor: string | null;
     backwardsCursor: string | null;
   };
-  /**
-   * Source pages for summary-only legacy Turns. These locators belong to the materialized history
-   * cache: storing them in a separate TTL cache lets a valid snapshot outlive the data required to
-   * expand it. Paginated histories leave this map empty and use thread/items/list directly.
-   */
-  legacyTurnPageLocators: Record<string, LegacyTurnPageLocator>;
   /** Null when a metadata-only thread/read cannot expose persisted model settings. */
   threadSettings: ThreadSettingsState | null;
   tokenUsage: ThreadTokenUsageState | null;

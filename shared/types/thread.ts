@@ -42,13 +42,6 @@ export interface ThreadGoalTimelineItem extends Record<string, unknown> {
   updatedAt: number;
 }
 
-/** Opaque app-server page identity used only to expand summary-only legacy Turns. */
-export interface LegacyTurnPageLocator {
-  cursor: string | null;
-  limit: number;
-  sortDirection: "asc" | "desc";
-}
-
 export interface ThreadOpenResult {
   hostId: number;
   thread: GatewayThread;
@@ -64,7 +57,6 @@ export interface ThreadOpenResult {
     nextCursor: string | null;
     backwardsCursor: string | null;
   };
-  legacyTurnPageLocators: Record<string, LegacyTurnPageLocator>;
   recentEvents: GatewayEvent[];
 }
 
@@ -74,7 +66,6 @@ export interface ThreadTurnsPageResult {
     nextCursor: string | null;
     backwardsCursor: string | null;
   };
-  legacyTurnPageLocators: Record<string, LegacyTurnPageLocator>;
 }
 
 export interface ThreadItemsPageResult {

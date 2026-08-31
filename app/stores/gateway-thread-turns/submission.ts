@@ -13,10 +13,9 @@ import {
   optimisticUserContent,
 } from "@/stores/gateway/thread-turns/turn-content";
 import {
+  acceptStartedTurn,
   insertOptimisticNewTurnMessage,
   insertOptimisticSteerMessage,
-  mergeStartedTurn,
-  mergeTurnItems,
 } from "./history";
 import { runTurnRequestWithAutoRetry } from "./retry";
 import { requestTurnStart, requestTurnSteer } from "./transport";
@@ -135,15 +134,7 @@ function applyAcceptedTurnResult(
     if (startedTurnId !== "" && !startedTurnId.startsWith("client-")) {
       runtime.setThreadStatus(hostId, threadId, "running", { turnId: startedTurnId });
     }
-    mergeStartedTurn(threadId, result.turn);
-  }
-  if (
-    result?.type === "turn.start.accepted" &&
-    result.turn?.items !== null &&
-    result.turn?.items !== undefined &&
-    result.turn.items.length > 0
-  ) {
-    mergeTurnItems(threadId, result.turn);
+    acceptStartedTurn(threadId, result.turn, clientUserMessageId, optimisticContent);
   }
   if (
     result?.type === "turn.steer.accepted" &&
