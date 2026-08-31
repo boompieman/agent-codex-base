@@ -1,8 +1,5 @@
 import type { HostWithSecret, RemoteCodexVersionState } from "../ssh/ssh-types";
-import {
-  isAppServerProxyStartupFailure,
-  isRecoverableCodexInstallError,
-} from "./codex-install-errors";
+import { isRecoverableCodexInstallError } from "./codex-install-errors";
 import { isCodexVersionAtLeast, SUPPORTED_CODEX_VERSION } from "./codex-version";
 import { hostLifecycleBus } from "../../state/host-events";
 import { currentGatewayUserId } from "../../state/memory";
@@ -172,7 +169,7 @@ export class CodexRuntimeService {
     host: HostWithSecret,
     error: unknown,
   ): Promise<RemoteCodexVersionState> {
-    if (!isRecoverableCodexInstallError(error) && !isAppServerProxyStartupFailure(error)) {
+    if (!isRecoverableCodexInstallError(error)) {
       throw error;
     }
 

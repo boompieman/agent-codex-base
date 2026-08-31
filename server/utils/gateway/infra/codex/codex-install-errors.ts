@@ -1,14 +1,9 @@
-// Codex install and app-server startup failures share one recovery policy.
+// Reinstallation is destructive and bandwidth-heavy, so only classify failures that prove the
+// npm-managed executable or its official platform package is absent. Socket and transport errors
+// describe app-server startup/connectivity, not a corrupt installation.
 export function isRecoverableCodexInstallError(error: unknown) {
   const message = messageFromError(error);
-  return /codex executable not found|Missing optional dependency @openai\/codex-|Cannot find module .*@openai\/codex-|Failed to read remote Codex version|failed to connect to socket at .*app-server-control\.sock|app-server proxy.*not found|codex app-server proxy/i.test(
-    message,
-  );
-}
-
-export function isAppServerProxyStartupFailure(error: unknown) {
-  const message = messageFromError(error);
-  return /Codex RPC remote proxy WebSocket handshake failed|Codex RPC transport closed|socket hang up|ECONNRESET|EPIPE/i.test(
+  return /codex executable not found|Missing optional dependency @openai\/codex-|Cannot find module .*@openai\/codex-/i.test(
     message,
   );
 }

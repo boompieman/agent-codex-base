@@ -61,14 +61,19 @@ export function codexRemoteAppServerProxyPayload() {
   return codexRemotePayload(`
 set -eu
 socket="\${CODEX_HOME:-$HOME/.codex}/app-server-control/app-server-control.sock"
+control_dir="$(dirname "$socket")"
+log_file="$control_dir/codex-gateway-app-server.log"
 ${ensureGatewayCodexConfigFeatureSnippet()}
 ${appServerSocketHasListenerSnippet()}
 if [ -S "$socket" ] && ! codex_gateway_socket_has_listener; then
   rm -f "$socket"
 fi
 if ! [ -S "$socket" ]; then
-  mkdir -p "$(dirname "$socket")"
-  nohup "$CODEX_BIN" app-server --listen unix:// >/tmp/codex-gateway-app-server.log 2>&1 </dev/null &
+  # The official socket is already scoped by CODEX_HOME/HOME. Keep the detached process log
+  # beside it as well: /tmp is shared by every Unix user, so a fixed filename there lets one
+  # user's app-server block another user's launch before Codex can create its private socket.
+  mkdir -p "$control_dir"
+  nohup "$CODEX_BIN" app-server --listen unix:// >"$log_file" 2>&1 </dev/null &
   for i in $(seq 1 100); do
     if [ -S "$socket" ] && codex_gateway_socket_has_listener; then
       break
@@ -76,7 +81,14 @@ if ! [ -S "$socket" ]; then
     sleep 0.1
   done
 fi
-[ -S "$socket" ] && codex_gateway_socket_has_listener
+if ! [ -S "$socket" ] || ! codex_gateway_socket_has_listener; then
+  echo "Codex app-server did not create a listening socket: $socket" >&2
+  if [ -r "$log_file" ]; then
+    echo "Codex app-server stderr (last 80 lines from $log_file):" >&2
+    tail -n 80 "$log_file" >&2 || true
+  fi
+  exit 1
+fi
 exec "$CODEX_BIN" app-server proxy
 `);
 }
