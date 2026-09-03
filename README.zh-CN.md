@@ -1,4 +1,4 @@
-# Codex Gateway
+# Agent Codex Base
 
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](nuxt.config.ts)
 [![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](package.json)
@@ -10,14 +10,14 @@
 
 [English](README.md) | 中文
 
-Codex Gateway 是一个面向官方 Codex app-server 的 Web 前端与连接网关。
+Agent Codex Base 是一个面向官方 Codex app-server 的 Web 前端与连接网关。
 
-它不是另一个 Codex 实现，也不会在浏览器里运行 agent runtime。浏览器只连接 Codex Gateway。Gateway 通过 SSH 连接远端机器，管理官方 `codex app-server` 的生命周期，并把官方 app-server 的线程、事件、审批、文件变更、图片、diff、终端输出和子代理过程渲染到网页里。
+它不是另一个 Codex 实现，也不会在浏览器里运行 agent runtime。浏览器只连接 Agent Codex Base。Gateway 通过 SSH 连接远端机器，管理官方 `codex app-server` 的生命周期，并把官方 app-server 的线程、事件、审批、文件变更、图片、diff、终端输出和子代理过程渲染到网页里。
 
 目标很直接：在浏览器里访问多台服务器上的 Codex 会话，同时让 Codex app-server 继续作为唯一事实源。Codex 桌面端、其他客户端和这个 Web 前端只要连接到同一个 app-server thread，就应该看到一致的状态流。
 
 <p align="center">
-  <img src="docs/images/codex-gateway-workspace.png" alt="Codex Gateway 展示远端主机、项目、Codex agent loop 和工作区标签页" width="100%">
+  <img src="docs/images/codex-gateway-workspace.png" alt="Agent Codex Base 展示远端主机、项目、Codex agent loop 和工作区标签页" width="100%">
 </p>
 
 <p align="center"><sub>在一个浏览器工作区中访问多台远端 SSH 主机上的 Codex 会话。</sub></p>
@@ -106,7 +106,7 @@ Codex Gateway 是一个面向官方 Codex app-server 的 Web 前端与连接网�
 ```text
 Browser
   └─ HTTP + WebSocket
-     └─ Codex Gateway (Nuxt server)
+     └─ Agent Codex Base (Nuxt server)
         ├─ SQLite encrypted config
         ├─ SSH connection pool
         ├─ one shared RPC client per host
@@ -169,20 +169,20 @@ Browser
 前置条件：安装 Docker Compose 和 Git，并确保 Gateway 所在机器可以访问需要管理的 SSH 主机。
 
 ```bash
-git clone --recurse-submodules https://github.com/yunhaoli24/codex-gateway.git
-cd codex-gateway
+git clone --recurse-submodules https://github.com/boompieman/agent-codex-base.git
+cd agent-codex-base
 
 cp .env.example .env
 # 使用 openssl rand -hex 32 替换 .env 中的 CODEX_GATEWAY_CONFIG_SECRET
 
 docker network create web-common 2>/dev/null || true
 docker compose build
-docker compose run --rm codex-gateway \
+docker compose run --rm agent-codex-base \
   node scripts/create-user.mjs admin '<至少-8-位-密码>'
 docker compose up -d
 ```
 
-通过反向代理打开服务，使用手动创建的账号登录，然后在设置中添加第一台 SSH 主机。项目自带的 Compose 文件只把 `3000` 端口暴露到外部 `web-common` Docker 网络，不会直接发布宿主机端口。
+通过反向代理打开服务，使用手动创建的账号登录，然后在设置中添加第一台 SSH 主机。项目自带的 Compose 文件会把 `3000` 端口暴露到外部 `web-common` Docker 网络，并绑定到宿主机 loopback 供 SSH/IAP tunnel 使用，不会发布到公网网卡。
 
 ## 本地开发
 
@@ -237,9 +237,9 @@ export CODEX_GATEWAY_CONFIG_SECRET="replace-with-a-long-random-secret"
 docker compose up -d --build
 ```
 
-默认容器只把 `3000` 暴露到 Docker 网络，适合放在 nginx、Caddy、Cloudflare Tunnel 或其他可信反向代理后面。SQLite 数据保存在 `/data/codex-gateway.db`，并通过 `./data:/data` 持久化。
+默认容器把 `3000` 暴露到 Docker 网络，并只绑定宿主机 `127.0.0.1:3000`，适合通过 IAP tunnel 或放在 nginx、Caddy、Cloudflare Tunnel 等可信反向代理后面。SQLite 数据保存在 `/data/codex-gateway.db`，并通过 `./data:/data` 持久化。
 
-远程浏览器面板使用 `p-<hmac>.example.com` 形式的隔离 origin。需要为 `p-*.example.com` 配置 wildcard DNS，并把这些 host 转发到 Codex Gateway 同一个 Nitro 端口 `3000`。反向代理必须保留 Host header 和 WebSocket Upgrade；不需要增加第二个监听端口或发布新的容器端口。Gateway 会保留上游的 `Content-Security-Policy` 与 `X-Frame-Options`，因此明确禁止 iframe 嵌入的应用仍会被浏览器阻止。
+远程浏览器面板使用 `p-<hmac>.example.com` 形式的隔离 origin。需要为 `p-*.example.com` 配置 wildcard DNS，并把这些 host 转发到 Agent Codex Base 同一个 Nitro 端口 `3000`。反向代理必须保留 Host header 和 WebSocket Upgrade；不需要增加第二个监听端口或发布新的容器端口。Gateway 会保留上游的 `Content-Security-Policy` 与 `X-Frame-Options`，因此明确禁止 iframe 嵌入的应用仍会被浏览器阻止。
 
 ## 测试
 
@@ -266,7 +266,7 @@ tests/e2e/run-in-containers.sh
 
 ## 与 Codex 的关系
 
-Codex Gateway 面向官方 Codex app-server 协议。`third_party/openai-codex/` 是官方源码 submodule，只用于参考协议和行为。Gateway 应该对齐官方 app-server，而不是在前端伪造事件或为旧协议维护兼容分支。
+Agent Codex Base 面向官方 Codex app-server 协议。`third_party/openai-codex/` 是官方源码 submodule，只用于参考协议和行为。Gateway 应该对齐官方 app-server，而不是在前端伪造事件或为旧协议维护兼容分支。
 
 ## 参与贡献
 

@@ -9,7 +9,7 @@ export const SERVER_TURN_CACHE_LIMIT = 50;
 export const SERVER_THREAD_CACHE_LIMIT = 100;
 export const CLIENT_THREAD_CACHE_LIMIT = 24;
 export const DEFAULT_BARK_SERVER_URL = "https://api.day.app";
-export const DEFAULT_BARK_GROUP = "Codex Gateway";
+export const DEFAULT_BARK_GROUP = "Agent Codex Base";
 
 export function defaultNotificationSettings(): GatewayNotificationSettings {
   return {

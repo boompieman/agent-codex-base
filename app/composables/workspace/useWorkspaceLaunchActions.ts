@@ -85,7 +85,7 @@ export function useWorkspaceLaunchActions() {
 
   return {
     canLaunch: computed(() => selectedHostId.value !== null),
-    selectedHostTitle: computed(() => selectedHost.value?.name ?? "Codex Gateway"),
+    selectedHostTitle: computed(() => selectedHost.value?.name ?? "Agent Codex Base"),
     openTerminal,
     openBrowser,
     openHostMonitor,

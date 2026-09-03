@@ -1,6 +1,6 @@
 
 
-# Codex Gateway
+# Agent Codex Base
 
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](nuxt.config.ts)
 [![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](package.json)
@@ -12,14 +12,14 @@
 
 English | [中文](README.zh-CN.md)
 
-Codex Gateway is a web frontend and connection gateway for the official Codex app-server.
+Agent Codex Base is a web frontend and connection gateway for the official Codex app-server.
 
-It is not a reimplementation of Codex, and it does not run an agent runtime in the browser. The browser talks only to Codex Gateway. Gateway connects to your remote machines over SSH, manages the official `codex app-server` lifecycle, and renders official app-server threads, events, approvals, file changes, images, diffs, terminal output, and sub-agent activity in a web UI.
+It is not a reimplementation of Codex, and it does not run an agent runtime in the browser. The browser talks only to Agent Codex Base. Gateway connects to your remote machines over SSH, manages the official `codex app-server` lifecycle, and renders official app-server threads, events, approvals, file changes, images, diffs, terminal output, and sub-agent activity in a web UI.
 
-The goal is simple: open Codex sessions from many servers in a browser while keeping Codex app-server as the source of truth. If Codex Desktop, another client, and Codex Gateway connect to the same app-server thread, they should observe the same state stream.
+The goal is simple: open Codex sessions from many servers in a browser while keeping Codex app-server as the source of truth. If Codex Desktop, another client, and Agent Codex Base connect to the same app-server thread, they should observe the same state stream.
 
 <p align="center">
-  <img src="docs/images/codex-gateway-workspace.png" alt="Codex Gateway showing remote hosts, projects, a Codex agent loop, and workspace tabs" width="100%">
+  <img src="docs/images/codex-gateway-workspace.png" alt="Agent Codex Base showing remote hosts, projects, a Codex agent loop, and workspace tabs" width="100%">
 </p>
 
 <p align="center"><sub>A browser workspace for Codex sessions running across remote SSH hosts.</sub></p>
@@ -108,7 +108,7 @@ These views are captured from the real Playwright E2E environment. Select any im
 ```text
 Browser
   └─ HTTP + WebSocket
-     └─ Codex Gateway (Nuxt server)
+     └─ Agent Codex Base (Nuxt server)
         ├─ SQLite encrypted config
         ├─ SSH connection pool
         ├─ one shared RPC client per host
@@ -172,20 +172,20 @@ Core rules:
 Prerequisites: Docker with Compose, Git, and network access from Gateway to the SSH hosts you want to manage.
 
 ```bash
-git clone --recurse-submodules https://github.com/yunhaoli24/codex-gateway.git
-cd codex-gateway
+git clone --recurse-submodules https://github.com/boompieman/agent-codex-base.git
+cd agent-codex-base
 
 cp .env.example .env
 # Replace CODEX_GATEWAY_CONFIG_SECRET in .env with: openssl rand -hex 32
 
 docker network create web-common 2>/dev/null || true
 docker compose build
-docker compose run --rm codex-gateway \
+docker compose run --rm agent-codex-base \
   node scripts/create-user.mjs admin '<a-password-with-at-least-8-characters>'
 docker compose up -d
 ```
 
-Open the service through your reverse proxy, sign in with the manually created account, and add the first SSH host from Settings. The bundled Compose file intentionally exposes port `3000` only to the external `web-common` Docker network.
+Open the service through your reverse proxy, sign in with the manually created account, and add the first SSH host from Settings. The bundled Compose file exposes port `3000` to the external `web-common` Docker network and binds it to host loopback for SSH/IAP tunnels; it is not published on a public interface.
 
 ## Local Development
 
@@ -240,9 +240,9 @@ export CODEX_GATEWAY_CONFIG_SECRET="replace-with-a-long-random-secret"
 docker compose up -d --build
 ```
 
-The compose service exposes container port `3000` only to Docker networks. Put it behind nginx, Caddy, Cloudflare Tunnel, or another trusted reverse proxy. SQLite data is stored at `/data/codex-gateway.db` and persisted through `./data:/data`.
+The compose service exposes port `3000` to Docker networks and binds it only to host `127.0.0.1:3000`. Reach it through an IAP tunnel or put it behind nginx, Caddy, Cloudflare Tunnel, or another trusted reverse proxy. SQLite data is stored at `/data/codex-gateway.db` and persisted through `./data:/data`.
 
-Remote Browser panels use isolated origins such as `p-<hmac>.example.com`. Configure wildcard DNS for `p-*.example.com` and route those hosts to the same Codex Gateway Nitro port (`3000`). The reverse proxy must preserve the Host header and WebSocket upgrades. No second listener or published container port is required. Upstream `Content-Security-Policy` and `X-Frame-Options` are preserved, so applications that prohibit embedding remain blocked by the browser.
+Remote Browser panels use isolated origins such as `p-<hmac>.example.com`. Configure wildcard DNS for `p-*.example.com` and route those hosts to the same Agent Codex Base Nitro port (`3000`). The reverse proxy must preserve the Host header and WebSocket upgrades. No second listener or published container port is required. Upstream `Content-Security-Policy` and `X-Frame-Options` are preserved, so applications that prohibit embedding remain blocked by the browser.
 
 ## Testing
 
@@ -269,7 +269,7 @@ Run the full E2E suite for changes involving SSH, RPC, WebSocket, thread state, 
 
 ## Relationship With Codex
 
-Codex Gateway targets the official Codex app-server protocol. `third_party/openai-codex/` is a submodule used only as a protocol and behavior reference. Gateway should align with official app-server behavior instead of fabricating frontend-only events or maintaining compatibility branches for old protocols.
+Agent Codex Base targets the official Codex app-server protocol. `third_party/openai-codex/` is a submodule used only as a protocol and behavior reference. Gateway should align with official app-server behavior instead of fabricating frontend-only events or maintaining compatibility branches for old protocols.
 
 ## Contributing
 

@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   // In production nginx sends every preview-origin HTTP request through this explicit route.
   // That routing happens before Nitro can mistake remote absolute assets such as /_nuxt/*.js for
-  // Codex Gateway's own public files. The original URI stays in X-Browser-Preview-Path and the
+  // Agent Codex Base's own public files. The original URI stays in X-Browser-Preview-Path and the
   // same proxy handler used by development forwards the complete remote origin.
   await handleBrowserPreviewRequest(event.node.req, event.node.res);
 });

@@ -41,7 +41,7 @@ test("can revoke the current session from appearance settings", async ({ page })
   await page.getByRole("tab", { name: "外观" }).click();
   await page.getByRole("button", { name: "退出登录" }).click();
 
-  await expect(page.getByRole("heading", { name: "登录 Codex Gateway" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "登录 Agent Codex Base" })).toBeVisible();
   const revokedStatus = await page.evaluate(async (authorization) => {
     const response = await fetch("/api/config/export", {
       headers: { authorization: `Bearer ${authorization}` },
@@ -62,7 +62,7 @@ test("synchronizes logout state across same-origin tabs", async ({ page }) => {
     localStorage.removeItem("codex-gateway-auth-token:username");
   });
 
-  await expect(secondPage.getByRole("heading", { name: "登录 Codex Gateway" })).toBeVisible();
+  await expect(secondPage.getByRole("heading", { name: "登录 Agent Codex Base" })).toBeVisible();
   await expect(secondPage.getByTestId("desktop-layout")).toBeHidden();
 });
 
