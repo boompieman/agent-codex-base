@@ -54,6 +54,34 @@ export function parseRpcEnvelope(value: unknown): RpcEnvelope {
   return rpcEnvelopeSchema.parse(value);
 }
 
+const skillsListResponseSchema = z
+  .object({
+    data: z.array(
+      z
+        .object({
+          cwd: z.string(),
+          skills: z.array(
+            z
+              .object({
+                name: z.string().min(1),
+                description: z.string(),
+                path: z.string().min(1),
+                scope: z.enum(["user", "repo", "system", "admin"]),
+                enabled: z.boolean(),
+              })
+              .loose(),
+          ),
+          errors: z.array(z.unknown()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export function parseSkillsListResponse(value: unknown) {
+  return skillsListResponseSchema.parse(value);
+}
+
 const appServerCollaborationModeSchema = z
   .object({
     mode: z.enum(["default", "plan"]),

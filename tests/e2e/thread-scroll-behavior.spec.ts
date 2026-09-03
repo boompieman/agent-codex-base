@@ -784,6 +784,7 @@ test("streaming output does not force scroll when the user is reading earlier co
   });
 
   await expect(page.getByText("agent loop line 140")).toBeVisible();
+  await expect(page.getByTestId("composer-diff-summary")).toContainText("1 个文件已修改");
   const nearBottomScrollTop = await detachChatViewportNearBottom(page);
   await expect(page.getByTestId("chat-scroll-area")).toHaveAttribute("data-follow-latest", "false");
   await appendAgentStreamLines(page, {

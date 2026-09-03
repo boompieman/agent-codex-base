@@ -3,12 +3,25 @@ import type { GetTabContextMenuItemsParams } from "dockview-vue";
 import { DockviewVue, themeDark, themeLight } from "dockview-vue";
 import { computed, provide, ref, toRefs } from "vue";
 import BrowserOpenDialog from "@/components/browser/BrowserOpenDialog.vue";
+import DesktopWorkspaceHeader from "../DesktopWorkspaceHeader.vue";
 import { useTerminalTheme } from "@/composables/terminal/useTerminalTheme";
 import { useWorkspaceLaunchActions } from "@/composables/workspace/useWorkspaceLaunchActions";
 import { useTmuxMonitorLauncher } from "@/composables/workspace/useTmuxMonitorLauncher";
 import { useChatWorkspaceState } from "../chat-workspace-state";
+import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
+import { projectById } from "@/stores/gateway-catalog/selectors";
 import { fileWorkspaceScopeKey } from "@/stores/file-workspace";
-import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
+import {
+  useGatewayWorkspaceLayoutStore,
+  workspaceLayoutScopeKey,
+} from "@/stores/gateway-workspace-layout";
+import { useFileGitReviewPanelStore } from "@/stores/file-workspace/git/review-panel";
+import {
+  AGENT_WORKSPACE_PANEL_ID,
+  FILES_WORKSPACE_PANEL_ID,
+  GIT_REVIEW_WORKSPACE_PANEL_ID,
+} from "@/stores/gateway/workspace-panels";
+import { titleForThread } from "@/stores/gateway/thread-utils/identity";
 import MobileWorkspaceHeader from "../MobileWorkspaceHeader.vue";
 import { createDockTabMenu } from "./actions";
 import { WORKSPACE_DOCK_UI_CONTEXT, WORKSPACE_FILES_PANEL_CONTEXT } from "./context";
@@ -70,6 +83,21 @@ const browserDialogOpen = ref(false);
 const dockviewHost = ref<HTMLElement | null>(null);
 const workspaceActions = useWorkspaceLaunchActions();
 const tmuxLauncher = useTmuxMonitorLauncher();
+const catalog = useGatewayCatalogStore();
+const workspaceLayout = useGatewayWorkspaceLayoutStore();
+const gitReviewPanels = useFileGitReviewPanelStore();
+const selectedProject = computed(() =>
+  projectById(catalog.projects, workspace.selectedProjectId.value),
+);
+const workspaceTitle = computed(() => {
+  if (workspace.selectedThreadId.value && workspace.currentThread.value) {
+    return titleForThread(workspace.currentThread.value);
+  }
+  return selectedProject.value?.name ?? workspaceActions.selectedHostTitle.value;
+});
+const workspaceSubtitle = computed(
+  () => workspace.currentThread.value?.cwd ?? selectedProject.value?.remotePath ?? null,
+);
 const lifecycle = useWorkspaceDockLifecycle({
   scopeKey,
   host: dockviewHost,
@@ -79,6 +107,24 @@ const lifecycle = useWorkspaceDockLifecycle({
   panelIds,
 });
 const dockTheme = computed(() => (isDark.value ? themeDark : themeLight));
+
+function openAgent() {
+  workspaceLayout.requestPanelActivation(AGENT_WORKSPACE_PANEL_ID);
+}
+
+function openSummary() {
+  lifecycle.activateRight(FILES_WORKSPACE_PANEL_ID);
+}
+
+function openReview() {
+  const hostId = workspace.selectedHostId.value;
+  const projectId = workspace.selectedProjectId.value;
+  const threadId = workspace.selectedThreadId.value;
+  if (hostId === null || projectId === null || threadId === null) return;
+  openSummary();
+  gitReviewPanels.open(workspaceLayoutScopeKey(hostId, projectId, threadId));
+  workspaceLayout.requestPanelActivation(GIT_REVIEW_WORKSPACE_PANEL_ID);
+}
 
 provide(WORKSPACE_FILES_PANEL_CONTEXT, {
   layout: refs.layout,
@@ -115,6 +161,24 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
     data-testid="workspace-dock-frame"
     class="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden"
   >
+    <DesktopWorkspaceHeader
+      v-if="layout === 'desktop'"
+      :title="workspaceTitle"
+      :subtitle="workspaceSubtitle"
+      :can-launch="workspaceActions.canLaunch.value"
+      :can-open-summary="workspace.selectedThreadId.value !== null"
+      :can-open-review="
+        workspace.selectedThreadId.value !== null && workspace.selectedProjectId.value !== null
+      "
+      :tmux-active-count="tmuxLauncher.activeCount.value"
+      @open-agent="openAgent"
+      @open-summary="openSummary"
+      @open-review="openReview"
+      @open-tmux="tmuxLauncher.open"
+      @open-terminal="workspaceActions.openTerminal"
+      @open-browser="browserDialogOpen = true"
+      @open-host-monitor="workspaceActions.openHostMonitor"
+    />
     <MobileWorkspaceHeader
       v-if="layout === 'mobile'"
       :can-open-terminal="workspace.canOpenTerminal.value"
@@ -147,7 +211,6 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
       />
     </div>
     <BrowserOpenDialog
-      v-if="layout === 'mobile'"
       v-model:open="browserDialogOpen"
       :open-target="workspaceActions.openBrowser"
     />

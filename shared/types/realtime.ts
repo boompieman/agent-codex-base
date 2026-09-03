@@ -26,6 +26,13 @@ import type { RemoteGitFileComparison, RemoteGitWorkspaceSnapshot } from "./file
 import type { ProjectFileSearchResult } from "./files";
 import type { GatewayMcpServerStatus } from "./mcp";
 
+export interface GatewaySkill {
+  name: string;
+  description: string;
+  path: string;
+  scope: "user" | "repo" | "system" | "admin";
+}
+
 export type RealtimeClientMessage =
   | {
       type: "auth.authenticate";
@@ -159,6 +166,12 @@ export type RealtimeClientMessage =
       requestId: string;
       hostId: number;
       threadId: string;
+    }
+  | {
+      type: "skill.list";
+      requestId: string;
+      hostId: number;
+      projectId: number;
     }
   | {
       type: "mcp.event.stream.start";
@@ -418,6 +431,13 @@ export type RealtimeServerMessage =
       hostId: number;
       threadId: string;
       servers: GatewayMcpServerStatus[];
+    }
+  | {
+      type: "skill.list.results";
+      requestId: string;
+      hostId: number;
+      projectId: number;
+      skills: GatewaySkill[];
     }
   | {
       type: "mcp.event.stream.accepted";

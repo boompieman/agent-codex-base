@@ -89,6 +89,20 @@ export function useComposerController() {
   const activePlanSummary = computed(() =>
     submit.planModeActive.value ? planItemSummary(latestThreadPlanItem(history.value)) : "",
   );
+  const activeDiffFileCount = computed(() => {
+    const latestTurn = history.value?.thread.turns.at(-1);
+    const paths = new Set(
+      (latestTurn?.items ?? []).flatMap((item) =>
+        item.type === "fileChange"
+          ? (item.changes ?? []).flatMap((change) => {
+              const path = change.pathAfter ?? change.path ?? change.filePath ?? change.pathBefore;
+              return typeof path === "string" && path !== "" ? [path] : [];
+            })
+          : [],
+      ),
+    );
+    return paths.size;
+  });
   const canSendTurn = computed(
     () =>
       selectedThreadId.value !== null &&
@@ -105,7 +119,8 @@ export function useComposerController() {
     ),
   );
   const sendButtonLabel = computed(() => {
-    if (submit.hasComposerInput.value) return t("app.send");
+    if (submit.hasComposerInput.value)
+      return isThreadRunning.value ? t("app.steerTurn") : t("app.send");
     if (isThreadRunning.value) return t("app.interruptTurn");
     if (selectedThreadStatus.value === "completed") return t("app.completed");
     if (selectedThreadStatus.value === "failed") return t("app.failed");
@@ -170,6 +185,7 @@ export function useComposerController() {
   }
 
   return {
+    activeDiffFileCount,
     activePlanSummary,
     attachedFiles,
     fileReferences,

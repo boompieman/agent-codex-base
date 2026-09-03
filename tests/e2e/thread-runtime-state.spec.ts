@@ -441,6 +441,8 @@ test("turn completed keeps thread running while context compaction is active", a
 
   await expect.poll(() => selectedThreadStatusInStore(page)).toBe("running");
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "停止生成");
+  await page.getByPlaceholder("输入后续修改要求").fill("追加要求");
+  await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "引导");
   await expect(page.getByText("压缩上下文")).toBeVisible();
 });
 

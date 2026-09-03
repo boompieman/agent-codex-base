@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FileIcon, XIcon } from "@lucide/vue";
 import { ref } from "vue";
 import type {
   ApprovalPolicy,
@@ -24,6 +25,7 @@ const props = defineProps<{
   attachedFiles: ComposerAttachment[];
   planModeActive: boolean;
   planSummary: string;
+  diffFileCount: number;
   goalInputActive: boolean;
   goal: ThreadGoal | null;
   goalObservedAt: number | null;
@@ -78,6 +80,7 @@ const emit = defineEmits<{
 }>();
 
 const uploadInput = ref<HTMLInputElement | null>(null);
+const editor = ref<InstanceType<typeof ComposerEditor> | null>(null);
 
 function openAttachmentPicker() {
   uploadInput.value?.click();
@@ -94,6 +97,10 @@ function updateModelValue(value: string, sourceScopeKey: string) {
 function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: string) {
   if (sourceScopeKey === composerScopeKey()) emit("update:fileReferences", value);
 }
+
+function insertTrigger(trigger: "@" | "$" | "/") {
+  editor.value?.insertTrigger(trigger);
+}
 </script>
 
 <template>
@@ -104,6 +111,7 @@ function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: st
       <ComposerModeStrip
         :plan-mode-active="planModeActive"
         :plan-summary="planSummary"
+        :diff-file-count="diffFileCount"
         :goal-input-active="goalInputActive"
         :goal="goal"
         :goal-observed-at="goalObservedAt"
@@ -131,8 +139,29 @@ function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: st
           multiple
           @change="emit('attachmentChange', $event)"
         />
+        <div
+          v-if="fileReferences.length"
+          data-testid="composer-context-chips"
+          class="mb-1 flex max-w-full flex-wrap gap-1.5 px-1"
+        >
+          <Button
+            v-for="reference in fileReferences"
+            :key="reference.id"
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="h-7 max-w-[16rem] gap-1.5 rounded-full px-2 text-xs"
+            :aria-label="$t('app.removeFileReference', { name: reference.name })"
+            @click="editor?.removeReference(reference.path)"
+          >
+            <FileIcon class="size-3.5 shrink-0" />
+            <span class="truncate">@{{ reference.name }}</span>
+            <XIcon class="size-3.5 shrink-0" />
+          </Button>
+        </div>
         <AttachmentChips :files="attachedFiles" @remove="emit('removeAttachment', $event)" />
         <ComposerEditor
+          ref="editor"
           :key="composerScopeKey()"
           :model-value="modelValue"
           :references="fileReferences"
@@ -151,6 +180,7 @@ function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: st
         <ComposerToolbar
           :uploading-attachments="uploadingAttachments"
           :selected-thread-id="selectedThreadId"
+          :selected-project-id="selectedProjectId"
           :selected-approval-mode="selectedApprovalMode"
           :selected-thread-token-usage="selectedThreadTokenUsage"
           :models="models"
@@ -170,6 +200,7 @@ function updateFileReferences(value: ComposerFileReference[], sourceScopeKey: st
           :selected-thread-status="selectedThreadStatus"
           :send-button-label="sendButtonLabel"
           @attach="openAttachmentPicker"
+          @insert-trigger="insertTrigger"
           @primary-action="emit('primaryAction')"
           @update-selected-approval-mode="emit('updateSelectedApprovalMode', $event)"
           @select-model="emit('selectModel', $event)"
