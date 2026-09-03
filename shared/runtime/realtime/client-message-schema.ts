@@ -192,6 +192,14 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
       .strict(),
     z
       .object({
+        type: z.literal("skill.list"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+      })
+      .strict(),
+    z
+      .object({
         type: z.literal("mcp.event.stream.start"),
         ...requestIdField,
         ...threadScopeFields,

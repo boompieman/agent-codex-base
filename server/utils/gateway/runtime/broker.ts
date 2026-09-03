@@ -1,5 +1,11 @@
-import type { HostRecord, ThreadGoalStatus, ThreadSettingsState } from "~~/shared/types";
+import type {
+  GatewaySkill,
+  HostRecord,
+  ThreadGoalStatus,
+  ThreadSettingsState,
+} from "~~/shared/types";
 import { INITIAL_TURN_PAGE_LIMIT } from "~~/shared/config";
+import { parseSkillsListResponse } from "~~/shared/runtime/app-server";
 import type { ServerRequestResponseInput, TurnStartInput, TurnSteerInput } from "./types";
 import { ControllerRegistry, type ThreadSubscriptionLease } from "./controller-registry";
 import { ThreadOpenService } from "./thread-open-service";
@@ -154,6 +160,31 @@ class ThreadBroker {
     cancellationToken: string,
   ) {
     return this.files.search(host, rootPath, query, cancellationToken);
+  }
+
+  async listSkills(host: HostRecord, cwd: string): Promise<GatewaySkill[]> {
+    const client = await this.registry.getHostClient(host);
+    const response = await client.request(
+      "skills/list",
+      { cwds: [cwd] },
+      120_000,
+      parseSkillsListResponse,
+    );
+    return (
+      (response.data.find((entry) => entry.cwd === cwd) ?? response.data[0])?.skills.flatMap(
+        (skill) =>
+          skill.enabled
+            ? [
+                {
+                  name: skill.name,
+                  description: skill.description,
+                  path: skill.path,
+                  scope: skill.scope,
+                },
+              ]
+            : [],
+      ) ?? []
+    );
   }
 
   async watchProjectFiles(

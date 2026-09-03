@@ -40,6 +40,25 @@ test("references real project files as structured turn context", async ({
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
   await selectSidebarThread(page, threadId);
 
+  const composer = page.getByPlaceholder("输入后续修改要求");
+  await page.getByTestId("composer-trigger-command").click();
+  await expect(composer).toHaveAttribute("data-value", "/");
+  await expect(page.getByTestId("slash-command-menu")).toBeVisible();
+  await composer.press("Escape");
+  await composer.fill("");
+
+  const skillListOffset = await realtimeClientMessageCount(page);
+  await page.getByTestId("composer-trigger-skill").click();
+  await expect(composer).toHaveAttribute("data-value", "$");
+  await expect(page.getByTestId("skill-menu")).toBeVisible();
+  const skillListMessage = await waitForRealtimeClientMessage(page, "skill.list", skillListOffset);
+  expect(skillListMessage).toMatchObject({ hostId: host.id, projectId: project.id });
+  await composer.press("Escape");
+  await composer.fill("");
+
+  await page.getByTestId("composer-trigger-file").click();
+  await expect(composer).toHaveAttribute("data-value", "@");
+
   const suffix = Date.now();
   const fileName = `e2e-file-reference-${suffix}.txt`;
   const rootFileName = `e2e-file-reference-${suffix}-root.txt`;
@@ -55,7 +74,6 @@ test("references real project files as structured turn context", async ({
     `mkdir -p -- ${shellQuote(`${project.remotePath}/${directory}`)} && printf '%s\\n' ${shellQuote(marker)} > ${shellQuote(`${project.remotePath}/${path}`)} && printf '%s\\n' root > ${shellQuote(`${project.remotePath}/${rootFileName}`)}`,
   );
 
-  const composer = page.getByPlaceholder("输入后续修改要求");
   await composer.fill(`@reference-${suffix}`);
   const menu = page.getByTestId("file-mention-menu");
   await expect(menu).toBeVisible();
@@ -94,6 +112,17 @@ test("references real project files as structured turn context", async ({
   await expect(chip).toHaveText(`@${fileName}`);
   await expect(chip).not.toContainText(directory);
   await expect(composer).toHaveAttribute("data-value", `@${path} `);
+  const contextChip = page
+    .getByTestId("composer-context-chips")
+    .getByRole("button", { name: `移除文件引用 ${fileName}` });
+  await expect(contextChip).toBeVisible();
+  await contextChip.click();
+  await expect(chip).toBeHidden();
+  await expect(composer).toHaveAttribute("data-value", "");
+
+  await composer.fill(`@reference-${suffix}`);
+  await menu.getByRole("option").filter({ hasText: fileName }).click();
+  await expect(chip).toBeVisible();
 
   await composer.press("Backspace");
   await expect(chip).toBeVisible();

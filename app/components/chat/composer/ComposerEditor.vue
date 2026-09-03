@@ -18,12 +18,16 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import type { FileReference } from "~~/shared/types";
+import type { FileReference, GatewaySkill } from "~~/shared/types";
 import type { ComposerFileReference } from "@/stores/gateway/types";
 import { useGatewayRealtimeStore } from "@/stores/gateway-realtime";
-import { expectProjectFileSearchResults } from "@/stores/gateway-realtime/response-parsers";
+import {
+  expectProjectFileSearchResults,
+  expectSkillListResults,
+} from "@/stores/gateway-realtime/response-parsers";
 import { createUuid } from "@/lib/uuid";
 import ComposerFileMentionMenu from "./ComposerFileMentionMenu.vue";
+import ComposerSkillMenu from "./ComposerSkillMenu.vue";
 
 const MAX_REFERENCES = 10;
 
@@ -55,6 +59,22 @@ const files = ref<FileReference[]>([]);
 const selectedIndex = ref(0);
 const loading = ref(false);
 const searchError = ref<string | null>(null);
+const skillMenuOpen = ref(false);
+const skillQuery = ref("");
+const skillQueryFrom = ref(0);
+const allSkills = ref<GatewaySkill[]>([]);
+const selectedSkillIndex = ref(0);
+const skillsLoading = ref(false);
+const skillsError = ref<string | null>(null);
+const loadedSkillsScope = ref("");
+const filteredSkills = computed(() => {
+  const normalized = skillQuery.value.trim().toLowerCase();
+  return normalized
+    ? allSkills.value.filter((skill) =>
+        `${skill.name} ${skill.description}`.toLowerCase().includes(normalized),
+      )
+    : allSkills.value;
+});
 const realtime = useGatewayRealtimeStore();
 const cancellationToken = `composer-files-${createUuid()}`;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -199,27 +219,64 @@ function handleUpdate(update: ViewUpdate) {
         emit("update:references", retained, props.scopeKey);
     }
   }
-  if (update.docChanged || update.selectionSet) updateMentionQuery(update.view);
+  if (update.docChanged || update.selectionSet) updateTokenQuery(update.view);
 }
 
-function updateMentionQuery(editor: EditorView) {
+function updateTokenQuery(editor: EditorView) {
   if (props.disabled || props.projectId === null || editor.state.selection.ranges.length !== 1) {
-    dismissMenu();
+    dismissMenus();
     return;
   }
   const cursor = editor.state.selection.main.head;
   const line = editor.state.doc.lineAt(cursor);
   const before = editor.state.doc.sliceString(line.from, cursor);
-  const match = /(?:^|\s)@([^\s@]*)$/u.exec(before);
-  if (!match) {
-    dismissMenu();
+  const fileMatch = /(?:^|\s)@([^\s@]*)$/u.exec(before);
+  if (fileMatch) {
+    dismissSkillMenu();
+    query.value = fileMatch[1] ?? "";
+    queryFrom.value = cursor - query.value.length - 1;
+    menuOpen.value = true;
+    selectedIndex.value = 0;
+    scheduleSearch();
     return;
   }
-  query.value = match[1] ?? "";
-  queryFrom.value = cursor - query.value.length - 1;
-  menuOpen.value = true;
-  selectedIndex.value = 0;
-  scheduleSearch();
+  const skillMatch = /(?:^|\s)\$([^\s$]*)$/u.exec(before);
+  if (skillMatch) {
+    dismissMenu();
+    skillQuery.value = skillMatch[1] ?? "";
+    skillQueryFrom.value = cursor - skillQuery.value.length - 1;
+    skillMenuOpen.value = true;
+    selectedSkillIndex.value = 0;
+    void loadSkills();
+    return;
+  }
+  dismissMenus();
+}
+
+async function loadSkills() {
+  if (props.hostId === null || props.projectId === null) return;
+  const scope = `${props.hostId}:${props.projectId}`;
+  if (loadedSkillsScope.value === scope) return;
+  skillsLoading.value = true;
+  skillsError.value = null;
+  try {
+    const response = await realtime.request(
+      (requestId) => ({
+        type: "skill.list",
+        requestId,
+        hostId: props.hostId!,
+        projectId: props.projectId!,
+      }),
+      expectSkillListResults,
+    );
+    if (!skillMenuOpen.value || scope !== `${props.hostId}:${props.projectId}`) return;
+    allSkills.value = response.skills;
+    loadedSkillsScope.value = scope;
+  } catch (error) {
+    skillsError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    skillsLoading.value = false;
+  }
 }
 
 function scheduleSearch() {
@@ -276,7 +333,17 @@ function selectCurrent() {
 }
 
 function handleMentionKeydown(event: KeyboardEvent) {
-  if (!menuOpen.value || event.isComposing) return false;
+  if (event.isComposing) return false;
+  if (skillMenuOpen.value) {
+    const handlers: Partial<Record<string, () => boolean>> = {
+      ArrowDown: () => moveSkillSelection(1),
+      ArrowUp: () => moveSkillSelection(-1),
+      Enter: selectCurrentSkill,
+      Escape: dismissSkillMenu,
+    };
+    return handlers[event.key]?.() ?? false;
+  }
+  if (!menuOpen.value) return false;
   const handlers: Partial<Record<string, () => boolean>> = {
     ArrowDown: () => moveSelection(1),
     ArrowUp: () => moveSelection(-1),
@@ -284,6 +351,31 @@ function handleMentionKeydown(event: KeyboardEvent) {
     Escape: dismissMenu,
   };
   return handlers[event.key]?.() ?? false;
+}
+
+function moveSkillSelection(delta: number) {
+  if (filteredSkills.value.length === 0) return true;
+  selectedSkillIndex.value =
+    (selectedSkillIndex.value + delta + filteredSkills.value.length) % filteredSkills.value.length;
+  return true;
+}
+
+function selectCurrentSkill() {
+  const skill = filteredSkills.value[selectedSkillIndex.value];
+  if (skill) selectSkill(skill);
+  return true;
+}
+
+function selectSkill(skill: GatewaySkill) {
+  const editor = view.value;
+  if (!editor) return;
+  const cursor = editor.state.selection.main.head;
+  editor.dispatch({
+    changes: { from: skillQueryFrom.value, to: cursor, insert: `$${skill.name} ` },
+    selection: { anchor: skillQueryFrom.value + skill.name.length + 2 },
+  });
+  dismissSkillMenu();
+  editor.focus();
 }
 
 function selectFile(file: FileReference) {
@@ -322,6 +414,53 @@ function dismissMenu() {
   loading.value = false;
   return true;
 }
+
+function dismissSkillMenu() {
+  if (!skillMenuOpen.value) return false;
+  skillMenuOpen.value = false;
+  skillsError.value = null;
+  skillsLoading.value = false;
+  return true;
+}
+
+function dismissMenus() {
+  return dismissMenu() || dismissSkillMenu();
+}
+
+function insertTrigger(trigger: "@" | "$" | "/") {
+  const editor = view.value;
+  if (!editor || props.disabled) return;
+  const selection = editor.state.selection.main;
+  const before = editor.state.doc.sliceString(0, selection.from);
+  const prefix = before !== "" && !/\s$/u.test(before) ? " " : "";
+  const insert = `${prefix}${trigger}`;
+  editor.dispatch({
+    changes: { from: selection.from, to: selection.to, insert },
+    selection: { anchor: selection.from + insert.length },
+  });
+  editor.focus();
+}
+
+function removeReference(path: string) {
+  const editor = view.value;
+  if (!editor) return;
+  const literal = `@${path}`;
+  const text = editor.state.doc.toString();
+  const changes = [];
+  let offset = 0;
+  while (offset < text.length) {
+    const from = text.indexOf(literal, offset);
+    if (from < 0) break;
+    const to = from + literal.length + (text[from + literal.length] === " " ? 1 : 0);
+    changes.push({ from, to });
+    offset = to;
+  }
+  if (changes.length === 0) return;
+  editor.dispatch({ changes });
+  editor.focus();
+}
+
+defineExpose({ insertTrigger, removeReference });
 </script>
 
 <template>
@@ -334,6 +473,16 @@ function dismissMenu() {
     :error="searchError"
     @hover="selectedIndex = $event"
     @select="selectFile"
+  />
+  <ComposerSkillMenu
+    :open="skillMenuOpen"
+    :skills="filteredSkills"
+    :selected-index="selectedSkillIndex"
+    :loading="skillsLoading"
+    :query="skillQuery"
+    :error="skillsError"
+    @hover="selectedSkillIndex = $event"
+    @select="selectSkill"
   />
   <div ref="container" data-testid="composer-editor" class="composer-editor" />
 </template>

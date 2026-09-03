@@ -33,6 +33,13 @@ export function expectProjectFileSearchResults(message: RealtimeResponseMessage)
   return message;
 }
 
+export function expectSkillListResults(message: RealtimeResponseMessage) {
+  if (message.type !== "skill.list.results") {
+    unexpectedResponse("skill.list.results", message.type);
+  }
+  return message;
+}
+
 export function expectFileWatchReady(message: RealtimeResponseMessage) {
   if (message.type !== "file.watch.ready") {
     unexpectedResponse("file.watch.ready", message.type);

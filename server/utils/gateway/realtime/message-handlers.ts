@@ -42,6 +42,7 @@ import {
   subscribeProjectFiles,
   unsubscribeProjectFiles,
 } from "./handlers/files";
+import { listSkills } from "./handlers/skills";
 
 export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "auth.authenticate": { auth: "public", handler: authenticatePeer },
@@ -77,6 +78,7 @@ export const realtimeMessageDispatcher = new RealtimeMessageDispatcher({
   "file.git.compare": compareGitFile,
   "file.git.workspace.inspect": inspectGitWorkspace,
   "file.search": searchProjectFiles,
+  "skill.list": listSkills,
   "file.watch.subscribe": subscribeProjectFiles,
   "file.watch.unsubscribe": unsubscribeProjectFiles,
   "mcp.status.list": listMcpStatuses,

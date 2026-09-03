@@ -8,7 +8,7 @@ import {
   AGENT_WORKSPACE_PANEL_ID,
   FILES_WORKSPACE_PANEL_ID,
 } from "@/stores/gateway/workspace-panels";
-import { notifyPopoutBlocked } from "./actions";
+import { notifyPopoutBlocked, splitDockPanelRight } from "./actions";
 import { useDockLayoutPersistence } from "./useDockLayoutPersistence";
 import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
@@ -37,6 +37,14 @@ export function useWorkspaceDockLifecycle(options: {
     if (!panel) return;
     panel.api.setActive();
     panel.api.group.api.setActive();
+  }
+
+  function activateRight(panelId: string) {
+    const panel = api.value?.getPanel(panelId);
+    const agent = api.value?.getPanel(AGENT_WORKSPACE_PANEL_ID);
+    if (!panel || !agent) return;
+    if (panel.api.group === agent.api.group) splitDockPanelRight(panel.api);
+    activate(panelId);
   }
 
   async function ready(event: DockviewReadyEvent) {
@@ -194,7 +202,7 @@ export function useWorkspaceDockLifecycle(options: {
     api.value = null;
   });
 
-  return { ready };
+  return { ready, activateRight };
 }
 
 function dockedLayout(layout: SerializedDockview): SerializedDockview {

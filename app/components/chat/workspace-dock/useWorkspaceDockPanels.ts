@@ -124,8 +124,13 @@ export function useWorkspaceDockPanels(options: {
         existing.api.setTitle(definition.title);
         existing.api.updateParameters(definition.params);
       } else {
+        const agent = api.getPanel(AGENT_WORKSPACE_PANEL_ID);
         const position =
-          api.activeGroup === undefined ? undefined : { referenceGroup: api.activeGroup };
+          definition.params.kind === "terminal" && agent
+            ? { referencePanel: agent, direction: "below" as const }
+            : api.activeGroup === undefined
+              ? undefined
+              : { referenceGroup: api.activeGroup };
         api.addPanel({
           ...definition,
           tabComponent: "WorkspaceDockTab",

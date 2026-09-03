@@ -53,6 +53,7 @@ export function createRealtimeServerMessageDispatcher(ctx: RealtimeServerMessage
       .with({ type: "file.git.comparison" }, (response) => ctx.resolveRequest(response))
       .with({ type: "file.git.workspace.snapshot" }, (response) => ctx.resolveRequest(response))
       .with({ type: "file.search.results" }, (response) => ctx.resolveRequest(response))
+      .with({ type: "skill.list.results" }, (response) => ctx.resolveRequest(response))
       .with({ type: "file.watch.ready" }, (response) => ctx.resolveRequest(response))
       .with({ type: "file.watch.changed" }, (event) =>
         gatewayDomainEvents.emit("remote-files-changed", {

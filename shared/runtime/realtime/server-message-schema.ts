@@ -394,6 +394,14 @@ const projectFileSearchResultSchema = z
     ),
   })
   .strict();
+const gatewaySkillSchema = z
+  .object({
+    name: nonEmptyString,
+    description: z.string(),
+    path: nonEmptyString,
+    scope: z.enum(["user", "repo", "system", "admin"]),
+  })
+  .strict();
 
 // Top-level Gateway messages are closed protocol objects. Nested app-server thread/envelope
 // records intentionally remain extensible because upstream adds fields between releases; their
@@ -472,6 +480,15 @@ export const realtimeServerMessageSchema: z.ZodType<RealtimeServerMessage> = z.d
         hostId: positiveId,
         projectId: positiveId,
         result: projectFileSearchResultSchema,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal("skill.list.results"),
+        ...requestIdField,
+        hostId: positiveId,
+        projectId: positiveId,
+        skills: z.array(gatewaySkillSchema),
       })
       .strict(),
     z

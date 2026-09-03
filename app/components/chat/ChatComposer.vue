@@ -4,6 +4,7 @@ import { useComposerController } from "@/composables/composer/useComposerControl
 
 const {
   activeEffortCompactLabel,
+  activeDiffFileCount,
   activeEffortValue,
   activeModel,
   activeModelLabel,
@@ -64,6 +65,7 @@ const {
     :attached-files="attachedFiles"
     :plan-mode-active="planModeActive"
     :plan-summary="activePlanSummary"
+    :diff-file-count="activeDiffFileCount"
     :goal-input-active="goalInputActive"
     :goal="selectedThreadGoal"
     :goal-observed-at="selectedThreadGoalObservedAt"

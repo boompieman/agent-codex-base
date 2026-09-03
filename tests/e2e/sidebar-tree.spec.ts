@@ -21,6 +21,35 @@ test("collapses the desktop sidebar and restores the saved layout", async ({ pag
   await expect(page.getByTestId("desktop-sidebar-collapse")).toBeVisible();
 });
 
+test("opens the workspace summary beside Agent", async ({ page }) => {
+  await openApp(page);
+  await seedGatewayThread(page, {
+    hostId: 100,
+    projectId: 200,
+    threadId: "native-shell-thread",
+    host: { ...defaultGatewayHost(100), name: "Native Shell Host" },
+    project: {
+      ...defaultGatewayProject(100, 200),
+      name: "Native Shell Project",
+      remotePath: "/workspace/native-shell",
+    },
+    currentThread: { id: "native-shell-thread", name: "Native Shell Thread" },
+    status: "completed",
+  });
+
+  await expect(page.getByTestId("desktop-workspace-header")).toContainText("Native Shell Thread");
+  await page.getByTestId("open-summary-button").click();
+  await expect(page.getByTestId("workspace-file-panel")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const agent = await page.getByTestId("chat-main-pane").boundingBox();
+      const summary = await page.getByTestId("workspace-file-panel").boundingBox();
+      return agent !== null && summary !== null && summary.x >= agent.x + agent.width;
+    })
+    .toBe(true);
+});
+
 test("toggles an expanded project closed from the desktop sidebar", async ({ page }) => {
   await openApp(page);
   await seedGatewayThread(page, {

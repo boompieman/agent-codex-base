@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useTimestamp } from "@vueuse/core";
-import { XIcon } from "@lucide/vue";
+import { GitCompareArrowsIcon, XIcon } from "@lucide/vue";
 import { computed, watch } from "vue";
 import type { ThreadGoal } from "~~/shared/types";
 import ComposerGoalDetailsDialog from "@/components/chat/composer/ComposerGoalDetailsDialog.vue";
@@ -11,6 +11,7 @@ import { formatGoalElapsed } from "@/utils/thread-goal-display";
 const props = defineProps<{
   planModeActive: boolean;
   planSummary: string;
+  diffFileCount: number;
   goalInputActive: boolean;
   goal: ThreadGoal | null;
   goalObservedAt: number | null;
@@ -49,7 +50,8 @@ const goalBudgetLabel = computed(() => {
 const goalElapsedLabel = computed(() => formatGoalElapsed(goalElapsedSeconds.value));
 const showGoalInputHint = computed(() => props.goalInputActive && !currentGoal.value);
 const showStrip = computed(
-  () => props.planModeActive || showGoalInputHint.value || currentGoal.value,
+  () =>
+    props.planModeActive || props.diffFileCount > 0 || showGoalInputHint.value || currentGoal.value,
 );
 
 // A paused or blocked Goal remains actionable and visible. The composer controller removes a
@@ -82,6 +84,16 @@ watch(
       >
         <XIcon class="size-3.5" />
       </Button>
+    </div>
+
+    <div
+      v-if="diffFileCount > 0"
+      data-testid="composer-diff-summary"
+      class="flex min-w-0 items-center gap-2 rounded-2xl border border-hairline bg-surface px-3 py-2 text-sm text-ink-secondary shadow-sm shadow-ink/5 md:text-base"
+    >
+      <GitCompareArrowsIcon class="size-4 shrink-0 text-primary" />
+      <span class="font-medium text-ink">{{ $t("app.diffSummary") }}</span>
+      <span>{{ $t("app.filesChanged", { count: diffFileCount }) }}</span>
     </div>
 
     <div
