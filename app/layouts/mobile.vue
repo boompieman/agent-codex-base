@@ -29,7 +29,7 @@ const mobileTitle = computed(() => {
   if (selectedThreadId.value && currentThread.value) {
     return titleForThread(currentThread.value);
   }
-  return selectedProject.value?.name || "Codex Gateway";
+  return selectedProject.value?.name || "Agent Codex Base";
 });
 
 watch([selectedHostId, selectedProjectId, selectedThreadId], () => {
@@ -66,7 +66,7 @@ watch([selectedHostId, selectedProjectId, selectedThreadId], () => {
         </Sheet>
         <div class="min-w-0 flex-1">
           <p class="truncate text-[0.9375rem] font-semibold">{{ mobileTitle }}</p>
-          <p class="truncate text-xs text-ink-muted">Codex Gateway</p>
+          <p class="truncate text-xs text-ink-muted">Agent Codex Base</p>
         </div>
       </template>
     </ChatWorkspace>

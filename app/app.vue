@@ -27,9 +27,9 @@ let activeSessionToken = "";
 const layoutName = computed(() => (device.isMobileOrTablet ? "mobile" : "default"));
 const pageTitle = computed(() => {
   if (!selectedThreadId.value || !currentThread.value) {
-    return "Codex Gateway";
+    return "Agent Codex Base";
   }
-  return `${titleForThread(currentThread.value)} - Codex Gateway`;
+  return `${titleForThread(currentThread.value)} - Agent Codex Base`;
 });
 
 useHead({
@@ -45,7 +45,7 @@ useHead({
     { name: "theme-color", content: "#ffffff" },
     { name: "mobile-web-app-capable", content: "yes" },
     { name: "apple-mobile-web-app-capable", content: "yes" },
-    { name: "apple-mobile-web-app-title", content: "Codex Gateway" },
+    { name: "apple-mobile-web-app-title", content: "Agent Codex Base" },
   ],
 });
 

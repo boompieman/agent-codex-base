@@ -1,5 +1,5 @@
 {
-  "name": "codex-gateway",
+  "name": "agent-codex-base",
   "private": true,
   "type": "module",
   "scripts": {

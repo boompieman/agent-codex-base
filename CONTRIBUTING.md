@@ -1,12 +1,12 @@
-# Contributing to Codex Gateway
+# Contributing to Agent Codex Base
 
-Thanks for contributing. Codex Gateway is an integration layer around the official Codex app-server, so protocol fidelity and end-to-end behavior matter more than local mocks.
+Thanks for contributing. Agent Codex Base is an integration layer around the official Codex app-server, so protocol fidelity and end-to-end behavior matter more than local mocks.
 
 ## Development Setup
 
 ```bash
-git clone --recurse-submodules https://github.com/yunhaoli24/codex-gateway.git
-cd codex-gateway
+git clone --recurse-submodules https://github.com/boompieman/agent-codex-base.git
+cd agent-codex-base
 pnpm install
 pnpm dev
 ```

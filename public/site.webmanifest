@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "name": "Codex Gateway",
-  "short_name": "Codex",
+  "name": "Agent Codex Base",
+  "short_name": "Agent Codex",
   "theme_color": "#ffffff"
 }

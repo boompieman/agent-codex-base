@@ -16,7 +16,7 @@ export function threadTurnCompletedNotification(event: GatewayEvent): ServerNoti
     key: `thread-terminal:${event.hostId}:${event.threadId}:turn:${turnId}:${status}`,
     title: `${threadTitle(event.hostId, event.threadId)} · 回合已结束`,
     body: `${hostTitle(event.hostId)} 上的会话状态：${turnStatusLabel(status)}。可以继续输入下一步。`,
-    group: "Codex Gateway",
+    group: "Agent Codex Base",
     target: notificationTarget(event),
   };
 }
@@ -34,7 +34,7 @@ export function threadGoalCompletedNotification(event: GatewayEvent): ServerNoti
       `${hostTitle(event.hostId)} 上的目标状态：${goalStatusLabel(goal.status)}。`,
       `推进 ${formatDuration(goal.timeUsedSeconds)}，使用 ${goal.tokensUsed.toLocaleString()} tokens。`,
     ].join(""),
-    group: "Codex Gateway",
+    group: "Agent Codex Base",
     target: notificationTarget(event),
   };
 }
@@ -58,7 +58,7 @@ export function threadUserInputRequestedNotification(event: GatewayEvent): Serve
     // Options may contain secrets or large model-generated payloads. A push notification only
     // needs enough context to bring the user back; the interactive card remains authoritative.
     body: `${hostTitle(event.hostId)} 上的 Agent 正在等待你的回答${questionCount}：${question ?? "请打开会话查看问题。"}`,
-    group: "Codex Gateway",
+    group: "Agent Codex Base",
     target: notificationTarget(event),
   };
 }

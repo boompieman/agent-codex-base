@@ -5,17 +5,19 @@ x-default-logging: &default-logging
     max-file: "3"
 
 services:
-  codex-gateway:
+  agent-codex-base:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: codex-gateway
+    container_name: agent-codex-base
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 1g
     memswap_limit: 1g
     expose:
       - "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
