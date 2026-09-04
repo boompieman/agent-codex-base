@@ -6,6 +6,8 @@ export type { HostRecord, PinnedThreadRecord, ProjectRecord };
  * leaking `any` through the Host/Project tree. */
 export interface SidebarThread extends Record<string, unknown> {
   id: string | number;
+  cwd?: string | null;
+  gitInfo?: { branch?: string | null } | null;
   updatedAt?: number | null;
   pinned?: boolean;
 }

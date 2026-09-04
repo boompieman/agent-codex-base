@@ -6,6 +6,7 @@ const props = defineProps<{
   open: boolean;
   count: number;
   loading: boolean;
+  empty: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -28,7 +29,12 @@ const { t } = useI18n();
     <ChevronDownIcon v-if="open" class="size-4 shrink-0 text-ink-faint" />
     <ChevronRightIcon v-else class="size-4 shrink-0 text-ink-faint" />
     <ListTreeIcon class="size-4 shrink-0 text-ink-faint" />
-    <span class="min-w-0 flex-1 truncate">{{ t("app.intermediateSteps") }}</span>
+    <span class="min-w-0 flex-1">
+      <span class="block truncate">{{ t("app.intermediateSteps") }}</span>
+      <span v-if="open && empty" class="block text-xs text-ink-faint">
+        {{ t("app.noIntermediateSteps") }}
+      </span>
+    </span>
     <Loader2Icon v-if="loading" class="size-4 animate-spin text-ink-muted" />
     <Badge v-else-if="count > 0" variant="outline">{{ count }}</Badge>
   </button>

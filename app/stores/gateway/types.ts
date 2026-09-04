@@ -8,6 +8,7 @@ import type {
   ThreadRuntimeStatus,
   UploadedFileRecord,
   FileReference,
+  AppServerThreadActiveFlag,
 } from "~~/shared/types";
 
 export type { ThreadRuntimeStatus };
@@ -79,6 +80,7 @@ export interface GatewayErrorState {
 
 export interface ThreadStatusUpdateOptions {
   turnId?: string | null;
+  activeFlags?: AppServerThreadActiveFlag[];
 }
 
 export type TerminalOpenInput = Omit<TerminalOpenTarget, "cols" | "rows"> & {

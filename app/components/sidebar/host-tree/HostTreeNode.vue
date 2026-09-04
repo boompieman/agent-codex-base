@@ -15,7 +15,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@codex-gateway/ui/context-menu";
-import type { HostRecord } from "../sidebar-types";
+import type { HostRecord, SidebarThread } from "../sidebar-types";
 import { formatRelative, selectedRowClass } from "../sidebar-utils";
 import HostStatusIndicator from "./HostStatusIndicator.vue";
 import SidebarRowLabel from "../SidebarRowLabel.vue";
@@ -25,6 +25,10 @@ import { requireHostTreeController } from "./controller";
 
 defineProps<{ host: HostRecord }>();
 const controller = requireHostTreeController();
+
+function isWorktree(thread: SidebarThread, projectPath: string) {
+  return typeof thread.cwd === "string" && thread.cwd !== projectPath;
+}
 </script>
 
 <template>
@@ -110,7 +114,10 @@ const controller = requireHostTreeController();
               :completion-attention="
                 controller.threadCompletionAttention(project.hostId, String(thread.id))
               "
+              :active-flags="controller.threadActiveFlags(project.hostId, String(thread.id))"
               :subtitle="formatRelative(thread.updatedAt)"
+              :worktree="isWorktree(thread, project.remotePath)"
+              :branch="thread.gitInfo?.branch"
               :pin-label="thread.pinned ? $t('app.unpinThread') : $t('app.pinThread')"
               :long-press-handlers="controller.longPressHandlers"
               :show-pinned-icon="thread.pinned"

@@ -125,6 +125,7 @@ const threadRuntimeStatusUpdateSchema = z
     threadId: nonEmptyString,
     status: z.enum(["idle", "running", "completed", "failed", "interrupted"]),
     turnId: z.string().nullable().optional(),
+    activeFlags: z.array(z.enum(["waitingOnApproval", "waitingOnUserInput"])).optional(),
   })
   .strict();
 const tokenUsageBreakdownSchema = z

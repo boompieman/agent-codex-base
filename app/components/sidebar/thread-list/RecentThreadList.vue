@@ -2,13 +2,14 @@
 import ThreadRow from "./ThreadRow.vue";
 import { formatRelative, threadKey } from "../sidebar-utils";
 import type { ThreadActivitySummary } from "@/stores/gateway-thread-activity";
-import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
+import type { AppServerThreadActiveFlag, ThreadRuntimeStatus } from "~~/shared/types";
 
 type RecentThread = ThreadActivitySummary & {
   id: string;
   hostName: string | null;
   status: ThreadRuntimeStatus;
   completionAttention: boolean;
+  activeFlags: AppServerThreadActiveFlag[];
 };
 
 defineProps<{
@@ -46,7 +47,10 @@ function subtitle(thread: RecentThread) {
         :selected="thread.hostId === selectedHostId && thread.threadId === selectedThreadId"
         :status="thread.status"
         :completion-attention="thread.completionAttention"
+        :active-flags="thread.activeFlags"
         :subtitle="subtitle(thread)"
+        :worktree="thread.isWorktree"
+        :branch="thread.branch"
         :pin-label="$t('app.pinThread')"
         :long-press-handlers="longPressHandlers"
         @open="emit('open', thread)"

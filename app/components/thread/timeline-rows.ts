@@ -22,6 +22,7 @@ export type ThreadTimelineRow =
       count: number;
       open: boolean;
       loading: boolean;
+      empty: boolean;
     }
   | {
       key: string;
@@ -66,7 +67,7 @@ export function buildThreadTimelineRows(input: {
     const timingTarget = sections.finalItems.findLast((item) => item.type === "agentMessage");
     appendItemRows(rows, input.threadId, turn.id, "user", sections.userItems, sections);
 
-    if (sections.intermediateItems.length || turn.itemsView !== "full") {
+    if (sections.intermediateItems.length || turn.itemsView !== "full" || intermediateOpen) {
       rows.push({
         key: `${input.threadId}:turn-${turn.id}:intermediate-header`,
         type: "intermediateHeader",
@@ -74,6 +75,7 @@ export function buildThreadTimelineRows(input: {
         count: sections.intermediateItems.length,
         open: intermediateOpen,
         loading: intermediateLoading,
+        empty: turn.itemsView === "full" && sections.intermediateItems.length === 0,
       });
       if (intermediateOpen) {
         appendItemRows(
@@ -184,6 +186,7 @@ function sameTimelineRow(left: ThreadTimelineRow, right: ThreadTimelineRow) {
       left.count === right.count &&
       left.open === right.open &&
       left.loading === right.loading &&
+      left.empty === right.empty &&
       left.turnId === right.turnId
     );
   }

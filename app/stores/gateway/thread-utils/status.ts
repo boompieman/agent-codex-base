@@ -1,4 +1,5 @@
 export {
+  activeFlagsFromAppThreadStatus,
   isTerminalOrIdleThreadStatus,
   isThreadActiveStatus,
   runtimeStatusFromCompletedTurn,

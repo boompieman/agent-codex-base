@@ -180,7 +180,7 @@ export class ThreadOpenService {
       ) ?? "completed";
     threadRuntimeEvents.record(host.id, threadId, "thread/status/changed", {
       method: "thread/status/changed",
-      params: { threadId, status },
+      params: { threadId, status: result.thread.status },
     });
     return { thread: result.thread, status };
   }
@@ -199,14 +199,13 @@ export class ThreadOpenService {
       limit,
       activationController,
     );
-    const status = runtimeStatusFromSnapshotState(snapshot.thread, snapshot.history) ?? "completed";
     // The refresh event is the backend's canonical correction after reconnect
     // or stale running scans; clients must converge on this status.
     threadRuntimeEvents.record(host.id, threadId, "thread/status/changed", {
       method: "thread/status/changed",
       params: {
         threadId,
-        status,
+        status: snapshot.thread.status,
       },
     });
     const recentEvents = gatewayEventStore.list(host.id, threadId, 0, 200);

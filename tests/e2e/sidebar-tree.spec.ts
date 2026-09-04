@@ -89,6 +89,56 @@ test("toggles an expanded project closed from the desktop sidebar", async ({ pag
   await expect(page.getByTestId("thread-button-toggle-thread")).toBeHidden();
 });
 
+test("keeps pinned worktree threads in their project and exposes row actions", async ({ page }) => {
+  await openApp(page);
+  const hostId = 105;
+  const projectId = 205;
+  const threadId = "pinned-worktree-thread";
+  await seedGatewayThread(page, {
+    hostId,
+    projectId,
+    threadId: null,
+    host: { ...defaultGatewayHost(hostId), name: "Worktree Host" },
+    project: {
+      ...defaultGatewayProject(hostId, projectId),
+      name: "Worktree Project",
+      remotePath: "/workspace/project",
+    },
+    threads: [
+      {
+        id: threadId,
+        name: "Pinned worktree task",
+        cwd: "/workspace/worktrees/task-org",
+        gitInfo: { sha: "abc123", branch: "feat/task-org", originUrl: null },
+        pinned: true,
+      },
+    ],
+  });
+  await page.evaluate(
+    ({ hostId, projectId, threadId }) => {
+      const driver = window.__codexGatewayE2e;
+      if (!driver) throw new Error("Gateway E2E driver is unavailable");
+      driver.config.gatewayConfig.pinnedThreads = [
+        { hostId, projectId, threadId, title: "Pinned worktree task" },
+      ];
+      driver.activity.ingestGatewayThreads(driver.navigation.threads, driver.catalog.projects);
+    },
+    { hostId, projectId, threadId },
+  );
+
+  const projectThread = page.getByTestId(`thread-button-${threadId}`);
+  const pinnedThread = page.getByTestId(`pinned-thread-button-${threadId}`);
+  await expect(projectThread).toBeVisible();
+  await expect(pinnedThread).toBeVisible();
+  await expect(projectThread).toContainText("feat/task-org");
+  await expect(pinnedThread).toContainText("feat/task-org");
+  await expect(projectThread.getByLabel("工作树")).toBeVisible();
+
+  await page.getByTestId(`thread-actions-thread-button-${threadId}`).click();
+  await expect(page.getByRole("menuitem", { name: "取消置顶" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "重命名会话" })).toBeVisible();
+});
+
 test("marks completed threads as needing review until they are opened", async ({ page }) => {
   await openApp(page);
   await seedGatewayThread(page, {
@@ -148,6 +198,44 @@ test("marks completed threads as needing review until they are opened", async ({
   await expect(
     page.getByTestId("thread-button-review-thread").getByLabel("已完成，待查看", { exact: true }),
   ).toBeHidden();
+});
+
+test("shows native running, approval, input, and completed thread states", async ({ page }) => {
+  await openApp(page);
+  await seedGatewayThread(page, {
+    hostId: 103,
+    projectId: 203,
+    threadId: null,
+    host: { ...defaultGatewayHost(103), name: "State Host" },
+    project: {
+      ...defaultGatewayProject(103, 203),
+      name: "State Project",
+      remotePath: "/workspace/states",
+    },
+    threads: [
+      { id: "running-thread", name: "Running Thread", pinned: false, updatedAt: 4 },
+      { id: "approval-thread", name: "Approval Thread", pinned: false, updatedAt: 3 },
+      { id: "input-thread", name: "Input Thread", pinned: false, updatedAt: 2 },
+      { id: "completed-thread", name: "Completed Thread", pinned: false, updatedAt: 1 },
+    ],
+  });
+  await page.evaluate(() => {
+    const runtime = window.__codexGatewayE2e?.runtime;
+    if (!runtime) throw new Error("Gateway E2E driver is unavailable");
+    runtime.setThreadStatus(103, "running-thread", "running");
+    runtime.setThreadStatus(103, "approval-thread", "running", {
+      activeFlags: ["waitingOnApproval"],
+    });
+    runtime.setThreadStatus(103, "input-thread", "running", {
+      activeFlags: ["waitingOnUserInput"],
+    });
+    runtime.setThreadStatus(103, "completed-thread", "completed");
+  });
+
+  await expect(page.getByTestId("thread-button-running-thread")).toContainText("运行中");
+  await expect(page.getByTestId("thread-button-approval-thread")).toContainText("等待审批");
+  await expect(page.getByTestId("thread-button-input-thread")).toContainText("需要输入");
+  await expect(page.getByTestId("thread-button-completed-thread")).toContainText("已完成");
 });
 
 test("keeps non-pinned main threads in recent activity for the page session", async ({ page }) => {

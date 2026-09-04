@@ -21,7 +21,8 @@ export function useRecentThreadActivity() {
   const { summariesByKey, observedRunningThreadKeys } = storeToRefs(activity);
   const { hosts } = storeToRefs(catalog);
   const pinnedThreads = useGatewayPinnedThreads();
-  const { threadStatuses, unviewedCompletedThreadKeys } = storeToRefs(runtime);
+  const { activeFlagsByThreadKey, threadStatuses, unviewedCompletedThreadKeys } =
+    storeToRefs(runtime);
 
   const recentThreads = computed(() => {
     const pinnedKeys = new Set(
@@ -42,6 +43,7 @@ export function useRecentThreadActivity() {
         hostName: hosts.value.find((host) => host.id === thread.hostId)?.name ?? null,
         status: threadStatuses.value[keyFor(thread)] ?? "idle",
         completionAttention: unviewedKeys.has(keyFor(thread)),
+        activeFlags: activeFlagsByThreadKey.value[keyFor(thread)] ?? [],
       }))
       .sort((left, right) => {
         const runningOrder = Number(right.status === "running") - Number(left.status === "running");

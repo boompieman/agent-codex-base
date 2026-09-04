@@ -26,6 +26,8 @@ export function useComposerTurnSubmit(input: {
   collaborationModel: Ref<string>;
   selectedEffort: Ref<string>;
   fileReferencesLabel: Ref<string>;
+  selectedHostId: Ref<number | null>;
+  selectedThreadId: Ref<string | null>;
 }) {
   const gateway = useGatewayBootstrapStore();
   const composer = useGatewayComposerStore();
@@ -51,22 +53,26 @@ export function useComposerTurnSubmit(input: {
   }
 
   async function submitTurn() {
-    const text = input.turnText.value.trim();
+    const draftText = input.turnText.value;
+    const text = draftText.trim();
     if (!text && !input.attachedFiles.value.length) return;
     if (planModeActive.value) {
       composer.dismissLatestSelectedPlanPrompt();
     }
     const files = [...input.attachedFiles.value];
+    const draftReferences = [...input.fileReferences.value];
     const remoteFiles = files.filter((file) => !file.isImage);
     const attachedImages = files.filter((file) => file.isImage);
-    const references = input.fileReferences.value.map(({ type, path, name }) => ({
+    const references = draftReferences.map(({ type, path, name }) => ({
       type,
       path,
       name,
     }));
     const collaborationMode = composer.selectedThreadSettings.collaborationMode ?? undefined;
+    const hostId = input.selectedHostId.value;
+    const threadId = input.selectedThreadId.value;
     input.clearDraft();
-    await threadTurns.sendTurn(
+    const sent = await threadTurns.sendTurn(
       messageWithFileReferences(text, remoteFiles, input.fileReferencesLabel.value),
       {
         ...input.selectedTurnOptions(),
@@ -78,6 +84,18 @@ export function useComposerTurnSubmit(input: {
         references,
       },
     );
+    if (
+      !sent &&
+      input.selectedHostId.value === hostId &&
+      input.selectedThreadId.value === threadId &&
+      input.turnText.value === "" &&
+      input.attachedFiles.value.length === 0 &&
+      input.fileReferences.value.length === 0
+    ) {
+      input.turnText.value = draftText;
+      input.attachedFiles.value = files;
+      input.fileReferences.value = draftReferences;
+    }
   }
 
   async function interruptTurn() {

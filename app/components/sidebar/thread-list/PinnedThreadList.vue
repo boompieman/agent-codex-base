@@ -2,7 +2,7 @@
 import ThreadRow from "./ThreadRow.vue";
 import { formatRelative, pinnedThreadId, pinnedThreadKey } from "../sidebar-utils";
 import type { HostRecord, PinnedThreadRecord } from "../sidebar-types";
-import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
+import type { AppServerThreadActiveFlag, ThreadRuntimeStatus } from "~~/shared/types";
 
 const props = defineProps<{
   threads: PinnedThreadRecord[];
@@ -12,6 +12,9 @@ const props = defineProps<{
   longPressHandlers?: Record<string, unknown>;
   runtimeStatus: (thread: PinnedThreadRecord) => ThreadRuntimeStatus;
   completionAttention: (thread: PinnedThreadRecord) => boolean;
+  activeFlags: (thread: PinnedThreadRecord) => AppServerThreadActiveFlag[];
+  worktree: (thread: PinnedThreadRecord) => boolean;
+  branch: (thread: PinnedThreadRecord) => string | null;
 }>();
 
 const emit = defineEmits<{
@@ -48,7 +51,10 @@ function isSelectedPinnedThread(thread: PinnedThreadRecord) {
         :selected="isSelectedPinnedThread(thread)"
         :status="runtimeStatus(thread)"
         :completion-attention="completionAttention(thread)"
+        :active-flags="activeFlags(thread)"
         :subtitle="subtitleForPinnedThread(thread) || formatRelative(thread.updatedAt)"
+        :worktree="worktree(thread)"
+        :branch="branch(thread)"
         :pin-label="$t('app.unpinThread')"
         :long-press-handlers="longPressHandlers"
         show-pinned-icon

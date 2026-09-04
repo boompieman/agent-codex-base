@@ -4,6 +4,7 @@ import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayPinnedThreads } from "@/stores/gateway-config";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
+import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import {
   pinnedThreadId,
@@ -18,13 +19,16 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
   const store = useGatewayCatalogStore();
   const navigation = useGatewayNavigationStore();
   const runtime = useGatewayThreadRuntimeStore();
+  const activity = useGatewayThreadActivityStore();
   const threadView = useGatewayThreadViewStore();
   const { hosts, projects, projectDirectoryAvailability, hostConnectionStatuses } =
     storeToRefs(store);
   const storedPinnedThreads = useGatewayPinnedThreads();
   const { threads, openingPinnedThreadKey, selectedHostId, selectedProjectId, selectedThreadId } =
     storeToRefs(navigation);
-  const { unviewedCompletedThreadKeys, threadStatuses } = storeToRefs(runtime);
+  const { activeFlagsByThreadKey, unviewedCompletedThreadKeys, threadStatuses } =
+    storeToRefs(runtime);
+  const { summariesByKey } = storeToRefs(activity);
   const expandedHostIds = ref<Set<number>>(new Set());
   const expandedProjectIds = ref<Set<number>>(new Set());
   const expandedMissingProjectHostIds = ref<Set<number>>(new Set());
@@ -33,9 +37,7 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     sortPinnedThreadsForDisplay(storedPinnedThreads.value, hosts.value),
   );
 
-  const projectThreads = computed(() =>
-    threads.value.filter((thread) => thread.pinned !== true).slice(0, 20),
-  );
+  const projectThreads = computed(() => threads.value.slice(0, 20));
   const selectedThreadIsPinned = computed(() => {
     if (
       selectedHostId.value === null ||
@@ -153,6 +155,10 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     return unviewedCompletedThreadKeys.value.includes(threadKey(hostId, threadId));
   }
 
+  function threadActiveFlags(hostId: number, threadId: string) {
+    return activeFlagsByThreadKey.value[threadKey(hostId, threadId)] ?? [];
+  }
+
   function pinnedRuntimeStatus(thread: PinnedThreadRecord) {
     const key = pinnedThreadKey(thread);
     if (openingPinnedThreadKey.value === key) {
@@ -163,6 +169,18 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
 
   function pinnedCompletionAttention(thread: PinnedThreadRecord) {
     return threadCompletionAttention(thread.hostId, pinnedThreadId(thread));
+  }
+
+  function pinnedActiveFlags(thread: PinnedThreadRecord) {
+    return threadActiveFlags(thread.hostId, pinnedThreadId(thread));
+  }
+
+  function pinnedWorktree(thread: PinnedThreadRecord) {
+    return summariesByKey.value[pinnedThreadKey(thread)]?.isWorktree === true;
+  }
+
+  function pinnedBranch(thread: PinnedThreadRecord) {
+    return summariesByKey.value[pinnedThreadKey(thread)]?.branch ?? null;
   }
 
   watch(
@@ -229,7 +247,11 @@ export function useSidebarTree(longPressTriggered: Ref<boolean>) {
     startThreadInProject,
     threadRuntimeStatus,
     threadCompletionAttention,
+    threadActiveFlags,
     pinnedRuntimeStatus,
     pinnedCompletionAttention,
+    pinnedActiveFlags,
+    pinnedWorktree,
+    pinnedBranch,
   };
 }
