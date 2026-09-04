@@ -4,8 +4,6 @@ import { useClipboard } from "@vueuse/core";
 import { toRef } from "vue";
 import { MessageAction, MessageActions } from "@codex-gateway/ai-elements/message";
 import { toast } from "@codex-gateway/ui/sonner";
-import TurnDurationLabel from "@/components/thread/TurnDurationLabel.vue";
-import TurnUsageAmountLabel from "@/components/thread/TurnUsageAmountLabel.vue";
 import type { ThreadResponseUsage } from "~~/shared/thread-history/types";
 import type { DisplayedTurnTiming } from "@/utils/turn-timing";
 
@@ -41,8 +39,6 @@ async function copyText() {
     data-testid="agent-message-actions"
     class="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
   >
-    <TurnDurationLabel v-if="turnTiming" :timing="turnTiming" />
-    <TurnUsageAmountLabel :usage="responseUsage" />
     <MessageAction
       :tooltip="t('app.copyAgentOutput')"
       size="sm"

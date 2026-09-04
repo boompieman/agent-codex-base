@@ -11,7 +11,7 @@ import { Textarea } from "@codex-gateway/ui/textarea";
 import type { HostConnectionFormValue } from "./form";
 
 const model = defineModel<HostConnectionFormValue>({ required: true });
-defineProps<{ create?: boolean }>();
+defineProps<{ create?: boolean; privateKeyStored?: boolean; passwordStored?: boolean }>();
 const { t } = useI18n();
 </script>
 
@@ -71,13 +71,13 @@ const { t } = useI18n();
     v-model="model.privateKey"
     class="min-h-32 bg-surface font-mono text-sm"
     :aria-label="t('app.privateKey')"
-    :placeholder="t('app.privateKey')"
+    :placeholder="privateKeyStored ? t('app.storedPrivateKeyPlaceholder') : t('app.privateKey')"
   />
   <Input
     v-if="model.authMode === 'password'"
     v-model="model.password"
     :aria-label="t('app.password')"
     type="password"
-    :placeholder="t('app.sshPassword')"
+    :placeholder="passwordStored ? t('app.storedPasswordPlaceholder') : t('app.sshPassword')"
   />
 </template>

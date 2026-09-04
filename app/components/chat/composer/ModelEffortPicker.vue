@@ -57,7 +57,7 @@ function preventInitialFocus(event: Event) {
         type="button"
         variant="ghost"
         size="lg"
-        class="min-w-0 max-w-full gap-1.5 px-1.5 text-sm font-normal text-ink-secondary hover:bg-canvas-soft sm:gap-2 sm:px-2 md:text-base"
+        class="h-11 min-w-0 max-w-full gap-1.5 px-1.5 text-sm font-normal text-ink-secondary hover:bg-canvas-soft sm:gap-2 sm:px-2 md:text-base"
         data-testid="model-select"
         :disabled="loadingModels || !models.length"
       >

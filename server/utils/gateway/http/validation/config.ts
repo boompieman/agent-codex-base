@@ -44,6 +44,7 @@ export const gatewayConfigSchema = z
         hostBaseSchema
           .extend({
             id: z.coerce.number().int().positive(),
+            hasPrivateKey: z.boolean().optional(),
             hasPassword: z.boolean().optional(),
             createdAt: z.string().optional(),
             updatedAt: z.string().optional(),
@@ -93,6 +94,10 @@ export function parseGatewayConfig(body: unknown): GatewayConfig {
       privateKey: host.privateKey ?? null,
       password: host.password ?? null,
       proxyUrl: trimmedOrNull(host.proxyUrl),
+      hasPrivateKey:
+        typeof host.privateKey === "string"
+          ? host.privateKey.length > 0
+          : (host.hasPrivateKey ?? false),
       hasPassword:
         typeof host.password === "string" ? host.password.length > 0 : (host.hasPassword ?? false),
       createdAt: host.createdAt ?? timestamp,

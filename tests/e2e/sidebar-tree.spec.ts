@@ -81,6 +81,7 @@ test("toggles an expanded project closed from the desktop sidebar", async ({ pag
   });
 
   await expect(page.getByTestId("desktop-layout")).toBeVisible();
+  await page.getByTestId("connections-toggle").click();
   await expect(page.getByTestId("project-button-201")).toBeVisible();
   await page.getByTestId("project-button-201").click();
   await expect(page.getByTestId("thread-button-toggle-thread")).toBeVisible();
@@ -128,10 +129,11 @@ test("keeps pinned worktree threads in their project and exposes row actions", a
 
   const projectThread = page.getByTestId(`thread-button-${threadId}`);
   const pinnedThread = page.getByTestId(`pinned-thread-button-${threadId}`);
+  await page.getByTestId("connections-toggle").click();
   await expect(projectThread).toBeVisible();
   await expect(pinnedThread).toBeVisible();
   await expect(projectThread).toContainText("feat/task-org");
-  await expect(pinnedThread).toContainText("feat/task-org");
+  await expect(pinnedThread).not.toContainText("feat/task-org");
   await expect(projectThread.getByLabel("工作树")).toBeVisible();
 
   await page.getByTestId(`thread-actions-thread-button-${threadId}`).click();
@@ -186,6 +188,7 @@ test("marks completed threads as needing review until they are opened", async ({
     runtime.setThreadStatus(102, "review-thread", "completed");
   });
 
+  await page.getByTestId("connections-toggle").click();
   await expect(page.getByTestId("thread-button-review-thread")).toBeVisible();
   await expect(
     page.getByTestId("thread-button-review-thread").getByLabel("已完成，待查看", { exact: true }),
@@ -232,6 +235,7 @@ test("shows native running, approval, input, and completed thread states", async
     runtime.setThreadStatus(103, "completed-thread", "completed");
   });
 
+  await page.getByTestId("connections-toggle").click();
   await expect(page.getByTestId("thread-button-running-thread")).toContainText("运行中");
   await expect(page.getByTestId("thread-button-approval-thread")).toContainText("等待审批");
   await expect(page.getByTestId("thread-button-input-thread")).toContainText("需要输入");
@@ -332,7 +336,7 @@ test("keeps non-pinned main threads in recent activity for the page session", as
     { host, project },
   );
 
-  await expect(page.getByText("最近运行", { exact: true })).toBeVisible();
+  await expect(page.getByText("最近任務", { exact: true })).toBeVisible();
   await expect(page.getByTestId("recent-thread-button-recent-main")).toBeVisible();
   await expect(page.getByTestId("recent-thread-button-already-pinned")).toBeHidden();
   await expect(page.getByTestId("recent-thread-button-spawned-child")).toBeHidden();
@@ -342,7 +346,7 @@ test("keeps non-pinned main threads in recent activity for the page session", as
 
   const sectionOrder = await page.getByTestId("sidebar-scroll-area").evaluate((root) => {
     const text = root.textContent ?? "";
-    return [text.indexOf("已固定"), text.indexOf("最近运行"), text.indexOf("主机")];
+    return [text.indexOf("已固定"), text.indexOf("最近任務"), text.indexOf("連線設定")];
   });
   expect(sectionOrder[0]).toBeLessThan(sectionOrder[1]!);
   expect(sectionOrder[1]).toBeLessThan(sectionOrder[2]!);
@@ -431,6 +435,7 @@ test("long expanded tree labels truncate without displacing trailing statuses", 
     { hostId, threadId },
   );
 
+  await page.getByTestId("connections-toggle").click();
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible();
   await page.getByTestId(`thread-button-${threadId}`).click();
   await expect(page.getByTestId(`thread-button-${threadId}`)).toHaveAttribute(

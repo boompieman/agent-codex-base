@@ -15,6 +15,7 @@ test("opens a real remote HTTP and WebSocket service through the SSH preview pro
   await selectSidebarThread(page, previewThreadId);
   await startRemotePreviewServer(remote);
 
+  await page.getByTestId("workspace-tools-toggle").click();
   await page.getByTestId("open-browser-button").click();
   await page.getByPlaceholder("http://localhost:3000").fill("http://localhost:4173");
   await page.getByTestId("browser-open-submit").click();

@@ -48,7 +48,7 @@ function selectProject(event: MouseEvent) {
         :data-testid="`project-button-${project.id}`"
         v-bind="longPressHandlers"
         variant="ghost"
-        class="h-10 w-full min-w-0 justify-start gap-2 overflow-hidden rounded-lg px-3 text-[0.9375rem] font-normal hover:bg-surface"
+        class="h-11 w-full min-w-0 justify-start gap-2 overflow-hidden rounded-lg px-3 text-[0.9375rem] font-normal hover:bg-surface"
         :class="[selectedRowClass(selected), missing ? 'text-ink-faint' : '']"
         :data-project-missing="missing ? 'true' : 'false'"
         @click="selectProject"

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { SettingsIcon } from "@lucide/vue";
+import { ChevronDownIcon, PlusIcon, ServerCogIcon, SettingsIcon } from "@lucide/vue";
 import { computed, nextTick, ref } from "vue";
 import { Button } from "@codex-gateway/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@codex-gateway/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ const catalog = useGatewayCatalogStore();
 const navigation = useGatewayNavigationStore();
 const { t } = useI18n();
 const showSettings = ref(false);
+const connectionsOpen = ref(false);
 const projectEditor = ref<{ host: HostRecord; project: ProjectRecord | null } | null>(null);
 const { longPressTriggered, longPressContextMenuHandlers } = useLongPressContextMenu();
 const sidebarTree = useSidebarTree(longPressTriggered);
@@ -39,8 +41,10 @@ const recentActivity = useRecentThreadActivity();
 const workspaceActions = useWorkspaceLaunchActions();
 const {
   hosts,
+  projects,
   pinnedThreads,
   selectedHostId,
+  selectedProjectId,
   selectedThreadId,
   openPinnedThread,
   pinnedRuntimeStatus,
@@ -50,6 +54,9 @@ const {
   pinnedBranch,
 } = sidebarTree;
 const { recentThreads } = recentActivity;
+const selectedProject = computed(() =>
+  projects.value.find((project) => project.id === selectedProjectId.value),
+);
 const hostTreeController = computed<HostTreeController>(() => ({
   hosts: sidebarTree.hosts.value,
   availableProjectsByHost: sidebarTree.availableProjectsByHost.value,
@@ -101,6 +108,14 @@ async function openHostMonitor(hostId: number) {
   await nextTick();
   workspaceActions.openHostMonitor();
 }
+
+function startTask() {
+  if (selectedProject.value) {
+    sidebarTree.startThreadInProject(selectedProject.value);
+    return;
+  }
+  connectionsOpen.value = true;
+}
 </script>
 
 <template>
@@ -108,10 +123,24 @@ async function openHostMonitor(hostId: number) {
     v-bind="$attrs"
     class="relative flex h-full min-h-0 flex-col border-r border-hairline bg-canvas-soft"
   >
+    <div class="shrink-0 border-b border-hairline px-3 py-3">
+      <div class="mb-3 flex min-h-11 items-center px-2 text-[0.9375rem] font-semibold">
+        Agent Codex
+      </div>
+      <Button
+        data-testid="new-task-button"
+        class="h-11 w-full justify-start gap-2 rounded-xl px-3"
+        @click="startTask"
+      >
+        <PlusIcon class="size-5" />
+        {{ t("app.newTask") }}
+      </Button>
+    </div>
     <div class="flex min-h-0 flex-1 overflow-hidden px-3 py-3">
       <SidebarScrollArea>
         <div class="min-w-0 max-w-full space-y-4 overflow-hidden pr-1">
           <PinnedThreadList
+            v-if="pinnedThreads.length"
             :threads="pinnedThreads"
             :hosts="hosts"
             :selected-host-id="selectedHostId"
@@ -137,7 +166,25 @@ async function openHostMonitor(hostId: number) {
             @rename="threadRename.startRename"
           />
 
-          <HostTree :controller="hostTreeController" />
+          <Collapsible v-model:open="connectionsOpen" class="pt-2">
+            <CollapsibleTrigger as-child>
+              <Button
+                data-testid="connections-toggle"
+                variant="ghost"
+                class="h-11 w-full justify-start gap-3 rounded-lg px-3 text-[0.9375rem] font-normal text-ink-muted hover:bg-surface hover:text-ink"
+              >
+                <ServerCogIcon class="size-4" />
+                <span class="min-w-0 flex-1 text-left">{{ t("app.connections") }}</span>
+                <ChevronDownIcon
+                  class="size-4 transition-transform"
+                  :class="connectionsOpen ? 'rotate-180' : ''"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="pt-2">
+              <HostTree :controller="hostTreeController" />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </SidebarScrollArea>
     </div>
@@ -146,7 +193,7 @@ async function openHostMonitor(hostId: number) {
       <Button
         data-testid="settings-toggle"
         variant="ghost"
-        class="h-10 w-full justify-start gap-3 rounded-lg px-3 text-[0.9375rem] font-normal hover:bg-surface"
+        class="h-11 w-full justify-start gap-3 rounded-lg px-3 text-[0.9375rem] font-normal hover:bg-surface"
         @click="showSettings = !showSettings"
       >
         <SettingsIcon class="size-4" />

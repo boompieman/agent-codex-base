@@ -17,7 +17,6 @@ import {
 } from "@/stores/gateway-workspace-layout";
 import { useFileGitReviewPanelStore } from "@/stores/file-workspace/git/review-panel";
 import {
-  AGENT_WORKSPACE_PANEL_ID,
   FILES_WORKSPACE_PANEL_ID,
   GIT_REVIEW_WORKSPACE_PANEL_ID,
 } from "@/stores/gateway/workspace-panels";
@@ -36,12 +35,13 @@ const refs = toRefs(props);
 const workspace = useChatWorkspaceState();
 const { t } = useI18n();
 const { isDark } = useTerminalTheme();
-const scopeKey = computed(() =>
-  workspaceLayoutScopeKey(
-    workspace.selectedHostId.value,
-    workspace.selectedProjectId.value,
-    workspace.selectedThreadId.value,
-  ),
+const scopeKey = computed(
+  () =>
+    `${workspaceLayoutScopeKey(
+      workspace.selectedHostId.value,
+      workspace.selectedProjectId.value,
+      workspace.selectedThreadId.value,
+    )}:${props.layout}`,
 );
 const {
   terminalPanels,
@@ -65,6 +65,7 @@ const panels = useWorkspaceDockPanels({
   hostMetricsPanel,
   gitReviewPanel,
   scopeKey,
+  layout: refs.layout,
 });
 const fileRequestScopeKey = computed(() =>
   workspace.selectedHostId.value && workspace.selectedThreadId.value
@@ -95,9 +96,6 @@ const workspaceTitle = computed(() => {
   }
   return selectedProject.value?.name ?? workspaceActions.selectedHostTitle.value;
 });
-const workspaceSubtitle = computed(
-  () => workspace.currentThread.value?.cwd ?? selectedProject.value?.remotePath ?? null,
-);
 const lifecycle = useWorkspaceDockLifecycle({
   scopeKey,
   host: dockviewHost,
@@ -105,14 +103,13 @@ const lifecycle = useWorkspaceDockLifecycle({
   reconcile: panels.reconcile,
   defaultLayout: panels.defaultLayout,
   panelIds,
+  openFilesPanel: panels.openFilesPanel,
+  layout: refs.layout,
 });
 const dockTheme = computed(() => (isDark.value ? themeDark : themeLight));
 
-function openAgent() {
-  workspaceLayout.requestPanelActivation(AGENT_WORKSPACE_PANEL_ID);
-}
-
 function openSummary() {
+  panels.openFilesPanel();
   lifecycle.activateRight(FILES_WORKSPACE_PANEL_ID);
 }
 
@@ -164,14 +161,12 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
     <DesktopWorkspaceHeader
       v-if="layout === 'desktop'"
       :title="workspaceTitle"
-      :subtitle="workspaceSubtitle"
       :can-launch="workspaceActions.canLaunch.value"
       :can-open-summary="workspace.selectedThreadId.value !== null"
       :can-open-review="
         workspace.selectedThreadId.value !== null && workspace.selectedProjectId.value !== null
       "
       :tmux-active-count="tmuxLauncher.activeCount.value"
-      @open-agent="openAgent"
       @open-summary="openSummary"
       @open-review="openReview"
       @open-tmux="tmuxLauncher.open"
@@ -181,8 +176,14 @@ function tabContextMenu({ panel, api }: GetTabContextMenuItemsParams) {
     />
     <MobileWorkspaceHeader
       v-if="layout === 'mobile'"
-      :can-open-terminal="workspace.canOpenTerminal.value"
+      :can-launch="workspaceActions.canLaunch.value"
+      :can-open-summary="workspace.selectedThreadId.value !== null"
+      :can-open-review="
+        workspace.selectedThreadId.value !== null && workspace.selectedProjectId.value !== null
+      "
       :tmux-active-count="tmuxLauncher.activeCount.value"
+      @open-summary="openSummary"
+      @open-review="openReview"
       @open-tmux="tmuxLauncher.open"
       @open-terminal="workspaceActions.openTerminal"
       @open-browser="browserDialogOpen = true"

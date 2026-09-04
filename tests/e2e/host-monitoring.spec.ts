@@ -18,6 +18,7 @@ test("streams real Linux Host metrics through the shared realtime connection", a
   });
 
   await expect(page.getByTestId(`project-button-${project.id}`)).toBeVisible();
+  await page.getByTestId("workspace-tools-toggle").click();
   await page.getByTestId("open-host-monitor-button").click();
   const panel = page.getByTestId("host-metrics-panel");
   await expect(panel).toBeVisible();
@@ -38,6 +39,7 @@ test("streams real Linux Host metrics through the shared realtime connection", a
   const monitorTab = page.getByRole("tab", { name: "主机监控" });
   await monitorTab.getByLabel(/关闭标签页|Close tab/).click();
   await expect(panel).toBeHidden();
+  await page.getByTestId("workspace-tools-toggle").click();
   await page.getByTestId("open-host-monitor-button").click();
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading", { name: hostName })).toBeVisible();

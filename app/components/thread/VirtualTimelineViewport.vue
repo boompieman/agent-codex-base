@@ -2,12 +2,13 @@
 import type { VirtualItem } from "@tanstack/virtual-core";
 import { useDocumentVisibility, useElementVisibility, useEventListener } from "@vueuse/core";
 import type { ComponentPublicInstance } from "vue";
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, nextTick, ref, watch } from "vue";
 import {
   CHAT_VIEWPORT_LAYOUT_REVISION,
   ChatVirtualScrollFrame,
   useChatVirtualizer,
 } from "@/components/common/chat-virtualizer";
+import { nextAnimationFrame } from "@/utils/browser-scheduling";
 
 interface TimelineViewportRow {
   key: string;
@@ -18,6 +19,7 @@ interface TimelineViewportRow {
 const props = defineProps<{
   rows: TimelineViewportRow[];
   estimateSize: (row: unknown, index: number) => number;
+  loadingOlder: boolean;
   scrollToLatestToken?: number;
 }>();
 
@@ -35,6 +37,9 @@ const historyStartThreshold = 80;
 const startControlsVisible = ref(false);
 const viewportReady = ref(false);
 const didInitialScroll = ref(false);
+let prependAnchor: { key: string; elementIndex: number; top: number; rowCount: number } | null =
+  null;
+let prependAnchorCaptureScheduled = false;
 
 const chatVirtualizer = useChatVirtualizer({
   count: () => props.rows.length,
@@ -58,6 +63,7 @@ const chatVirtualizer = useChatVirtualizer({
       chatVirtualizer.userDetached.value && viewport.scrollTop <= historyStartThreshold;
     startControlsVisible.value = reachedStart;
     if (reachedStart) {
+      schedulePrependAnchorCapture(viewport);
       emit("reachStart");
     }
   },
@@ -81,6 +87,7 @@ useEventListener(
     if (event.deltaY >= 0 || viewport === null || viewport.scrollTop > historyStartThreshold)
       return;
     startControlsVisible.value = true;
+    schedulePrependAnchorCapture(viewport);
     emit("reachStart");
   },
   { passive: true },
@@ -111,6 +118,52 @@ function rowStyle(_virtualRow: VirtualItem) {
 function resetFollowLatest() {
   void chatVirtualizer.scrollToLatest();
 }
+
+function schedulePrependAnchorCapture(viewport: HTMLElement) {
+  if (prependAnchor !== null || prependAnchorCaptureScheduled) return;
+  prependAnchorCaptureScheduled = true;
+  void nextTick(() => {
+    prependAnchorCaptureScheduled = false;
+    const viewportTop = viewport.getBoundingClientRect().top;
+    const row = Array.from(viewport.querySelectorAll<HTMLElement>("[data-row-key]")).find(
+      (candidate) => candidate.getBoundingClientRect().bottom > viewportTop,
+    );
+    if (!row?.dataset.rowKey) return;
+    const descendants = Array.from(row.querySelectorAll<HTMLElement>("*"));
+    const visibleElement = descendants.find(
+      (candidate) => candidate.getBoundingClientRect().top >= viewportTop,
+    );
+    prependAnchor = {
+      key: row.dataset.rowKey,
+      elementIndex: visibleElement ? descendants.indexOf(visibleElement) : -1,
+      top: (visibleElement ?? row).getBoundingClientRect().top,
+      rowCount: props.rows.length,
+    };
+  });
+}
+
+watch(
+  [() => props.loadingOlder, () => props.rows.length],
+  async ([loading, rowCount]) => {
+    if (loading || prependAnchor === null || rowCount <= prependAnchor.rowCount) return;
+    const anchor = prependAnchor;
+    prependAnchor = null;
+    await nextTick();
+    await nextAnimationFrame();
+    await nextAnimationFrame();
+    const viewport = scrollViewport();
+    const row = viewport?.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(anchor.key)}"]`);
+    if (viewport && row) {
+      const element =
+        anchor.elementIndex >= 0
+          ? row.querySelectorAll<HTMLElement>("*").item(anchor.elementIndex)
+          : row;
+      viewport.scrollTop += element.getBoundingClientRect().top - anchor.top;
+    }
+    prependAnchor = null;
+  },
+  { flush: "post" },
+);
 
 // TanStack's ResizeObserver owns actual viewport changes and dynamic row measurements. These
 // watchers only reconnect the direct Vue adapter after Dockview or the browser hid a still-mounted

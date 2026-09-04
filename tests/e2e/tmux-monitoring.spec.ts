@@ -53,6 +53,7 @@ done
   const { host, project } = await remoteWorkspace.provision({ hostName });
   await remoteWorkspace.startThread(project.id);
 
+  await page.getByTestId("workspace-tools-toggle").click();
   await page.getByTestId("open-tmux-button").click();
   const panel = page.getByTestId("tmux-monitor-panel");
   await expect(panel).toBeVisible();
@@ -101,7 +102,7 @@ done
   await expect(runningPane.getByTestId("tmux-monitor-adding-spinner")).toBeVisible();
   await monitorCreated;
   await expect(panel.getByText("监控中 · 1")).toBeVisible();
-  await expect(page.getByTestId("open-tmux-button")).toContainText("1");
+  await expect(page.getByTestId("workspace-tools-toggle")).toContainText("1");
   const addedToast = page.locator("[data-sonner-toast]").filter({ hasText: "已开始监控" });
   await expect(addedToast).toContainText(sessionName);
   await expect(addedToast).toContainText(hostName);
@@ -217,6 +218,7 @@ tmux new-session -d -s ${shellQuote(sessionName)} -n train`,
   await configureBarkNotifications(page, bark.url);
   const { host, project } = await remoteWorkspace.provision({ hostName });
   await remoteWorkspace.startThread(project.id);
+  await page.getByTestId("workspace-tools-toggle").click();
   await page.getByTestId("open-tmux-button").click();
 
   const panel = page.getByTestId("tmux-monitor-panel");

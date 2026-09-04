@@ -3,8 +3,10 @@ import { trimmedOrNull } from "~~/shared/utils/strings";
 import { gatewayMemoryState, nextId, nowIso, type StoredHostRecord } from "./memory";
 
 function sanitizeHost(host: StoredHostRecord): HostRecord {
+  const { privateKey: _privateKey, password: _password, ...publicHost } = host;
   return {
-    ...host,
+    ...publicHost,
+    hasPrivateKey: Boolean(host.privateKey),
     hasPassword: Boolean(host.password),
   };
 }
@@ -12,6 +14,14 @@ function sanitizeHost(host: StoredHostRecord): HostRecord {
 function normalizeHost(input: HostCreateInput, id = nextId(gatewayMemoryState.hosts)) {
   const timestamp = nowIso();
   const existing = gatewayMemoryState.hosts.find((host) => host.id === id);
+  const privateKey =
+    input.authMode === "privateKey"
+      ? (input.privateKey ?? (existing?.authMode === "privateKey" ? existing.privateKey : null))
+      : null;
+  const password =
+    input.authMode === "password"
+      ? (input.password ?? (existing?.authMode === "password" ? existing.password : null))
+      : null;
   return {
     id,
     name: input.name.trim(),
@@ -20,10 +30,11 @@ function normalizeHost(input: HostCreateInput, id = nextId(gatewayMemoryState.ho
     port: input.port ?? null,
     authMode: input.authMode,
     privateKeyPath: trimmedOrNull(input.privateKeyPath),
-    privateKey: input.privateKey ?? null,
-    password: input.password ?? null,
+    privateKey,
+    password,
     proxyUrl: trimmedOrNull(input.proxyUrl),
-    hasPassword: Boolean(input.password),
+    hasPrivateKey: Boolean(privateKey),
+    hasPassword: Boolean(password),
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
@@ -34,6 +45,7 @@ export const hostStore = {
     gatewayMemoryState.hosts = hosts.map((host) => ({
       ...host,
       proxyUrl: trimmedOrNull(host.proxyUrl),
+      hasPrivateKey: Boolean(host.privateKey),
       hasPassword: Boolean(host.password),
     }));
   },

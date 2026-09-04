@@ -191,6 +191,7 @@ done
     },
   });
 
+  await page.getByTestId("open-summary-button").click();
   await expect(filesWorkspaceTab(page)).toBeVisible();
   await page.getByRole("link", { name: "preview target" }).click();
   const panel = page.getByTestId("workspace-file-panel");
@@ -259,10 +260,7 @@ done
   await panel.getByRole("button", { name: "打开完整变更审查" }).click();
   const reviewPanel = page.getByTestId("git-review-panel");
   await expect(reviewPanel).toBeVisible();
-  await page
-    .getByRole("region", { name: "审查变更" })
-    .getByRole("button", { name: "关闭标签页" })
-    .click();
+  await gitReviewWorkspaceTab(page).getByLabel("关闭标签页").click();
   await expect(reviewPanel).toBeHidden();
   await changesTree.locator(`[data-git-change-path=${JSON.stringify(reviewDeletedPath)}]`).click();
   await expect(reviewPanel).toBeVisible();
@@ -273,13 +271,10 @@ done
   await expect(reviewPanel.getByTestId("git-review-diff-editor")).toContainText(
     "deleted file baseline",
   );
-  await page
-    .getByRole("region", { name: "审查变更" })
-    .getByRole("button", { name: "关闭标签页" })
-    .click();
+  await gitReviewWorkspaceTab(page).getByLabel("关闭标签页").click();
   await expect(reviewPanel).toBeHidden();
   await filesWorkspaceTab(page).click();
-  await panel.getByRole("tab", { name: "文件", exact: true }).click();
+  await panel.getByRole("tab", { name: "檔案", exact: true }).click();
   await symlinkDirectoryRow.click({ button: "right", position: { x: 20, y: 16 } });
   await page.getByRole("menuitem", { name: "复制绝对路径" }).click();
   await expect(
@@ -486,6 +481,12 @@ done
   await expect(
     page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]'),
   ).toHaveCount(1);
+  await filesWorkspaceTab(page).getByLabel("关闭标签页").click();
+  await expect(filesWorkspaceTab(page)).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await page.getByTestId("open-summary-button").click();
+  await expect(filesWorkspaceTab(page)).toBeVisible();
+  await expect(panel).toBeVisible();
   await expect(page.getByTestId("file-workspace-tab")).toHaveCount(3);
   await expect(panel.getByText("codex-gateway-nested-python")).toBeVisible();
   await expect(panel.getByTestId("remote-file-editor")).toBeVisible();
@@ -713,6 +714,10 @@ function agentWorkspaceTab(page: import("@playwright/test").Page) {
 
 function filesWorkspaceTab(page: import("@playwright/test").Page) {
   return page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]');
+}
+
+function gitReviewWorkspaceTab(page: import("@playwright/test").Page) {
+  return page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="gitReview"]');
 }
 
 function fileTab(page: import("@playwright/test").Page, path: string) {

@@ -70,31 +70,31 @@ function openThread(threadId: string) {
 
 <template>
   <section data-testid="project-thread-list" class="mx-auto w-full max-w-4xl">
-    <div class="mb-8 flex items-start justify-between gap-4 border-b border-hairline pb-5">
+    <div class="mb-8 flex items-start justify-between gap-4 pb-5">
       <div class="min-w-0">
         <div class="mb-2 flex items-center gap-2 text-sm text-ink-muted">
           <FolderIcon class="size-4" />
-          {{ t("app.projectThreads") }}
+          {{ t("app.tasks") }}
         </div>
         <h2 class="truncate text-2xl font-semibold text-ink">{{ selectedProject?.name }}</h2>
-        <p class="mt-2 truncate text-sm text-ink-muted">{{ selectedProject?.remotePath }}</p>
         <p class="mt-4 max-w-2xl text-[0.9375rem] leading-7 text-ink-secondary">
-          {{ t("app.projectThreadsHint") }}
+          {{ t("app.taskListHint") }}
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <Button
           variant="secondary"
-          size="sm"
+          size="icon-lg"
+          class="size-11 rounded-xl"
           :disabled="loading"
+          :aria-label="t('app.refresh')"
           @click="navigation.listThreads('')"
         >
           <RefreshCwIcon class="size-4" />
-          {{ t("app.refresh") }}
         </Button>
-        <Button size="sm" @click="threadView.startThread()">
+        <Button class="h-11 rounded-xl px-4" @click="threadView.startThread()">
           <PlusIcon class="size-4" />
-          {{ t("app.newThread") }}
+          {{ t("app.newTask") }}
         </Button>
       </div>
     </div>

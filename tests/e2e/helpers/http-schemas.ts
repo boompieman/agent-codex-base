@@ -12,6 +12,7 @@ export const hostRecordSchema = z
     privateKey: z.string().nullable().optional(),
     password: z.string().nullable().optional(),
     proxyUrl: z.string().nullable(),
+    hasPrivateKey: z.boolean(),
     hasPassword: z.boolean(),
     createdAt: z.string(),
     updatedAt: z.string(),

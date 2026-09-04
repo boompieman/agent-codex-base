@@ -56,9 +56,7 @@ test("uses the mobile layout with hidden sidebar and usable composer shell", asy
   await expect(page.getByText("先选择一个项目")).toBeVisible();
 });
 
-test("shows effort and compact context usage without mobile approval controls", async ({
-  page,
-}) => {
+test("shows advanced model, context, and approval controls on demand", async ({ page }) => {
   await openApp(page);
   await page.route("**/api/threads/settings", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
@@ -101,9 +99,10 @@ test("shows effort and compact context usage without mobile approval controls", 
     },
   });
 
+  await page.getByTestId("composer-options-toggle").click();
   await expect(page.getByTestId("model-select")).toContainText("GPT-5.6 Luna");
   await expect(page.getByTestId("model-select")).toContainText("Medium");
-  await expect(page.getByText("完全访问", { exact: true })).toBeHidden();
+  await expect(page.getByText("完全访问", { exact: true })).toBeVisible();
   const contextMeter = page.getByTestId("context-usage-meter");
   await expect(contextMeter).toBeVisible();
   await expect(contextMeter).toHaveAttribute("aria-label", "上下文用量 50%");
@@ -158,7 +157,7 @@ test("gives the Goal objective most of the mobile details dialog", async ({ page
   await installSelectedThreadGoalSubmitMock(page, { hostId: 1, threadId });
 
   const longObjective = "移动端目标正文需要保留足够的阅读空间。".repeat(40);
-  const composer = page.getByPlaceholder("输入后续修改要求");
+  const composer = page.getByPlaceholder("輸入你想完成的事");
   await composer.fill(`/goal ${longObjective}`);
   await page.keyboard.press("Enter");
   await page.getByTestId("composer-goal-summary").click();
@@ -589,22 +588,26 @@ test("opens sidebar context actions with long press on mobile", async ({
   ) {
     await page.getByTestId("mobile-sidebar-toggle").click();
   }
+  await page.getByTestId("connections-toggle").click();
   await expect(page.getByTestId(`project-button-${project.id}`)).toBeVisible();
   await longPress(page, page.getByTestId(`project-button-${project.id}`));
   await page.getByRole("menuitem", { name: /新建/ }).click();
   const threadId = await waitForSelectedThreadId(page);
 
   await page.getByTestId("mobile-sidebar-toggle").click();
+  await page.getByTestId("connections-toggle").click();
   await page.getByTestId(`project-button-${project.id}`).click();
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
+  await page.getByTestId("workspace-tools-mobile-toggle").click();
   await expect(page.getByTestId("open-tmux-mobile-button")).toBeVisible();
   await expect(page.getByTestId("open-host-monitor-mobile-button")).toBeVisible();
   await page.getByTestId("open-host-monitor-mobile-button").click();
   await expect(page.getByTestId("host-metrics-panel")).toBeVisible();
-  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByRole("tab", { name: /對話|Agent/ }).click();
+  await page.getByTestId("workspace-tools-mobile-toggle").click();
   await page.getByTestId("open-terminal-mobile-button").click();
   await expect(page.getByTestId("terminal-panel")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByRole("tab", { name: /對話|Agent/ }).click();
   await expect(page.getByTestId("project-thread-list")).toBeVisible();
   const threadButton = page.getByTestId(`project-thread-row-${threadId}`);
   await expect(threadButton).toBeVisible({ timeout: 30_000 });
@@ -740,7 +743,7 @@ printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${she
     status: "completed",
   });
 
-  await page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]').click();
+  await page.getByTestId("open-summary-mobile-button").click();
   await expect(page.getByRole("button", { name: "向右分屏" })).toHaveCount(0);
   const panel = page.getByTestId("workspace-file-panel");
   await expect(panel).toBeVisible();
@@ -759,12 +762,12 @@ printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${she
     "Mobile File Baseline",
   );
   await page
-    .getByRole("region", { name: "审查变更" })
+    .getByRole("region", { name: "檢視變更" })
     .getByRole("button", { name: "关闭标签页" })
     .click();
   await page.getByRole("button", { name: "文件树", exact: true }).click();
   await expect(tree).toBeVisible();
-  await page.getByRole("tab", { name: "文件", exact: true }).click();
+  await page.getByRole("tab", { name: "檔案", exact: true }).click();
   await tree.getByText(path.split("/").pop()!, { exact: true }).click();
   await expect(panel.locator(".markdown-content h1")).toHaveText("Mobile File Workspace");
   await panel.getByRole("button", { name: "源码" }).click();
@@ -809,14 +812,14 @@ printf '%s\n' '# Mobile File Workspace' 'Rendered from the remote tree.' > ${she
     history: { thread: { id: plainThreadId, turns: [] } },
     status: "completed",
   });
-  await page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]').click();
+  await page.getByTestId("open-summary-mobile-button").click();
   await page.getByRole("button", { name: "文件树", exact: true }).click();
   await page.getByRole("tab", { name: /变更/ }).click();
   await expect(page.getByText("当前工作区不在 Git 仓库中", { exact: true })).toBeVisible();
 });
 
 async function openIntermediateSteps(page: Page) {
-  const toggle = page.getByRole("button", { name: /中间过程/ }).first();
+  const toggle = page.getByRole("button", { name: /工作細節/ }).first();
   await expect(toggle).toBeVisible();
   if ((await toggle.getAttribute("data-state")) !== "open") {
     await toggle.click();

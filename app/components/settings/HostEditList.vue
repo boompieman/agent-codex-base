@@ -100,7 +100,11 @@ async function saveHost(host: HostRecord) {
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent class="space-y-3 border-t border-hairline p-3">
-        <HostConnectionFields v-model="entry.form" />
+        <HostConnectionFields
+          v-model="entry.form"
+          :private-key-stored="entry.host.hasPrivateKey"
+          :password-stored="entry.host.hasPassword"
+        />
         <div
           v-if="saveErrors[entry.host.id]"
           class="whitespace-pre-line rounded-md bg-destructive/10 p-2 text-xs text-destructive"

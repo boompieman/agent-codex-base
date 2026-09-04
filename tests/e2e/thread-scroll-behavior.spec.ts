@@ -139,6 +139,7 @@ test("same-page thread switches retain the loaded history depth", async ({ page 
     },
   });
 
+  await page.getByTestId("connections-toggle").click();
   await page.getByTestId(`thread-button-${secondThreadId}`).click();
   await expect(page.getByText("cached second turn 005")).toBeVisible();
   expect(await selectedTimelineUsesCachedReference(page, secondThreadId)).toBe(true);
@@ -588,6 +589,7 @@ test("switching threads discards stale virtual row measurements", async ({ page 
     },
   });
 
+  await page.getByTestId("connections-toggle").click();
   await page.getByTestId(`thread-button-${shortThreadId}`).click();
   await expect(page.getByText("e2e-short-measure-thread line 003")).toBeVisible();
   await expect.poll(() => visibleTimelineRowsDoNotOverlap(page)).toBe(true);
@@ -617,7 +619,7 @@ test("restoring the agent viewport reflows rows without moving a detached reader
 
   await parkChatViewportInMiddle(page);
   const anchor = await captureVisibleTextAnchor(page, "viewport reflow turn");
-  await page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="files"]').click();
+  await page.getByTestId("open-summary-button").click();
   await page.locator('[data-testid="workspace-dock-tab"][data-panel-kind="agent"]').click();
 
   await expect.poll(() => visibleTimelineRowsDoNotOverlap(page)).toBe(true);
@@ -1030,7 +1032,7 @@ test("manually expanded completed intermediate steps stay open after returning t
     },
   });
 
-  const toggle = page.getByRole("button", { name: /中间过程/ }).first();
+  const toggle = page.getByRole("button", { name: /工作細節/ }).first();
   await expect(toggle).toHaveAttribute("data-state", "closed");
   await toggle.click();
   await expect(toggle).toHaveAttribute("data-state", "open");

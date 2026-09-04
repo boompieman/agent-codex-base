@@ -41,6 +41,7 @@ const props = defineProps<{
   placeholder: string;
   limitMessage: string;
 }>();
+const sourceScopeKey = props.scopeKey;
 
 const emit = defineEmits<{
   "update:modelValue": [value: string, scopeKey: string];
@@ -181,6 +182,7 @@ function extensions(): Extension[] {
       "aria-label": props.placeholder,
       placeholder: props.placeholder,
       "data-testid": "composer-input",
+      "data-scope-key": sourceScopeKey,
       "data-value": props.modelValue,
     }),
     EditorView.updateListener.of(handleUpdate),
@@ -213,10 +215,10 @@ function handleUpdate(update: ViewUpdate) {
     const text = update.state.doc.toString();
     update.view.contentDOM.dataset.value = text;
     if (!syncing) {
-      emit("update:modelValue", text, props.scopeKey);
+      emit("update:modelValue", text, sourceScopeKey);
       const retained = props.references.filter((reference) => text.includes(`@${reference.path}`));
       if (retained.length !== props.references.length)
-        emit("update:references", retained, props.scopeKey);
+        emit("update:references", retained, sourceScopeKey);
     }
   }
   if (update.docChanged || update.selectionSet) updateTokenQuery(update.view);
@@ -398,7 +400,7 @@ function selectFile(file: FileReference) {
         ...props.references,
         { ...file, id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${file.path}` },
       ],
-      props.scopeKey,
+      sourceScopeKey,
     );
   }
   dismissMenu();

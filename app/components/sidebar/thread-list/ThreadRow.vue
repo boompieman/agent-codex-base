@@ -57,7 +57,7 @@ const subtitle = computed(() => [worktreeLabel.value, props.subtitle].filter(Boo
           v-bind="pressHandlers"
           :data-selected="selected ? 'true' : 'false'"
           variant="ghost"
-          class="h-auto min-h-9 min-w-0 flex-1 justify-start overflow-hidden rounded-lg px-3 py-2 text-sm font-normal hover:bg-surface"
+          class="h-auto min-h-11 min-w-0 flex-1 justify-start overflow-hidden rounded-lg px-3 py-2 text-sm font-normal hover:bg-surface"
           :class="selectedRowClass(selected)"
           @click="emit('open')"
         >
@@ -88,7 +88,7 @@ const subtitle = computed(() => [worktreeLabel.value, props.subtitle].filter(Boo
               :data-testid="`thread-actions-${testId}`"
               size="icon"
               variant="ghost"
-              class="size-8 shrink-0 text-ink-muted"
+              class="size-11 shrink-0 text-ink-muted"
               :aria-label="$t('app.threadActions')"
             >
               <MoreHorizontalIcon class="size-4" />

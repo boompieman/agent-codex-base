@@ -151,7 +151,7 @@ export async function addRemoteHost(
   if (remote.proxyUrl !== undefined) {
     await hostForm.getByTestId("host-proxy-url-input").fill(remote.proxyUrl ?? "");
   }
-  await hostForm.getByTestId("host-auth-select").click();
+  await hostForm.getByTestId("host-auth-select").press("Enter");
   await page.getByTestId("host-auth-password-option").click();
   await hostForm.getByPlaceholder("SSH 密码").fill(remote.password);
 
@@ -161,6 +161,7 @@ export async function addRemoteHost(
   await hostForm.getByTestId("add-host-button").click();
   const host = uiHostSchema.parse(await (await hostResponsePromise).json());
   await closeSettings(page);
+  await openConnections(page);
   await expect(hostConnectedIndicator(page, host.id)).toBeVisible({ timeout: 120_000 });
   if (
     remote.initialCodexVersion !== undefined &&
@@ -176,6 +177,11 @@ export async function addRemoteHost(
 
 function hostConnectedIndicator(page: Page, hostId: number) {
   return page.getByTestId(`host-button-${hostId}`).getByLabel(/已连接|Connected/);
+}
+
+export async function openConnections(page: Page) {
+  const toggle = page.getByTestId("connections-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
 
 export async function addRemoteProject(
@@ -206,10 +212,12 @@ export async function startRemoteThreadFromProjectMenu(
   remote: RemoteCodexEnv,
   projectId: number,
 ) {
+  const previousThreadId = new URL(page.url()).searchParams.get("threadId");
+  await openConnections(page);
   await page.getByTestId(`project-button-${projectId}`).click({ button: "right" });
   await page.getByRole("menuitem", { name: /新建/ }).click();
-  const threadId = await waitForSelectedThreadId(page);
-  await expect(page.getByPlaceholder("输入后续修改要求")).toBeEnabled();
+  const threadId = await waitForSelectedThreadId(page, previousThreadId);
+  await expect(page.getByPlaceholder("輸入你想完成的事")).toBeEnabled();
   await expect(page.getByTestId(`thread-button-${threadId}`)).toBeVisible({ timeout: 30_000 });
   if (remote.testModel !== undefined && remote.testModel !== "") {
     await page.evaluate(async (model) => {
@@ -223,10 +231,13 @@ export async function startRemoteThreadFromProjectMenu(
   return threadId;
 }
 
-export async function waitForSelectedThreadId(page: Page) {
+export async function waitForSelectedThreadId(page: Page, previousThreadId: string | null = null) {
   const handle = await page.waitForFunction(
-    () => new URLSearchParams(window.location.search).get("threadId"),
-    undefined,
+    (previous) => {
+      const current = new URLSearchParams(window.location.search).get("threadId");
+      return current !== null && current !== previous ? current : null;
+    },
+    previousThreadId,
     { timeout: 30_000 },
   );
   const threadId = await handle.jsonValue();
@@ -243,7 +254,7 @@ export async function sendTextTurn(
       .poll(async () => (await currentRouteSelection(page)).threadId, { timeout: 10_000 })
       .toBe(context.threadId);
   }
-  await page.getByPlaceholder("输入后续修改要求").fill(`用一句话回复：${marker}`);
+  await page.getByPlaceholder("輸入你想完成的事").fill(`用一句话回复：${marker}`);
   await page.getByTestId("send-turn-button").click();
 }
 
@@ -263,10 +274,14 @@ export async function selectSidebarThread(page: Page, threadId: string) {
       { timeout: 30_000 },
     )
     .toBe(threadId);
+  await expect(page.getByTestId("composer-input")).toHaveAttribute(
+    "data-scope-key",
+    new RegExp(`:${threadId}$`),
+  );
 }
 
 export async function sendSteerText(page: Page, marker: string) {
-  await page.getByPlaceholder("输入后续修改要求").fill(`追加要求：${marker}`);
+  await page.getByPlaceholder("輸入你想完成的事").fill(`追加要求：${marker}`);
   await page.getByTestId("send-turn-button").click();
 }
 

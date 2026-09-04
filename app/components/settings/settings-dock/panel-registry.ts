@@ -26,7 +26,7 @@ export const settingsPanelRegistry = {
 
 export const settingsPanelKinds = [
   "appearance",
-  "config",
-  "hosts",
   "notifications",
+  "hosts",
+  "config",
 ] as const satisfies readonly SettingsPanelKind[];
