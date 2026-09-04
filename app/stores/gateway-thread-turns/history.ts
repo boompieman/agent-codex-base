@@ -76,6 +76,35 @@ export function acceptStartedTurn(
   cacheSelectedThreadView();
 }
 
+export function removeOptimisticMessage(
+  hostId: number,
+  threadId: string,
+  clientUserMessageId: string,
+) {
+  const navigation = useGatewayNavigationStore();
+  const views = useGatewayThreadViewStore();
+  const key = pinnedKey(hostId, threadId);
+  const selected = navigation.selectedHostId === hostId && navigation.selectedThreadId === threadId;
+  const history = selected ? views.history : views.threadViews[key]?.history;
+  if (history === null || history === undefined) return;
+  const turns = history.thread.turns.flatMap((turn) => {
+    const items = (turn.items ?? []).filter(
+      (item) =>
+        String(item.id) !== clientUserMessageId && String(item.clientId) !== clientUserMessageId,
+    );
+    if (items.length === (turn.items ?? []).length) return [turn];
+    if (items.length === 0 && String(turn.id).startsWith("client-")) return [];
+    return [{ ...turn, items }];
+  });
+  const next = { ...history, thread: { ...history.thread, turns } };
+  if (selected) {
+    setSelectedThreadHistory(next);
+    cacheSelectedThreadView();
+  } else {
+    patchThreadView(hostId, threadId, { history: next });
+  }
+}
+
 export function upsertHistoryItem(hostId: number, threadId: string, item: ThreadHistoryItem) {
   const navigation = useGatewayNavigationStore();
   const views = useGatewayThreadViewStore();

@@ -12,6 +12,10 @@ import {
 import { defaultGatewayProject } from "./fixtures/thread-history";
 import { gatewayThreadFixture } from "./fixtures/gateway-thread";
 import { appServerTurnFixture } from "./fixtures/app-server-turn";
+import {
+  installRealtimeThreadItemsLoadRoute,
+  realtimeThreadItemsLoadRequests,
+} from "./helpers/realtime-route";
 import { z } from "zod";
 
 const storedRouteSelectionSchema = z.object({
@@ -142,6 +146,66 @@ test("opening completed history does not show fake thinking", async ({ page }) =
     status: "completed",
   });
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成");
+});
+
+test("expanding a summary-only turn explains when no intermediate content is available", async ({
+  page,
+}) => {
+  await openApp(page);
+  const threadId = "e2e-empty-intermediate-thread";
+  const turnId = "turn-empty-intermediate";
+  const userMessage = {
+    id: "user-empty-intermediate",
+    type: "userMessage",
+    content: [{ type: "text", text: "安安" }],
+  };
+  const finalMessage = {
+    id: "agent-empty-intermediate",
+    type: "agentMessage",
+    phase: "final_answer",
+    text: "安安～又见面啦",
+  };
+  await installRealtimeThreadSnapshotMock(page, {
+    snapshots: {
+      [threadId]: {
+        thread: { id: threadId, name: "Empty Intermediate" },
+        history: {
+          thread: {
+            id: threadId,
+            turns: [
+              appServerTurnFixture({
+                id: turnId,
+                status: "completed",
+                itemsView: "summary",
+                items: [userMessage, finalMessage],
+              }),
+            ],
+          },
+        },
+        projectId: 1,
+        project: defaultGatewayProject(),
+      },
+    },
+  });
+  installRealtimeThreadItemsLoadRoute(page, {
+    items: [
+      userMessage,
+      { id: "reasoning-empty-intermediate", type: "reasoning", summary: [], content: [] },
+      finalMessage,
+    ],
+    nextCursor: null,
+    backwardsCursor: null,
+  });
+  await seedGatewayThread(page, { projectId: 1, threadId: null });
+  await openThreadInStore(page, { threadId, hostId: 1, projectId: 1 });
+
+  const toggle = page.getByRole("button", { name: /中间过程/ });
+  await expect(toggle).toHaveAttribute("data-state", "closed");
+  await toggle.click();
+
+  await expect(toggle).toHaveAttribute("data-state", "open");
+  await expect(toggle.getByText("此回合没有可显示的中间过程")).toBeVisible();
+  await expect.poll(() => realtimeThreadItemsLoadRequests(page).length).toBe(1);
 });
 
 test("opening a cached thread applies terminal events before deriving composer state", async ({

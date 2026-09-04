@@ -26,6 +26,7 @@ const emit = defineEmits<{
     :open="props.row.open"
     :count="props.row.count"
     :loading="props.row.loading"
+    :empty="props.row.empty"
     @toggle="emit('intermediateToggle', props.row.turnId, $event)"
   />
   <ThreadItemView

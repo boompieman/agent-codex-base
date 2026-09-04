@@ -40,6 +40,7 @@ interface RealtimeRouteState {
   interruptRequest: Extract<RealtimeClientMessage, { type: "turn.interrupt" }> | null;
   serverRequestResponse: ServerRequestResponseRouteState | null;
   threadTurnsLoad: ThreadTurnsLoadRouteState | null;
+  threadItemsLoad: ThreadItemsLoadRouteState | null;
 }
 
 interface RealtimeRouteConnection {
@@ -63,12 +64,22 @@ interface ThreadTurnsLoadRouteState {
   response: Extract<RealtimeServerMessage, { type: "thread.turns.page" }>;
 }
 
+interface ThreadItemsLoadRouteState {
+  requests: Extract<RealtimeClientMessage, { type: "thread.items.load" }>[];
+  response: Omit<
+    Extract<RealtimeServerMessage, { type: "thread.items.page" }>,
+    "type" | "requestId" | "hostId" | "threadId" | "turnId"
+  >;
+}
+
 export type ThreadTurnsLoadResponseInput = Omit<
   Extract<RealtimeServerMessage, { type: "thread.turns.page" }>,
   "history"
 > & {
   history: ThreadHistoryState;
 };
+
+export type ThreadItemsLoadResponseInput = ThreadItemsLoadRouteState["response"];
 
 const routes = new WeakMap<Page, RealtimeRouteState>();
 
@@ -82,6 +93,7 @@ export async function installRealtimeRoute(page: Page) {
     interruptRequest: null,
     serverRequestResponse: null,
     threadTurnsLoad: null,
+    threadItemsLoad: null,
   };
   routes.set(page, state);
   await page.routeWebSocket(/\/api\/realtime$/, (route) => {
@@ -153,6 +165,17 @@ export function realtimeThreadTurnsLoadRequests(page: Page) {
   return (routes.get(page)?.threadTurnsLoad?.requests ?? []).map(({ message }) => message);
 }
 
+export function installRealtimeThreadItemsLoadRoute(
+  page: Page,
+  response: ThreadItemsLoadResponseInput,
+) {
+  requireRealtimeRoute(page).threadItemsLoad = { requests: [], response };
+}
+
+export function realtimeThreadItemsLoadRequests(page: Page) {
+  return [...(routes.get(page)?.threadItemsLoad?.requests ?? [])];
+}
+
 export function realtimeThreadActivateRequests(page: Page) {
   return [...(routes.get(page)?.activateRequests ?? [])];
 }
@@ -185,6 +208,18 @@ function handleClientMessage(
     state.threadTurnsLoad.requests.push({ connection, message });
     if (!state.threadTurnsLoad.deferred)
       sendThreadTurnsPage(connection, state.threadTurnsLoad.response, message);
+    return;
+  }
+  if (message.type === "thread.items.load" && state.threadItemsLoad !== null) {
+    state.threadItemsLoad.requests.push(message);
+    send(connection, {
+      ...state.threadItemsLoad.response,
+      type: "thread.items.page",
+      requestId: message.requestId,
+      hostId: message.hostId,
+      threadId: message.threadId,
+      turnId: message.turnId,
+    });
     return;
   }
   connection.upstream.send(raw);

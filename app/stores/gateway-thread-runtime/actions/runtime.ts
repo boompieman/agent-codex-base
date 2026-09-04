@@ -20,7 +20,11 @@ export function createThreadRuntimeActions() {
       status: ThreadRuntimeStatus,
       options: ThreadStatusUpdateOptions = {},
     ) {
-      applyThreadRuntimeStatus(hostId, threadId, { status, turnId: options.turnId });
+      applyThreadRuntimeStatus(hostId, threadId, {
+        status,
+        turnId: options.turnId,
+        activeFlags: options.activeFlags,
+      });
     },
     setThreadTokenUsage(hostId: number, threadId: string, tokenUsage: ThreadTokenUsageState) {
       const runtime = useGatewayThreadRuntimeStore();

@@ -16,6 +16,8 @@ export interface ThreadActivitySummary {
   threadId: string;
   title: string;
   cwd: string | null;
+  branch: string | null;
+  isWorktree: boolean;
   projectName: string | null;
   parentThreadId: string | null;
   agentNickname: string | null;
@@ -78,6 +80,11 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
         threadId: record.id,
         title: firstNonEmptyString([record.title, record.name, record.preview]) ?? record.id,
         cwd: stringOrNull(record.cwd),
+        branch: null,
+        isWorktree:
+          project !== undefined &&
+          stringOrNull(record.cwd) !== null &&
+          stringOrNull(record.cwd) !== project.remotePath,
         projectName: project?.name ?? null,
         parentThreadId: stringOrNull(record.parentThreadId),
         agentNickname: stringOrNull(record.agentNickname),
@@ -101,6 +108,8 @@ export const useGatewayThreadActivityStore = defineStore("gateway-thread-activit
         ...summary,
         projectId: summary.projectId ?? existing?.projectId ?? null,
         cwd: summary.cwd ?? existing?.cwd ?? null,
+        branch: summary.branch ?? existing?.branch ?? null,
+        isWorktree: summary.isWorktree || existing?.isWorktree === true,
         projectName: summary.projectName ?? existing?.projectName ?? null,
         parentThreadId: summary.parentThreadId ?? existing?.parentThreadId ?? null,
         agentNickname: summary.agentNickname ?? existing?.agentNickname ?? null,
@@ -182,6 +191,7 @@ function summaryFromThread(
     | "name"
     | "preview"
     | "cwd"
+    | "gitInfo"
     | "source"
     | "recencyAt"
     | "updatedAt"
@@ -193,12 +203,15 @@ function summaryFromThread(
   const parentThreadId = stringOrNull(thread.parentThreadId);
   const agentNickname = stringOrNull(thread.agentNickname);
   const agentRole = stringOrNull(thread.agentRole);
+  const cwd = stringOrNull(thread.cwd);
   return {
     hostId,
     projectId,
     threadId: thread.id,
     title: firstNonEmptyString([gatewayTitle, thread.name, thread.preview]) ?? thread.id,
-    cwd: stringOrNull(thread.cwd),
+    cwd,
+    branch: stringOrNull(thread.gitInfo?.branch),
+    isWorktree: project !== undefined && cwd !== null && cwd !== project.remotePath,
     projectName: project?.name ?? null,
     parentThreadId,
     agentNickname,

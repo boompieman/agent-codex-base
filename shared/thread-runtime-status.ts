@@ -1,4 +1,4 @@
-import type { GatewayEvent, ThreadRuntimeStatus } from "./types";
+import type { AppServerThreadActiveFlag, GatewayEvent, ThreadRuntimeStatus } from "./types";
 
 type ThreadStatusLike = string | { type?: unknown } | null | undefined;
 
@@ -59,6 +59,15 @@ export function runtimeStatusFromAppThreadStatus(status: unknown): ThreadRuntime
   if (value === "systemError" || value === "failed") return "failed";
   if (value === "interrupted") return "interrupted";
   return "completed";
+}
+
+export function activeFlagsFromAppThreadStatus(status: unknown): AppServerThreadActiveFlag[] {
+  if (!isRecord(status) || status.type !== "active" || !Array.isArray(status.activeFlags))
+    return [];
+  return status.activeFlags.filter(
+    (flag): flag is AppServerThreadActiveFlag =>
+      flag === "waitingOnApproval" || flag === "waitingOnUserInput",
+  );
 }
 
 export function runtimeStatusFromTopLevelThreadState(thread: unknown): ThreadRuntimeStatus {

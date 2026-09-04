@@ -1,6 +1,8 @@
 import type { HostRecord, PinnedThreadRecord } from "./sidebar-types";
 
 const threadStatusClassByStatus: Record<string, string> = {
+  waitingApproval: "text-accent-orange",
+  needsInput: "text-primary",
   running: "text-primary",
   completedUnviewed: "text-primary",
   completed: "text-accent-green",
@@ -9,6 +11,8 @@ const threadStatusClassByStatus: Record<string, string> = {
 };
 
 const threadStatusLabelKeyByStatus: Record<string, string> = {
+  waitingApproval: "app.waitingApproval",
+  needsInput: "app.needsInput",
   running: "app.running",
   completedUnviewed: "app.completedUnviewed",
   completed: "app.completed",

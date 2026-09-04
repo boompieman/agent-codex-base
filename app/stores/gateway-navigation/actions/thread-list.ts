@@ -10,7 +10,10 @@ import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import type { ThreadListResponse } from "@/stores/gateway/types";
 import { messageFromError, sortThreads } from "@/stores/gateway/thread-utils/identity";
-import { runtimeStatusFromAppThreadStatus } from "@/stores/gateway/thread-utils/status";
+import {
+  activeFlagsFromAppThreadStatus,
+  runtimeStatusFromAppThreadStatus,
+} from "@/stores/gateway/thread-utils/status";
 import { isAppServerSubAgentThread } from "~~/shared/runtime/app-server";
 import { captureSessionEpoch } from "@/utils/session-epoch";
 
@@ -129,6 +132,8 @@ function applyProjectDirectoryAvailability(response: ThreadListResponse) {
 function syncThreadStatusesFromList(hostId: number, threads: GatewayThread[]) {
   const runtime = useGatewayThreadRuntimeStore();
   for (const thread of threads) {
-    runtime.setThreadStatus(hostId, thread.id, runtimeStatusFromAppThreadStatus(thread.status));
+    runtime.setThreadStatus(hostId, thread.id, runtimeStatusFromAppThreadStatus(thread.status), {
+      activeFlags: activeFlagsFromAppThreadStatus(thread.status),
+    });
   }
 }

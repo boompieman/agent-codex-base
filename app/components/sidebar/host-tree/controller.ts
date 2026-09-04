@@ -1,5 +1,5 @@
 import type { InjectionKey, Ref } from "vue";
-import type { ThreadRuntimeStatus } from "@/stores/gateway/types";
+import type { AppServerThreadActiveFlag, ThreadRuntimeStatus } from "~~/shared/types";
 import type { HostRecord, ProjectRecord, SidebarThread } from "../sidebar-types";
 
 export interface HostTreeController {
@@ -29,6 +29,7 @@ export interface HostTreeController {
   rename: (thread: SidebarThread & { hostId: number }) => void;
   threadRuntimeStatus: (hostId: number, threadId: string) => ThreadRuntimeStatus;
   threadCompletionAttention: (hostId: number, threadId: string) => boolean;
+  threadActiveFlags: (hostId: number, threadId: string) => AppServerThreadActiveFlag[];
 }
 
 export const HOST_TREE_CONTROLLER: InjectionKey<Ref<HostTreeController>> =

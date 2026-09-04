@@ -2,12 +2,14 @@ import type { GatewayEvent, ProjectRecord } from "./records";
 import type { ThreadHistoryItem, ThreadTimelineHistoryState } from "../thread-history/types";
 
 export type ThreadRuntimeStatus = "idle" | "running" | "completed" | "failed" | "interrupted";
+export type AppServerThreadActiveFlag = "waitingOnApproval" | "waitingOnUserInput";
 
 export interface ThreadRuntimeStatusUpdate {
   hostId: number;
   threadId: string;
   status: ThreadRuntimeStatus;
   turnId?: string | null;
+  activeFlags?: AppServerThreadActiveFlag[];
 }
 export type ThreadGoalStatus =
   | "active"
@@ -107,7 +109,7 @@ export type AppServerThreadStatus =
   | { type: "notLoaded" }
   | { type: "idle" }
   | { type: "systemError" }
-  | { type: "active"; activeFlags: Array<"waitingOnApproval" | "waitingOnUserInput"> };
+  | { type: "active"; activeFlags: AppServerThreadActiveFlag[] };
 
 export type AppServerSessionSource =
   | "cli"

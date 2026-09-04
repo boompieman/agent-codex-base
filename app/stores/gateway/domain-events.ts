@@ -13,6 +13,7 @@ import type {
   HostGpuProcessSnapshot,
   HostMetricsCollectorStatus,
   HostMetricsSample,
+  AppServerThreadActiveFlag,
   TmuxSessionsSnapshot,
 } from "~~/shared/types";
 import type { AppServerEventParams } from "~~/shared/thread-history/app-server-event-handlers/types";
@@ -87,6 +88,7 @@ export type GatewayDomainEventMap = {
     threadId: string;
     status: ThreadRuntimeStatus;
     turnId?: string | null;
+    activeFlags?: AppServerThreadActiveFlag[];
   };
   "terminal-process-detected": {
     hostId: number;

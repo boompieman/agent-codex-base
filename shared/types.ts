@@ -15,6 +15,7 @@ export type {
   AppServerSessionSource,
   AppServerSubAgentSource,
   AppServerThread,
+  AppServerThreadActiveFlag,
   AppServerThreadStatus,
   AppServerTurn,
   ComposerTurnOptions,

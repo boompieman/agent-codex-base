@@ -84,6 +84,8 @@ export function useComposerController() {
     collaborationModel: settings.collaborationModel,
     selectedEffort: settings.selectedEffort,
     fileReferencesLabel: computed(() => t("app.attachedFileReferences")),
+    selectedHostId,
+    selectedThreadId,
   });
   const goalInputActive = computed(() => /^\/goal(?:\s|$)/i.test(turnText.value.trimStart()));
   const activePlanSummary = computed(() =>

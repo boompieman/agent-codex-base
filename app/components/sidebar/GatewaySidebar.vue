@@ -45,6 +45,9 @@ const {
   openPinnedThread,
   pinnedRuntimeStatus,
   pinnedCompletionAttention,
+  pinnedActiveFlags,
+  pinnedWorktree,
+  pinnedBranch,
 } = sidebarTree;
 const { recentThreads } = recentActivity;
 const hostTreeController = computed<HostTreeController>(() => ({
@@ -74,6 +77,7 @@ const hostTreeController = computed<HostTreeController>(() => ({
   rename: threadRename.startRename,
   threadRuntimeStatus: sidebarTree.threadRuntimeStatus,
   threadCompletionAttention: sidebarTree.threadCompletionAttention,
+  threadActiveFlags: sidebarTree.threadActiveFlags,
 }));
 
 defineOptions({
@@ -115,6 +119,9 @@ async function openHostMonitor(hostId: number) {
             :long-press-handlers="longPressContextMenuHandlers"
             :runtime-status="pinnedRuntimeStatus"
             :completion-attention="pinnedCompletionAttention"
+            :active-flags="pinnedActiveFlags"
+            :worktree="pinnedWorktree"
+            :branch="pinnedBranch"
             @open="openPinnedThread"
             @unpin="navigation.setPinnedThread($event, false)"
             @rename="threadRename.startRename"

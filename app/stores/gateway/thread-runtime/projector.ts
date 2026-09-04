@@ -1,4 +1,4 @@
-import type { ThreadRuntimeStatus } from "~~/shared/types";
+import type { AppServerThreadActiveFlag, ThreadRuntimeStatus } from "~~/shared/types";
 import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { useGatewayThreadActivityStore } from "@/stores/gateway-thread-activity";
 import { useGatewayThreadRuntimeStore } from "@/stores/gateway-thread-runtime";
@@ -18,6 +18,7 @@ export interface ThreadRuntimeProjection {
 export interface ThreadRuntimeStatusInput {
   status: ThreadRuntimeStatus;
   turnId?: string | null;
+  activeFlags?: AppServerThreadActiveFlag[];
 }
 
 export interface ActiveTerminalProcessInput {
@@ -56,6 +57,10 @@ export function applyThreadRuntimeStatus(
 
   if (input.status === "running") {
     runningKeys.add(key);
+    runtime.activeFlagsByThreadKey = {
+      ...runtime.activeFlagsByThreadKey,
+      [key]: input.activeFlags ?? [],
+    };
     if (input.turnId !== null && input.turnId !== undefined && input.turnId !== "") {
       runtime.activeTurnIdsByThreadKey = {
         ...runtime.activeTurnIdsByThreadKey,
@@ -71,6 +76,7 @@ export function applyThreadRuntimeStatus(
       runtime.activeTerminalProcessByThreadKey,
       key,
     );
+    runtime.activeFlagsByThreadKey = omitKey(runtime.activeFlagsByThreadKey, key);
   }
   runtime.runningThreadKeys = [...runningKeys];
 }

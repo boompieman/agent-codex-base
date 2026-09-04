@@ -5,7 +5,10 @@ import {
 } from "~~/shared/runtime/app-server";
 import { gatewayDomainEvents } from "../domain-events";
 import { threadIdFromParams } from "../thread-utils/identity";
-import { runtimeStatusFromAppThreadStatus } from "../thread-utils/status";
+import {
+  activeFlagsFromAppThreadStatus,
+  runtimeStatusFromAppThreadStatus,
+} from "../thread-utils/status";
 import type { GatewayEventHandlerRegistry } from "./types";
 
 export const threadEventHandlers: GatewayEventHandlerRegistry = {
@@ -25,6 +28,7 @@ export const threadEventHandlers: GatewayEventHandlerRegistry = {
         hostId: event.hostId,
         threadId: String(threadId),
         status: runtimeStatusFromAppThreadStatus(params.status),
+        activeFlags: activeFlagsFromAppThreadStatus(params.status),
       });
     }
   },
