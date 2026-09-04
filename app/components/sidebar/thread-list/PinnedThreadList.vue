@@ -24,8 +24,7 @@ const emit = defineEmits<{
 }>();
 
 function subtitleForPinnedThread(thread: PinnedThreadRecord) {
-  const hostName = props.hosts.find((host) => host.id === thread.hostId)?.name;
-  return [hostName, thread.projectName].filter(Boolean).join(" / ");
+  return formatRelative(thread.updatedAt);
 }
 
 function isSelectedPinnedThread(thread: PinnedThreadRecord) {
@@ -52,9 +51,7 @@ function isSelectedPinnedThread(thread: PinnedThreadRecord) {
         :status="runtimeStatus(thread)"
         :completion-attention="completionAttention(thread)"
         :active-flags="activeFlags(thread)"
-        :subtitle="subtitleForPinnedThread(thread) || formatRelative(thread.updatedAt)"
-        :worktree="worktree(thread)"
-        :branch="branch(thread)"
+        :subtitle="subtitleForPinnedThread(thread)"
         :pin-label="$t('app.unpinThread')"
         :long-press-handlers="longPressHandlers"
         show-pinned-icon

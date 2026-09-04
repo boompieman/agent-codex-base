@@ -109,7 +109,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   });
 
   await expect(page.getByText("completed history")).toBeVisible();
-  await expect(page.getByRole("button", { name: /中间过程/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /工作細節/ })).toHaveAttribute(
     "data-state",
     "open",
   );
@@ -119,7 +119,7 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   for (const usageEvent of usageEvents) await applyGatewayLiveEvent(page, usageEvent);
   await applyGatewayLiveEvent(page, completedEvent);
 
-  await expect(page.getByRole("button", { name: /中间过程/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /工作細節/ })).toHaveAttribute(
     "data-state",
     "closed",
   );
@@ -129,8 +129,8 @@ test("opening completed history does not show fake thinking", async ({ page }) =
   await expect
     .poll(() => agentActions.evaluate((element) => getComputedStyle(element).opacity))
     .toBe("1");
-  await expect(agentActions.getByText("本轮用时 2.50s")).toBeVisible();
-  await expect(agentActions.getByText("用量 0.0046")).toBeVisible();
+  await expect(agentActions.getByText(/本轮用时/)).toHaveCount(0);
+  await expect(agentActions.getByText(/用量/)).toHaveCount(0);
   await expect(agentActions.getByRole("button", { name: "复制输出" })).toBeAttached();
   await expect(page.getByText("思考中")).toBeHidden();
 
@@ -199,12 +199,12 @@ test("expanding a summary-only turn explains when no intermediate content is ava
   await seedGatewayThread(page, { projectId: 1, threadId: null });
   await openThreadInStore(page, { threadId, hostId: 1, projectId: 1 });
 
-  const toggle = page.getByRole("button", { name: /中间过程/ });
+  const toggle = page.getByRole("button", { name: /工作細節/ });
   await expect(toggle).toHaveAttribute("data-state", "closed");
   await toggle.click();
 
   await expect(toggle).toHaveAttribute("data-state", "open");
-  await expect(toggle.getByText("此回合没有可显示的中间过程")).toBeVisible();
+  await expect(toggle.getByText("這次任務沒有其他工作細節")).toBeVisible();
   await expect.poll(() => realtimeThreadItemsLoadRequests(page).length).toBe(1);
 });
 
@@ -505,7 +505,7 @@ test("turn completed keeps thread running while context compaction is active", a
 
   await expect.poll(() => selectedThreadStatusInStore(page)).toBe("running");
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "停止生成");
-  await page.getByPlaceholder("输入后续修改要求").fill("追加要求");
+  await page.getByPlaceholder("輸入你想完成的事").fill("追加要求");
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "引导");
   await expect(page.getByText("压缩上下文")).toBeVisible();
 });

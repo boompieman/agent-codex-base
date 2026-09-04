@@ -22,7 +22,7 @@ async function switchLanguage(value: unknown) {
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="zh">中文</SelectItem>
+      <SelectItem value="zh">繁體中文</SelectItem>
       <SelectItem value="en">English</SelectItem>
     </SelectContent>
   </Select>

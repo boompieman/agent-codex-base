@@ -148,7 +148,7 @@ function isWorktree(thread: SidebarThread, projectPath: string) {
         <Button
           :data-testid="`missing-projects-toggle-${host.id}`"
           variant="ghost"
-          class="h-9 w-full justify-start gap-2 rounded-lg px-3 text-xs font-normal text-ink-muted hover:bg-surface"
+          class="h-11 w-full justify-start gap-2 rounded-lg px-3 text-xs font-normal text-ink-muted hover:bg-surface"
           @click="controller.toggleMissingProjects(host.id)"
         >
           <ChevronDownIcon

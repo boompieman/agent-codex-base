@@ -19,6 +19,8 @@ export function useWorkspaceDockLifecycle(options: {
   reconcile: (api: DockviewApi) => void;
   defaultLayout: (api: DockviewApi) => SerializedDockview;
   panelIds: ComputedRef<unknown>;
+  openFilesPanel: () => void;
+  layout: Ref<"desktop" | "mobile">;
 }) {
   const { t } = useI18n();
   const workspaceLayout = useGatewayWorkspaceLayoutStore();
@@ -37,13 +39,18 @@ export function useWorkspaceDockLifecycle(options: {
     if (!panel) return;
     panel.api.setActive();
     panel.api.group.api.setActive();
+    const request = workspaceLayout.panelActivationRequest;
+    if (request?.panelId === panelId) workspaceLayout.consumePanelActivation(request.sequence);
   }
 
   function activateRight(panelId: string) {
+    if (api.value) options.reconcile(api.value);
     const panel = api.value?.getPanel(panelId);
     const agent = api.value?.getPanel(AGENT_WORKSPACE_PANEL_ID);
     if (!panel || !agent) return;
-    if (panel.api.group === agent.api.group) splitDockPanelRight(panel.api);
+    if (options.layout.value === "desktop" && panel.api.group === agent.api.group) {
+      splitDockPanelRight(panel.api);
+    }
     activate(panelId);
   }
 
@@ -77,8 +84,8 @@ export function useWorkspaceDockLifecycle(options: {
         workspaceLayout.setActivePanel(activeScopeKey, panel.id);
       }),
       event.api.onDidRemovePanel((panel) => {
-        if (panel.id === AGENT_WORKSPACE_PANEL_ID || panel.id === FILES_WORKSPACE_PANEL_ID) {
-          void restorePermanentPanels();
+        if (panel.id === AGENT_WORKSPACE_PANEL_ID) {
+          void restoreAgentPanel();
         } else {
           void restoreRequestedPanel();
         }
@@ -148,17 +155,10 @@ export function useWorkspaceDockLifecycle(options: {
     }
   }
 
-  async function restorePermanentPanels() {
+  async function restoreAgentPanel() {
     await nextTick();
     if (!api.value) return;
-    const hasAgent = Boolean(api.value.getPanel(AGENT_WORKSPACE_PANEL_ID));
-    const needsFiles = Boolean(options.fileRequestScopeKey.value);
-    const hasFiles = Boolean(api.value.getPanel(FILES_WORKSPACE_PANEL_ID));
-    if (hasAgent && (!needsFiles || hasFiles)) {
-      await restoreRequestedPanel();
-      return;
-    }
-    options.reconcile(api.value);
+    if (!api.value.getPanel(AGENT_WORKSPACE_PANEL_ID)) options.reconcile(api.value);
     await restoreRequestedPanel();
   }
 
@@ -189,8 +189,11 @@ export function useWorkspaceDockLifecycle(options: {
   watch(
     () => fileWorkspace.workspaceOpenRequest,
     (request) => {
-      if (request?.scopeKey === options.fileRequestScopeKey.value)
+      if (request?.scopeKey === options.fileRequestScopeKey.value && api.value) {
+        options.openFilesPanel();
+        options.reconcile(api.value);
         activate(FILES_WORKSPACE_PANEL_ID);
+      }
     },
   );
 

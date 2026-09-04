@@ -153,6 +153,7 @@ watch(
     :key="threadId ?? 'empty-thread'"
     :rows="rows"
     :estimate-size="estimateRowSize"
+    :loading-older="loadingOlder"
     :scroll-to-latest-token="scrollToLatestToken"
     @reach-start="handleReachStart"
     @user-detached-change="handleUserDetachedChange"

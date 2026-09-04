@@ -23,7 +23,7 @@ test("goal slash input derives the goal tag and requires an objective before sub
     threadId: "e2e-goal-slash-thread",
   });
 
-  const composer = page.getByPlaceholder("输入后续修改要求");
+  const composer = page.getByPlaceholder("輸入你想完成的事");
   await composer.fill("/goal");
   await expect(
     page.getByTestId("composer-mode-strip").getByText("目标", { exact: true }).first(),
@@ -74,7 +74,7 @@ test("goal controls are shared by the slash menu and details dialog", async ({ p
     threadId,
   });
 
-  const composer = page.getByPlaceholder("输入后续修改要求");
+  const composer = page.getByPlaceholder("輸入你想完成的事");
   await composer.fill("/goal 保持目标控制清晰");
   await page.keyboard.press("Enter");
   await expect
@@ -298,7 +298,7 @@ test("goal progress updates the composer status strip without flooding the agent
   await expect(page.getByTestId("chat-scroll-area").getByText("目标已更新")).toHaveCount(0);
   await expect(goalCards).toHaveCount(0);
 
-  const composer = page.getByPlaceholder("输入后续修改要求");
+  const composer = page.getByPlaceholder("輸入你想完成的事");
   await composer.fill("/goal");
   await expect(page.getByTestId("slash-command-goal-objective")).toBeVisible();
   await expect(page.getByTestId("slash-command-goal-edit")).toHaveCount(0);

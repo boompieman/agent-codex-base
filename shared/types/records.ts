@@ -11,6 +11,7 @@ export interface HostRecord {
   privateKey?: string | null;
   password?: string | null;
   proxyUrl: string | null;
+  hasPrivateKey: boolean;
   hasPassword: boolean;
   createdAt: string;
   updatedAt: string;

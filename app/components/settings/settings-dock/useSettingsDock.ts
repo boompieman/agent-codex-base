@@ -1,7 +1,7 @@
 import type { DockviewApi, DockviewReadyEvent, IDockviewPanel } from "dockview-vue";
 import { settingsPanelKinds, settingsPanelRegistry } from "./panel-registry";
 
-const DEFAULT_SETTINGS_PANEL = "config";
+const DEFAULT_SETTINGS_PANEL = "appearance";
 
 export function useSettingsDock() {
   const { locale, t } = useI18n();

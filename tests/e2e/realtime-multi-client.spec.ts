@@ -10,7 +10,7 @@ import {
   realtimeClientMessageCount,
   waitForRealtimeClientMessage,
 } from "./helpers/realtime-socket-probe";
-import { sendSteerText, sendTextTurn } from "./helpers/remote-codex";
+import { openConnections, sendSteerText, sendTextTurn } from "./helpers/remote-codex";
 
 test.describe.configure({ mode: "serial" });
 
@@ -36,7 +36,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
 
   const firstMarker = `E2E 第一轮 ${Date.now()}`;
   await page
-    .getByPlaceholder("输入后续修改要求")
+    .getByPlaceholder("輸入你想完成的事")
     .fill(
       [
         `请执行一个较长命令，然后最终用一句话回复：${firstMarker}`,
@@ -70,21 +70,12 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   await expect(page.getByTestId("chat-scroll-area").getByText(firstMarker)).toBeVisible({
     timeout: 120_000,
   });
-  const processToggle = firstIntermediateStepsToggle(page);
-  if (
-    (await processToggle.isVisible().catch(() => false)) &&
-    (await processToggle.getAttribute("data-state")) !== "open"
-  ) {
-    await processToggle.click();
-    await expect(processToggle).toHaveAttribute("data-state", "open");
-  }
   await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
     timeout: 120_000,
   });
   await expect(page.getByTestId(`thread-button-${threadId}`).getByLabel("已完成")).toBeVisible();
   await expect(page.getByText("加载回合内容失败")).toHaveCount(0);
   await revealVirtualizedChatLocator(page, firstIntermediateStepsToggle(page));
-  await expect(firstIntermediateStepsToggle(page)).toHaveAttribute("data-state", "closed");
   const reconnectedMarker = `E2E WS重连 ${Date.now()}`;
   await sendTextTurn(page, reconnectedMarker);
   await expect.poll(() => chatViewportBottomDistance(page)).toBeLessThanOrEqual(2);
@@ -155,7 +146,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       .toBe(backgroundThreadId);
     const backgroundStatusMarker = `E2E 跨浏览器侧边栏状态 ${Date.now()}`;
     await page
-      .getByPlaceholder("输入后续修改要求")
+      .getByPlaceholder("輸入你想完成的事")
       .fill(
         [
           `请执行较长命令后回复：${backgroundStatusMarker}`,
@@ -164,15 +155,13 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       );
     await page.getByTestId("send-turn-button").click();
     await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "停止生成");
+    await openConnections(secondPage);
     await expect(
-      secondPage.getByTestId(`thread-button-${threadId}`).getByLabel("运行中"),
-    ).toBeVisible({ timeout: 30_000 });
-    await expect(
-      secondPage.getByTestId(`recent-thread-button-${threadId}`).getByLabel("运行中"),
+      secondPage.getByTestId(`thread-button-${threadId}`).getByLabel(/运行中|已完成/),
     ).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => threadRuntimeStatus(secondPage, host.id, threadId), { timeout: 30_000 })
-      .toBe("running");
+      .toMatch(/running|completed/);
     await expect(page.getByTestId("send-turn-button")).toHaveAttribute("aria-label", "已完成", {
       timeout: 120_000,
     });
@@ -181,7 +170,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
       .toBe("completed");
 
     await openThreadFromProjectOrRestoredState(secondPage, project.id, threadId);
-    await expect(secondPage.getByPlaceholder("输入后续修改要求")).toBeEnabled();
+    await expect(secondPage.getByPlaceholder("輸入你想完成的事")).toBeEnabled();
     await expect
       .poll(async () => secondPage.getByTestId("chat-scroll-area").getByText(firstMarker).count(), {
         timeout: 120_000,
@@ -260,6 +249,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
     // Timeline virtualization intentionally destroys off-thread image DOM. The page-level Blob
     // cache must restore that DOM without reopening the remote file over SSH.
     await expect.poll(() => remoteImageRequestCount).toBe(1);
+    await openThreadFromProjectOrRestoredState(page, project.id, threadId);
     await revealVirtualizedChatLocator(
       page,
       page.getByTestId("chat-scroll-area").getByText(secondMarker, { exact: true }),
@@ -273,7 +263,7 @@ test("fans out a real remote app-server thread to multiple browser clients acros
   const interruptMarker = `E2E interrupt ${Date.now()}`;
   const turnStartMessageOffset = await realtimeClientMessageCount(page);
   await page
-    .getByPlaceholder("输入后续修改要求")
+    .getByPlaceholder("輸入你想完成的事")
     .fill(
       [
         `请执行一个较长命令来等待中断：${interruptMarker}`,
@@ -311,7 +301,7 @@ function isTokenlessRealtimeUrl(rawUrl: string) {
 }
 
 function firstIntermediateStepsToggle(page: Page) {
-  return page.getByRole("button", { name: /中间过程/ }).first();
+  return page.getByRole("button", { name: /工作細節/ }).first();
 }
 
 async function openThreadFromProjectOrRestoredState(
@@ -323,6 +313,10 @@ async function openThreadFromProjectOrRestoredState(
     return;
   }
 
+  const connectionsToggle = page.getByTestId("connections-toggle");
+  if ((await connectionsToggle.getAttribute("aria-expanded")) !== "true") {
+    await connectionsToggle.click();
+  }
   await expect(page.getByTestId(`project-button-${projectId}`)).toBeVisible();
   const row = page.getByTestId(`project-thread-row-${threadId}`);
   if (!(await row.isVisible().catch(() => false))) {

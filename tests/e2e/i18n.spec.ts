@@ -21,11 +21,55 @@ test("requires bearer auth for protected HTTP APIs", async ({ page }) => {
   expect(config.version).toBe(1);
 });
 
+test("never returns stored SSH credentials to the browser", async ({ page }) => {
+  await openApp(page);
+  const secret = `e2e-secret-${Date.now()}`;
+  const created = await authenticatedFetch(
+    page,
+    {
+      url: "/api/hosts",
+      method: "POST",
+      body: {
+        name: "Credential boundary",
+        sshHost: "127.0.0.1",
+        username: "codex",
+        port: 65535,
+        authMode: "password",
+        password: secret,
+        proxyUrl: null,
+      },
+    },
+    (value) => z.record(z.string(), z.unknown()).parse(value),
+  );
+  const hosts = await authenticatedFetch(page, { url: "/api/hosts" }, (value) =>
+    z.array(z.record(z.string(), z.unknown())).parse(value),
+  );
+  const config = await authenticatedFetch(page, { url: "/api/config/export" }, (value) =>
+    z.record(z.string(), z.unknown()).parse(value),
+  );
+
+  for (const response of [created, hosts, config]) {
+    const serialized = JSON.stringify(response);
+    expect(serialized).not.toContain(secret);
+  }
+  expect(created).not.toHaveProperty("password");
+  expect(created).not.toHaveProperty("privateKey");
+  for (const host of hosts) {
+    expect(host).not.toHaveProperty("password");
+    expect(host).not.toHaveProperty("privateKey");
+  }
+  for (const host of z.object({ hosts: z.array(z.record(z.string(), z.unknown())) }).parse(config)
+    .hosts) {
+    expect(host).not.toHaveProperty("password");
+    expect(host).not.toHaveProperty("privateKey");
+  }
+});
+
 test("defaults to Chinese and can switch to English", async ({ page }) => {
   await openApp(page);
-  await expect(page.getByText("设置")).toBeVisible();
+  await expect(page.getByTestId("settings-toggle")).toContainText("設定");
   await page.getByTestId("settings-toggle").click();
-  await page.getByRole("tab", { name: "外观" }).click();
+  await page.getByRole("tab", { name: "外觀" }).click();
   await page.getByRole("combobox").first().click();
   await page.getByRole("option", { name: "English" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -38,8 +82,8 @@ test("can revoke the current session from appearance settings", async ({ page })
   expect(token).toBeTruthy();
 
   await page.getByTestId("settings-toggle").click();
-  await page.getByRole("tab", { name: "外观" }).click();
-  await page.getByRole("button", { name: "退出登录" }).click();
+  await page.getByRole("tab", { name: "外觀" }).click();
+  await page.getByRole("button", { name: "登出" }).click();
 
   await expect(page.getByRole("heading", { name: "登录 Agent Codex Base" })).toBeVisible();
   const revokedStatus = await page.evaluate(async (authorization) => {
@@ -72,6 +116,7 @@ test("config JSON editor shows current config by default and scrolls", async ({ 
   const settingsPanel = page.getByTestId("settings-panel");
   await expect(settingsPanel.locator(".dv-groupview")).toHaveCount(1);
   await expect(settingsPanel.getByRole("tab")).toHaveCount(4);
+  await page.getByRole("tab", { name: "配置 JSON" }).click();
   const editor = page.getByTestId("config-json-editor");
   await expect(editor).toContainText('"version"');
   await expect(editor).toContainText('"notifications"');

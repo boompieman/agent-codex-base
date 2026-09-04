@@ -2,6 +2,7 @@ import { Orientation } from "dockview-vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
 
 import type { ComputedRef, Ref } from "vue";
+import { ref } from "vue";
 import { useGatewayTerminalTransport } from "@/composables/terminal/useGatewayTerminalTransport";
 import { useGatewayThreadViewStore } from "@/stores/gateway-thread-view";
 import { useGatewayWorkspaceLayoutStore } from "@/stores/gateway-workspace-layout";
@@ -37,6 +38,7 @@ export function useWorkspaceDockPanels(options: {
   hostMetricsPanel: ComputedRef<Array<{ id: string; hostId: number }>>;
   gitReviewPanel: ComputedRef<Array<{ id: string }>>;
   scopeKey: ComputedRef<string>;
+  layout: Ref<"desktop" | "mobile">;
 }) {
   const { t } = useI18n();
   const threadView = useGatewayThreadViewStore();
@@ -46,6 +48,8 @@ export function useWorkspaceDockPanels(options: {
   const tmuxStore = useGatewayTmuxStore();
   const hostMetricsPanels = useGatewayHostMetricsPanelStore();
   const gitReviewPanels = useFileGitReviewPanelStore();
+  const savedLayout = workspaceLayout.layoutFor(options.scopeKey.value);
+  const filesPanelOpen = ref(savedLayout?.panels[FILES_WORKSPACE_PANEL_ID] !== undefined);
 
   function definitions(): PanelDefinition[] {
     const panels: PanelDefinition[] = [
@@ -56,7 +60,7 @@ export function useWorkspaceDockPanels(options: {
         params: { kind: "agent" },
       },
     ];
-    if (options.selectedThreadId.value !== null) {
+    if (options.selectedThreadId.value !== null && filesPanelOpen.value) {
       panels.push({
         id: FILES_WORKSPACE_PANEL_ID,
         title: t("app.filesTab"),
@@ -126,7 +130,7 @@ export function useWorkspaceDockPanels(options: {
       } else {
         const agent = api.getPanel(AGENT_WORKSPACE_PANEL_ID);
         const position =
-          definition.params.kind === "terminal" && agent
+          options.layout.value === "desktop" && definition.params.kind === "terminal" && agent
             ? { referencePanel: agent, direction: "below" as const }
             : api.activeGroup === undefined
               ? undefined
@@ -220,8 +224,12 @@ export function useWorkspaceDockPanels(options: {
         // desktop and locked mobile Dockview; the generic dynamic-panel fallback prefers Agent.
         workspaceLayout.requestPanelActivation(FILES_WORKSPACE_PANEL_ID);
         return;
-      case "agent":
       case "files":
+        filesPanelOpen.value = false;
+        panel.api.close();
+        workspaceLayout.requestPanelActivation(nextPanelId ?? AGENT_WORKSPACE_PANEL_ID);
+        return;
+      case "agent":
         return;
     }
     if (nextPanelId !== null) workspaceLayout.requestPanelActivation(nextPanelId);
@@ -240,5 +248,9 @@ export function useWorkspaceDockPanels(options: {
     return nextPanel?.id ?? null;
   }
 
-  return { reconcile, defaultLayout, closeDynamic };
+  function openFilesPanel() {
+    filesPanelOpen.value = true;
+  }
+
+  return { reconcile, defaultLayout, closeDynamic, openFilesPanel };
 }

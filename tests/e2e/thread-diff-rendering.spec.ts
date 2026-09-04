@@ -296,6 +296,7 @@ test("switching threads keeps asynchronously rendered diff content in normal flo
     },
   });
 
+  await page.getByTestId("connections-toggle").click();
   await page.getByTestId(`thread-button-${shortThreadId}`).click();
   await expect(page.getByText("short thread content")).toBeVisible();
   await page.getByTestId(`thread-button-${diffThreadId}`).click();
@@ -334,7 +335,7 @@ async function diffEndsBeforeText(page: import("@playwright/test").Page, text: s
 }
 
 async function openIntermediateSteps(page: import("@playwright/test").Page) {
-  const toggle = page.getByRole("button", { name: /中间过程/ }).first();
+  const toggle = page.getByRole("button", { name: /工作細節/ }).first();
   await expect(toggle).toBeVisible();
   if ((await toggle.getAttribute("data-state")) !== "open") {
     await toggle.click();

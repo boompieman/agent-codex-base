@@ -39,10 +39,7 @@ export const runtimeConfigStore = {
   export(): GatewayConfig {
     return {
       version: 1,
-      hosts: hostStore.listWithSecret().map((host) => ({
-        ...host,
-        hasPassword: Boolean(host.password),
-      })),
+      hosts: hostStore.list(),
       projects: projectStore.listConfigured(),
       pinnedThreads: gatewayMemoryState.pinnedThreads,
       notifications: normalizeNotificationSettings(gatewayMemoryState.notifications),

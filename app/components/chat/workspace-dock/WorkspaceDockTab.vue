@@ -45,6 +45,7 @@ function toggleMaximize() {
     :data-panel-kind="kind"
     :data-panel-title="title"
     class="group flex h-full min-w-0 items-center gap-1.5 px-2 text-sm"
+    :class="context.layout.value === 'mobile' ? 'min-h-11' : ''"
     @dblclick="toggleMaximize"
   >
     <component :is="policy.icon" class="size-3.5 shrink-0" />
@@ -59,13 +60,14 @@ function toggleMaximize() {
       <PanelRightOpenIcon class="size-3.5" />
     </button>
     <button
-      v-if="policy.closable"
+      v-if="policy.closable && (kind !== 'files' || context.layout.value === 'desktop')"
       type="button"
-      class="ml-1 inline-flex size-5 items-center justify-center rounded text-ink-faint opacity-70 hover:bg-canvas-soft hover:text-ink"
+      class="ml-1 inline-flex items-center justify-center rounded text-ink-faint opacity-70 hover:bg-canvas-soft hover:text-ink"
+      :class="context.layout.value === 'mobile' ? 'size-11' : 'size-5'"
       :aria-label="$t('app.closeTab')"
       @click="closePanel"
     >
-      <XIcon class="size-3" />
+      <XIcon :class="context.layout.value === 'mobile' ? 'size-4' : 'size-3'" />
     </button>
   </div>
 </template>

@@ -24,7 +24,7 @@ export const workspacePanelRegistry = {
     closable: false,
     dynamic: false,
   },
-  files: { component: "WorkspaceDockFilesPanel", icon: FilesIcon, closable: false, dynamic: false },
+  files: { component: "WorkspaceDockFilesPanel", icon: FilesIcon, closable: true, dynamic: false },
   gitReview: {
     component: "WorkspaceDockGitReviewPanel",
     icon: GitCompareArrowsIcon,

@@ -5,7 +5,7 @@ import { useGatewayNavigationStore } from "@/stores/gateway-navigation";
 import { workspaceLayoutScopeKey } from "@/stores/gateway-workspace-layout";
 import WorkspaceDock from "./workspace-dock/WorkspaceDock.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     layout?: "desktop" | "mobile";
   }>(),
@@ -17,8 +17,9 @@ withDefaults(
 const { selectedHostId, selectedProjectId, selectedThreadId } = storeToRefs(
   useGatewayNavigationStore(),
 );
-const scopeKey = computed(() =>
-  workspaceLayoutScopeKey(selectedHostId.value, selectedProjectId.value, selectedThreadId.value),
+const scopeKey = computed(
+  () =>
+    `${workspaceLayoutScopeKey(selectedHostId.value, selectedProjectId.value, selectedThreadId.value)}:${props.layout}`,
 );
 </script>
 

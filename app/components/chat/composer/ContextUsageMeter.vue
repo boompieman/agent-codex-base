@@ -48,7 +48,7 @@ function formatTokens(value: number) {
         type="button"
         variant="ghost"
         size="sm"
-        class="shrink-0 gap-2 px-1.5 text-base font-normal text-ink-muted hover:bg-canvas-soft"
+        class="size-11 shrink-0 gap-2 px-1.5 text-base font-normal text-ink-muted hover:bg-canvas-soft sm:w-auto"
         :title="accessibleLabel"
         :aria-label="accessibleLabel"
       >

@@ -70,7 +70,7 @@ test("Bark keeps monitoring an active main turn after the last browser closes", 
   });
   await remoteWorkspace.startThread(project.id);
   await page
-    .getByPlaceholder("输入后续修改要求")
+    .getByPlaceholder("輸入你想完成的事")
     .fill(
       [
         "运行下面的命令，命令结束后简短回复。",
@@ -114,13 +114,13 @@ test("plan-mode user questions render and notify through Sonner and Bark", async
   const hostName = `bark-plan-question-host-${Date.now()}`;
   const { project } = await remoteWorkspace.provision({ hostName });
   await remoteWorkspace.startThread(project.id);
-  await page.getByPlaceholder("输入后续修改要求").fill("/");
+  await page.getByPlaceholder("輸入你想完成的事").fill("/");
   await page.getByTestId("slash-command-plan").click();
   await expect(page.getByTestId("composer-mode-strip").getByText("计划模式").first()).toBeVisible();
 
   const question = `请选择 E2E 方案 ${Date.now()}`;
   await page
-    .getByPlaceholder("输入后续修改要求")
+    .getByPlaceholder("輸入你想完成的事")
     .fill(
       `先不要制定计划或回复正文。立即调用 request_user_input，只询问“${question}”，提供“方案 A”和“方案 B”两个选项。`,
     );

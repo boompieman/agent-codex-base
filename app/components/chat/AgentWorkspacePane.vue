@@ -83,9 +83,9 @@ const showThreadLoading = computed(
 
       <ChatPanelScrollArea v-else class="flex items-start">
         <div
-          class="max-w-3xl rounded-2xl bg-canvas-soft px-4 py-3 text-[0.9375rem] leading-7 text-ink md:ml-auto md:px-5 md:py-4"
+          class="mx-auto mt-[clamp(3rem,12vh,8rem)] max-w-xl rounded-2xl bg-canvas-soft px-5 py-5 text-center text-[0.9375rem] leading-7 text-ink"
         >
-          <div class="mb-2 flex items-center gap-2 text-ink-muted">
+          <div class="mb-2 flex items-center justify-center gap-2 text-ink-muted">
             <FolderIcon class="size-4" />
             {{ selectedProjectId ? t("app.selectThreadFirst") : t("app.selectProjectFirst") }}
           </div>

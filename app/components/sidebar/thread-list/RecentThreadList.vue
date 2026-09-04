@@ -26,10 +26,7 @@ const emit = defineEmits<{
 }>();
 
 function subtitle(thread: RecentThread) {
-  return (
-    [thread.hostName, thread.projectName].filter(Boolean).join(" / ") ||
-    formatRelative(thread.updatedAt)
-  );
+  return formatRelative(thread.updatedAt);
 }
 </script>
 
@@ -49,8 +46,6 @@ function subtitle(thread: RecentThread) {
         :completion-attention="thread.completionAttention"
         :active-flags="thread.activeFlags"
         :subtitle="subtitle(thread)"
-        :worktree="thread.isWorktree"
-        :branch="thread.branch"
         :pin-label="$t('app.pinThread')"
         :long-press-handlers="longPressHandlers"
         @open="emit('open', thread)"
