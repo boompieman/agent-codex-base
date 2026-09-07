@@ -8,6 +8,9 @@ export function normalizeThreadSettings(
   return {
     ...(Object.hasOwn(settings, "model") ? { model: trimmedOrNull(settings.model) } : {}),
     ...(Object.hasOwn(settings, "effort") ? { effort: trimmedOrNull(settings.effort) } : {}),
+    ...(Object.hasOwn(settings, "permissions")
+      ? { permissions: trimmedOrNull(settings.permissions) }
+      : {}),
     ...(Object.hasOwn(settings, "approvalPolicy")
       ? {
           approvalPolicy:
@@ -32,6 +35,7 @@ export function mergeThreadSettings(
     ...current,
     ...(Object.hasOwn(next, "model") ? { model: next.model ?? null } : {}),
     ...(Object.hasOwn(next, "effort") ? { effort: next.effort ?? null } : {}),
+    ...(Object.hasOwn(next, "permissions") ? { permissions: next.permissions ?? null } : {}),
     ...(Object.hasOwn(next, "approvalPolicy")
       ? { approvalPolicy: next.approvalPolicy ?? null }
       : {}),

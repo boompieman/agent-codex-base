@@ -41,6 +41,7 @@ export interface TurnStartInput {
   model?: string | null;
   effort?: ReasoningEffort | null;
   approvalPolicy?: ApprovalPolicy | null;
+  permissions?: string | null;
   collaborationMode?: ThreadCollaborationMode | null;
   images?: Array<{
     path?: string;

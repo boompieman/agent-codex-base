@@ -58,6 +58,7 @@ export function requestStartThread(options: ComposerTurnOptions) {
       model: options.model === "" ? undefined : options.model,
       effort: options.effort === "" ? undefined : options.effort,
       approvalPolicy: options.approvalPolicy ?? undefined,
+      permissions: options.permissions ?? undefined,
     }),
     expectThreadStarted,
     { timeoutMs: 30_000 },

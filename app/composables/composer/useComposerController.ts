@@ -1,5 +1,6 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
+import { THREAD_PERMISSION_PROFILES } from "~~/shared/thread-permissions";
 import { useAttachmentUpload } from "./useAttachmentUpload";
 import { useComposerDraft } from "./useComposerDraft";
 import { useComposerGoalControls } from "./useComposerGoalControls";
@@ -64,15 +65,17 @@ export function useComposerController() {
   const selectedTurnOptions = () => {
     const effort =
       settings.selectedEffort.value === "default" ? undefined : settings.selectedEffort.value;
+    // Existing threads already apply permission changes through thread/settings/update. Replaying
+    // a browser snapshot on every turn could undo a newer restriction selected in another client.
+    const approvalMode =
+      selectedThreadId.value === null ? settings.selectedApprovalMode.value : "custom";
     return {
       // Only an explicit per-thread/new-thread selection may override app-server persistence.
       // Existing-thread settings are projected from thread/resume instead of inferred here.
       model: settings.selectedModel.value === "" ? undefined : settings.selectedModel.value,
       effort,
-      approvalPolicy:
-        settings.selectedApprovalMode.value === "custom"
-          ? undefined
-          : settings.selectedApprovalMode.value,
+      approvalPolicy: approvalMode === "custom" ? undefined : approvalMode,
+      permissions: approvalMode === "custom" ? undefined : THREAD_PERMISSION_PROFILES[approvalMode],
     };
   };
   const submit = useComposerTurnSubmit({

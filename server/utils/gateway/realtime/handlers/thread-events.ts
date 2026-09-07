@@ -111,6 +111,7 @@ export async function startThread(
       model: input.model === "" ? undefined : input.model,
       effort: input.effort === "" ? undefined : input.effort,
       approvalPolicy: input.approvalPolicy ?? undefined,
+      permissions: input.permissions ?? undefined,
     },
     input.projectId ?? null,
   );

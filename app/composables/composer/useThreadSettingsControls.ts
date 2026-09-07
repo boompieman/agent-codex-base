@@ -2,6 +2,7 @@ import { computed, ref } from "vue";
 
 import { storeToRefs } from "pinia";
 import type { ApprovalPolicy, ReasoningEffort } from "~~/shared/types";
+import { THREAD_PERMISSION_PROFILES } from "~~/shared/thread-permissions";
 import { firstNonEmptyString, trimmedOrFallback, trimmedOrNull } from "~~/shared/utils/strings";
 import { useGatewayCatalogStore } from "@/stores/gateway-catalog";
 import { useGatewayComposerStore } from "@/stores/gateway-composer";
@@ -54,17 +55,22 @@ export function useThreadSettingsControls() {
     },
   });
   const selectedApprovalMode = computed<ApprovalPolicy | "custom">({
-    get: () =>
-      selectedThreadId.value === null
-        ? newThreadApprovalMode.value
-        : (selectedThreadSettings.value.approvalPolicy ?? "custom"),
+    get: () => {
+      if (selectedThreadId.value === null) return newThreadApprovalMode.value;
+      const { approvalPolicy, permissions } = selectedThreadSettings.value;
+      return approvalPolicy && permissions === THREAD_PERMISSION_PROFILES[approvalPolicy]
+        ? approvalPolicy
+        : "custom";
+    },
     set: (approvalPolicy) => {
       if (selectedThreadId.value === null) {
         newThreadApprovalMode.value = approvalPolicy;
         return;
       }
+      if (approvalPolicy === "custom") return;
       void composer.saveSelectedThreadSettings({
-        approvalPolicy: approvalPolicy === "custom" ? null : approvalPolicy,
+        approvalPolicy,
+        permissions: THREAD_PERMISSION_PROFILES[approvalPolicy],
       });
     },
   });

@@ -30,6 +30,7 @@ export function requestTurnStart(input: {
       model: input.options.model === "" ? undefined : input.options.model,
       effort: input.options.effort === "" ? undefined : input.options.effort,
       approvalPolicy: input.options.approvalPolicy ?? undefined,
+      permissions: input.options.permissions ?? undefined,
       collaborationMode: input.options.collaborationMode ?? undefined,
       images: input.options.images ?? [],
       files: input.options.files ?? [],

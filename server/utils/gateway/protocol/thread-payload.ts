@@ -5,7 +5,10 @@ import type {
   ThreadSettingsState,
   ThreadTokenUsageState,
 } from "~~/shared/types";
-import { threadSettingsFromAppServer } from "~~/shared/runtime/app-server";
+import {
+  permissionProfileIdFromAppServer,
+  threadSettingsFromAppServer,
+} from "~~/shared/runtime/app-server";
 import { normalizeTokenUsage } from "~~/shared/token-usage";
 import { recordFromUnknown } from "~~/shared/utils/records";
 import type { TurnStartInput } from "../runtime/types";
@@ -46,6 +49,7 @@ export function buildTurnStartParams(
     model: input.model === "" || input.model === undefined ? null : input.model,
     effort: input.effort === "" || input.effort === undefined ? null : input.effort,
     approvalPolicy: input.approvalPolicy ?? null,
+    permissions: input.permissions ?? null,
     collaborationMode:
       input.collaborationMode !== null && input.collaborationMode !== undefined
         ? buildAppServerCollaborationMode(input.collaborationMode)
@@ -82,6 +86,7 @@ export function extractThreadSettings(source: unknown): ThreadSettingsState {
     approvalPolicy: normalizeApprovalPolicy(
       threadSettings?.approvalPolicy ?? sourceRecord?.approvalPolicy,
     ),
+    permissions: permissionProfileIdFromAppServer(sourceRecord?.activePermissionProfile),
   };
 }
 

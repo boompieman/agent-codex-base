@@ -110,6 +110,7 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         model: nullableString,
         effort: nullableString,
         approvalPolicy,
+        permissions: nonEmptyString.nullable().optional(),
       })
       .strict(),
     z
@@ -124,6 +125,7 @@ export const realtimeClientMessageSchema: z.ZodType<RealtimeClientMessage> = z.d
         model: nullableString,
         effort: nullableString,
         approvalPolicy,
+        permissions: nonEmptyString.nullable().optional(),
         collaborationMode,
         images: z.array(imageInput).optional(),
         files: z.array(fileInput).optional(),

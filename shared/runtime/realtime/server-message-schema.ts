@@ -103,6 +103,7 @@ const threadSettingsSchema = z
     model: nullableString,
     effort: nullableString,
     approvalPolicy: z.enum(["untrusted", "on-request", "never"]).nullable().optional(),
+    permissions: nullableString,
     collaborationMode: z
       .object({
         mode: z.enum(["default", "plan"]),

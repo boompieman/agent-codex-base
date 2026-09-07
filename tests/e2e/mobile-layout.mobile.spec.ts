@@ -74,7 +74,12 @@ test("shows advanced model, context, and approval controls on demand", async ({ 
     projectId: 1,
     threadId,
     currentThread: { id: threadId, name: "Mobile composer settings" },
-    threadSettings: { model: "gpt-5.6-luna", effort: "medium", approvalPolicy: "never" },
+    threadSettings: {
+      model: "gpt-5.6-luna",
+      effort: "medium",
+      approvalPolicy: "never",
+      permissions: ":danger-full-access",
+    },
     models: [
       {
         id: "gpt-5.6-luna",

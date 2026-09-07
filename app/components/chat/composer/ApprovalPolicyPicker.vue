@@ -68,6 +68,7 @@ const activeApprovalOption = computed(
     <PopoverTrigger as-child>
       <Button
         type="button"
+        data-testid="permission-mode-trigger"
         variant="ghost"
         size="lg"
         class="h-11 shrink-0 gap-1.5 px-1.5 text-sm font-normal text-ink-muted hover:bg-canvas-soft hover:text-ink-secondary sm:gap-2 sm:px-2 md:text-base"
@@ -95,6 +96,7 @@ const activeApprovalOption = computed(
       <button
         v-for="option in approvalOptions"
         :key="option.value"
+        :data-testid="`permission-mode-${option.value}`"
         type="button"
         class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-xl px-3 py-2.5 text-left hover:bg-canvas-soft"
         :class="option.value === modelValue ? 'bg-canvas-soft' : ''"
