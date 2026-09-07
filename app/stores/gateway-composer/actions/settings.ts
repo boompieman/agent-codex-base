@@ -104,7 +104,8 @@ export function createThreadSettingsActions() {
           // therefore acknowledged without reverting the user's composer selection.
         }
         if (!sessionIsCurrent()) return false;
-        this.setThreadSettings(hostId, threadId, settings);
+        // Permission labels must reflect app-server's settings notification, never the request.
+        if (!("permissions" in settings)) this.setThreadSettings(hostId, threadId, settings);
         return true;
       } catch (error: unknown) {
         if (!sessionIsCurrent()) return false;

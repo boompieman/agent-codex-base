@@ -115,6 +115,7 @@ export type RealtimeClientMessage =
       model?: string | null;
       effort?: ReasoningEffort | null;
       approvalPolicy?: ApprovalPolicy | null;
+      permissions?: string | null;
     }
   | {
       type: "turn.start";
@@ -128,6 +129,7 @@ export type RealtimeClientMessage =
       model?: string | null;
       effort?: ReasoningEffort | null;
       approvalPolicy?: ApprovalPolicy | null;
+      permissions?: string | null;
       collaborationMode?: ComposerTurnOptions["collaborationMode"];
       images?: ComposerTurnOptions["images"];
       files?: ComposerTurnOptions["files"];

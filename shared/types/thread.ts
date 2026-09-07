@@ -93,6 +93,8 @@ export interface ThreadSettingsState {
   model?: string | null;
   effort?: ReasoningEffort | null;
   approvalPolicy?: ApprovalPolicy | null;
+  /** Native permission profile id, confirmed by app-server settings/start/resume. */
+  permissions?: string | null;
   collaborationMode?: ThreadCollaborationMode | null;
 }
 
@@ -186,7 +188,7 @@ export interface AppServerThreadSection {
   } | null;
 }
 
-/** Exact Codex 0.151 Thread DTO for the experimental API negotiated by Gateway. */
+/** Exact Codex 0.153 Thread DTO for the experimental API negotiated by Gateway. */
 export interface AppServerThread {
   id: string;
   extra: Record<never, never> | null;
@@ -200,6 +202,8 @@ export interface AppServerThread {
   projectId: string | null;
   historyMode: "legacy" | "paginated";
   modelProvider: string;
+  model: string | null;
+  reasoningEffort: ReasoningEffort | null;
   createdAt: number;
   updatedAt: number;
   recencyAt: number | null;
@@ -248,6 +252,7 @@ export interface ComposerTurnOptions {
   model?: string | null;
   effort?: ReasoningEffort | null;
   approvalPolicy?: ApprovalPolicy | null;
+  permissions?: string | null;
   collaborationMode?: ThreadCollaborationMode | null;
   images?: Array<{
     path?: string;

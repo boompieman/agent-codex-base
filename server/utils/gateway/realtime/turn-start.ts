@@ -23,6 +23,7 @@ export async function startTurnFromRealtime(message: RealtimeTurnStartMessage) {
     model: input.model,
     effort: input.effort,
     approvalPolicy: input.approvalPolicy,
+    permissions: input.permissions,
     collaborationMode: input.collaborationMode,
     images: input.images,
     files: input.files,

@@ -54,6 +54,7 @@ export const threadSettingFields = {
   model: z.string().trim().nullable().optional(),
   effort: z.string().trim().min(1).nullable().optional(),
   approvalPolicy: z.enum(["untrusted", "on-request", "never"]).nullable().optional(),
+  permissions: z.string().trim().min(1).nullable().optional(),
 };
 
 const collaborationModeSchema = z

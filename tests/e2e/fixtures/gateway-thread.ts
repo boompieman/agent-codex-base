@@ -20,6 +20,8 @@ export function gatewayThreadFixture(
     appServerProjectId: null,
     historyMode: "legacy",
     modelProvider: "e2e",
+    model: null,
+    reasoningEffort: null,
     createdAt: now,
     updatedAt: now,
     recencyAt: now,

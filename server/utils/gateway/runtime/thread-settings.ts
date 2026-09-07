@@ -1,7 +1,12 @@
 import type { HostRecord, ThreadSettingsState } from "~~/shared/types";
 import type { ControllerRegistry } from "./controller-registry";
 import { buildAppServerCollaborationMode } from "../protocol/thread-payload";
-import { parseTurnSettingsUpdateResponse } from "~~/shared/runtime/app-server";
+import {
+  parseTurnSettingsUpdateResponse,
+  threadSettingsFromAppServer,
+} from "~~/shared/runtime/app-server";
+import { recordFromUnknown } from "~~/shared/utils/records";
+import { threadRuntimeEvents } from "./thread-runtime-events";
 
 export class ThreadSettingsService {
   constructor(private readonly registry: ControllerRegistry) {}
@@ -18,11 +23,54 @@ export class ThreadSettingsService {
     if ("model" in input) params.model = input.model;
     if ("effort" in input) params.effort = input.effort;
     if ("approvalPolicy" in input) params.approvalPolicy = input.approvalPolicy;
+    if ("permissions" in input) params.permissions = input.permissions;
     if (input.collaborationMode !== null && input.collaborationMode !== undefined) {
       params.collaborationMode = buildAppServerCollaborationMode(input.collaborationMode);
     }
     return this.registry.withScopedSubscription(host, threadId, (controller) =>
-      controller.enqueue(() => controller.client.request("thread/settings/update", params)),
+      controller.enqueue(async () => {
+        const current = controller.getOpenSnapshot()?.threadSettings;
+        if (
+          input.permissions == null ||
+          (current?.permissions === input.permissions &&
+            (input.approvalPolicy == null || current.approvalPolicy === input.approvalPolicy))
+        ) {
+          return controller.client.request("thread/settings/update", params);
+        }
+        // The RPC acknowledges a queued update. Idle browser views release their upstream lease,
+        // so keep this scoped lease until the native notification confirms the permission change.
+        let resolveApplied = () => {};
+        let timer: ReturnType<typeof setTimeout>;
+        const applied = new Promise<void>((resolve, reject) => {
+          resolveApplied = resolve;
+          timer = setTimeout(
+            () => reject(new Error("Timed out confirming thread permissions")),
+            30_000,
+          );
+        });
+        const unsubscribe = threadRuntimeEvents.subscribe(host.id, threadId, (event) => {
+          if (event.method !== "thread/settings/updated") return;
+          const settings = threadSettingsFromAppServer(
+            recordFromUnknown(event.payload.params)?.threadSettings,
+          );
+          if (
+            settings !== null &&
+            settings.permissions === input.permissions &&
+            (input.approvalPolicy == null || settings.approvalPolicy === input.approvalPolicy)
+          )
+            resolveApplied();
+        });
+        try {
+          const [result] = await Promise.all([
+            controller.client.request("thread/settings/update", params),
+            applied,
+          ]);
+          return result;
+        } finally {
+          clearTimeout(timer!);
+          unsubscribe();
+        }
+      }),
     );
   }
 

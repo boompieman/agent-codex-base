@@ -100,6 +100,7 @@ const appServerThreadSettingsSchema = z
     model: z.string().min(1),
     effort: z.string().nullable().optional(),
     approvalPolicy: z.unknown(),
+    activePermissionProfile: z.unknown(),
     collaborationMode: appServerCollaborationModeSchema,
   })
   .loose();
@@ -126,12 +127,21 @@ export function threadSettingsFromAppServer(value: unknown): ThreadSettingsState
     model: parsed.data.model,
     effort: parsed.data.effort ?? null,
     approvalPolicy: approvalPolicyFromAppServer(parsed.data.approvalPolicy),
+    permissions: permissionProfileIdFromAppServer(parsed.data.activePermissionProfile),
     collaborationMode: threadCollaborationModeFromAppServer(parsed.data.collaborationMode),
   };
 }
 
 function approvalPolicyFromAppServer(value: unknown): ApprovalPolicy | null {
   return value === "untrusted" || value === "on-request" || value === "never" ? value : null;
+}
+
+export function permissionProfileIdFromAppServer(value: unknown): string | null {
+  const parsed = z
+    .object({ id: z.string().min(1) })
+    .loose()
+    .safeParse(value);
+  return parsed.success ? parsed.data.id : null;
 }
 
 const threadItemSchema = z
@@ -275,6 +285,8 @@ export const appServerThreadSchema = z
     projectId: z.string().nullable(),
     historyMode: z.enum(["legacy", "paginated"]),
     modelProvider: z.string(),
+    model: z.string().nullable(),
+    reasoningEffort: z.string().nullable(),
     createdAt: z.number(),
     updatedAt: z.number(),
     recencyAt: z.number().nullable(),
